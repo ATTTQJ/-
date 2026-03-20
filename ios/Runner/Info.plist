@@ -39,6 +39,9 @@
 	<string>我们需要使用您的相机来扫描设备二维码</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>我们需要使用蓝牙与水表进行实时数据传输</string>
+	<key>NSSiriUsageDescription</key>
+    <string>我们需要使用 Siri 来为您提供语音开水和关水服务。</string>
+
 
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>

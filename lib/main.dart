@@ -6,6 +6,7 @@ import 'dart:ui';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 🌟 新增：用于 MethodChannel 与原生通信
 import 'package:http2/http2.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -72,10 +73,14 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
   OverlayEntry? _toastEntry;
   Timer? _toastOverlayTimer;
 
+  // 🌟 新增：与 iOS 原生 Siri Intent 通信的频道
+  final MethodChannel _siriChannel = const MethodChannel('com.fakeuy.water/siri');
+
   @override
   void initState() {
     super.initState();
     _loadFromLocal();
+    _initSiriListener(); // 🌟 启动 Siri 监听
   }
 
   @override
@@ -86,6 +91,43 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
     _countdownTimer?.cancel();
     _sharedTransport?.finish();
     super.dispose();
+  }
+
+  // 🌟 新增：监听来自 Siri / 快捷指令的操作
+  void _initSiriListener() {
+    _siriChannel.setMethodCallHandler((call) async {
+      if (call.method == "executeAction") {
+        final args = call.arguments;
+        String action = "";
+        String targetName = "";
+
+        if (args is Map) {
+          action = args["action"]?.toString() ?? "";
+          targetName = args["device"]?.toString() ?? "";
+        } else if (args is String) {
+          action = args;
+        }
+
+        if (action == "start") {
+          // 如果 Siri 传来了指定的设备名称，尝试匹配
+          if (targetName.isNotEmpty && _deviceList.isNotEmpty) {
+            for (var d in _deviceList) {
+              String id = d["deviceInfId"].toString();
+              String name = _customRemarks[id] ?? d["deviceInfName"].toString();
+              // 模糊匹配：只要语音包含备注名，或者备注名包含语音，就算匹配成功
+              if (name.contains(targetName) || targetName.contains(name)) {
+                setState(() => _selectedDeviceId = id);
+                break;
+              }
+            }
+          }
+          // Siri 触发时，带上 force: true 强制开启，跳过时段弹窗
+          startWater(force: true);
+        } else if (action == "stop") {
+          stopWater();
+        }
+      }
+    });
   }
 
   void _showGlassBottomSheet(Widget child) {
@@ -245,7 +287,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
       Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.orange[400], size: 48),
+          Icon(Icons.access_time_rounded, color: Colors.orange[400], size: 48),
           const SizedBox(height: 16),
           Text("非热水供应时段", style: TextStyle(color: _deepTextColor, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
@@ -1002,13 +1044,12 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start, 
               children: [
-                // 🌟 修改：改为 40，实现整体下移 10dp
                 const SizedBox(height: 40), 
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 28), 
                   child: Text("你好, $_userName", style: TextStyle(color: Colors.grey[600], fontSize: 15, fontWeight: FontWeight.w600))
                 ), 
-                const SizedBox(height: 10), 
+                const SizedBox(height: 12), 
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 28), 
                   child: GestureDetector(
@@ -1018,6 +1059,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
                       crossAxisAlignment: CrossAxisAlignment.start, 
                       children: [
                         const Text("钱包余额", style: TextStyle(color: Colors.grey, fontSize: 13)), 
+                        const SizedBox(height: 2), 
                         FittedBox(child: Text("¥ $_balance", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: _deepTextColor)))
                       ]
                     )
@@ -1027,7 +1069,6 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
            
                 _buildSmartDeviceCard(),
 
-                // 🌟 修改：利用 Row 以及 crossAxisAlignment 将文字按钮与展开按钮对齐在同水平线
                 Padding(
                   padding: const EdgeInsets.only(left: 43, right: 28, top: 12), 
                   child: Row(
@@ -1060,7 +1101,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
                           )
                         )
                       else 
-                        const SizedBox(height: 28), // 占位，保证展开和不展开状态下的行高度一致
+                        const SizedBox(height: 28),
                     ]
                   )
                 ), 
@@ -1818,9 +1859,6 @@ class _ThreeDotsLoadingState extends State<ThreeDotsLoading> with TickerProvider
   } 
 }
 
-// ==========================================
-// 🌟 独立组件：新增的扫码页面组件
-// ==========================================
 class QRScannerPage extends StatelessWidget {
   const QRScannerPage({super.key});
 
