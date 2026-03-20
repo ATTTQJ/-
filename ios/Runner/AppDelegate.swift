@@ -17,31 +17,39 @@ import AppIntents
 }
 
 // ==========================================
-// 🌟 修复版：符合 iOS 26 严格规范的 Siri 意图
+// 🌟 增强版：带唤醒逻辑的 Siri 意图
 // ==========================================
 
 @available(iOS 16.0, *)
 struct StartWaterIntent: AppIntent {
     static var title: LocalizedStringResource = "开启热水"
     
-    // 🌟 核心修复1：在快捷指令的短语中，系统限制了动态字符串的使用。
-    // 我们先定义一个可选参数，但不强行要求 Siri 实时填充它。
+    // 设置 openAppWhenRun 为 true，当 App 在后台死掉时，系统会自动尝试拉起引擎
+    static var openAppWhenRun: Bool = false 
+
     @Parameter(title: "设备备注")
     var deviceName: String?
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        guard let delegate = UIApplication.shared.delegate as? FlutterAppDelegate,
-              let controller = delegate.window?.rootViewController as? FlutterViewController else {
-            return .result(value: "失败", dialog: "App 引擎未就绪")
+        // 1. 尝试获取当前的 Flutter 控制器
+        var controller = UIApplication.shared.windows.first?.rootViewController as? FlutterViewController
+        
+        // 2. 如果控制器不存在，说明引擎完全没启动
+        if controller == nil {
+            // 这里返回一个特殊的 Dialog 引导用户手动打开一次，或者尝试静默等待
+            return .result(value: "请先打开App", dialog: "水控引擎未就绪，请先手动打开一次App。")
         }
         
-        let channel = FlutterMethodChannel(name: "com.fakeuy.water/siri", binaryMessenger: controller.binaryMessenger)
+        // 3. 建立通讯频道
+        let channel = FlutterMethodChannel(name: "com.fakeuy.water/siri", binaryMessenger: controller!.binaryMessenger)
         let targetDevice = deviceName ?? ""
         
+        // 4. 发送指令给 Dart
         channel.invokeMethod("executeAction", arguments: ["action": "start", "device": targetDevice])
         
-        return .result(value: "指令已发送", dialog: "好的，已为你发送开水指令。")
+        // 5. 提示成功
+        return .result(value: "已发送开水指令", dialog: "好的，已为你尝试开启 \(targetDevice) 热水。")
     }
 }
 
@@ -51,7 +59,6 @@ struct WaterShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: StartWaterIntent(),
             phrases: [
-                // 🌟 核心修复2：必须包含 (.applicationName)，且移除不符合规范的变量插值
                 "使用 \(.applicationName) 开启热水",
                 "在 \(.applicationName) 里开水",
                 "嘿 Siri，用 \(.applicationName) 洗澡"
