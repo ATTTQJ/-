@@ -16,15 +16,15 @@ import AppIntents
         GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     }
 
-    // 🌟 方案 B 核心：处理 waterapp:// 协议跳转
+    // 🌟 方案 B 增强：处理 waterapp:// 协议跳转
     override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
         if url.scheme == "waterapp" {
-            let action = url.host ?? "" // 获取 start 或 stop
+            let action = url.host ?? "" 
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             let deviceName = components?.queryItems?.first(where: { $0.name == "device" })?.value ?? ""
 
-            // 给引擎一点点启动时间（如果是冷启动）
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            // 🌟 关键改进：将延时稍微拉长到 0.8秒，确保冷启动时引擎绝对就绪
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 if let controller = self.window?.rootViewController as? FlutterViewController {
                     let channel = FlutterMethodChannel(name: "com.fakeuy.water/siri", binaryMessenger: controller.binaryMessenger)
                     channel.invokeMethod("executeAction", arguments: ["action": action, "device": deviceName])
@@ -36,20 +36,20 @@ import AppIntents
     }
 }
 
-// 保持方案 A 的 Siri 意图代码（双保险）
+// Siri 意图代码（保持原样，无需修改）
 @available(iOS 16.0, *)
 struct StartWaterIntent: AppIntent {
     static var title: LocalizedStringResource = "开启热水"
     static var openAppWhenRun: Bool = true 
     @Parameter(title: "设备备注") var deviceName: String?
     @MainActor func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        try? await Task.sleep(nanoseconds: 800_000_000) // 增加到 0.8s
         guard let controller = UIApplication.shared.windows.first?.rootViewController as? FlutterViewController else {
             return .result(value: "启动中", dialog: "正在唤醒水控...")
         }
         let channel = FlutterMethodChannel(name: "com.fakeuy.water/siri", binaryMessenger: controller.binaryMessenger)
         channel.invokeMethod("executeAction", arguments: ["action": "start", "device": deviceName ?? ""])
-        return .result(value: "已执行", dialog: "热水已开启。")
+        return .result(value: "已执行", dialog: "热水指令已发送。")
     }
 }
 
@@ -58,7 +58,7 @@ struct StopWaterIntent: AppIntent {
     static var title: LocalizedStringResource = "停止用水"
     static var openAppWhenRun: Bool = true 
     @MainActor func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        try? await Task.sleep(nanoseconds: 500_000_000)
         guard let controller = UIApplication.shared.windows.first?.rootViewController as? FlutterViewController else {
             return .result(value: "启动中", dialog: "正在关水...")
         }
