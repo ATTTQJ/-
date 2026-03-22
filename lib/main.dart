@@ -33,7 +33,8 @@ class WaterApp extends StatefulWidget {
   State<WaterApp> createState() => _WaterAppState();
 }
 
-class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
+// 🌟 引入 WidgetsBindingObserver，监听 App 切回前台的动作
+class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, WidgetsBindingObserver {
   String _token = "";
   String _userId = "";
   String _userPhone = "";
@@ -71,18 +72,18 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
   OverlayEntry? _toastEntry;
   Timer? _toastOverlayTimer;
 
-  // 🌟 通信频道
   final MethodChannel _siriChannel = const MethodChannel('com.fakeuy.water/siri');
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // 🌟 注册生命周期监听
     _loadFromLocal();
-    _initSiriListener();
   }
 
   @override
   void dispose() { 
+    WidgetsBinding.instance.removeObserver(this); // 🌟 移除监听
     _timer?.cancel(); 
     _toastOverlayTimer?.cancel();
     _toastEntry?.remove();
@@ -92,21 +93,22 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
   }
 
   // ==========================================
-  // 🌟 核心：热启动监听与逻辑执行
+  // 🌟 核心引擎：只要 App 被唤醒，立刻查收硬盘信件！
   // ==========================================
-  void _initSiriListener() {
-    _siriChannel.setMethodCallHandler((call) async {
-      if (call.method == "executeAction") {
-        // 不阻塞回执，直接抛给异步任务处理
-        _processActionAsync(call.arguments);
-        // 🌟 只要活着接到信号，必定回复 Success，让 Swift 清空信箱！
-        return "Success"; 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 当 App 从后台被 URL 或快捷指令唤醒到前台时触发
+    if (state == AppLifecycleState.resumed) {
+      if (_token.isNotEmpty) {
+        // 延时 500ms 确保 iOS 已经把最新指令写入了硬盘
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _checkPendingAction();
+        });
       }
-      return null;
-    });
+    }
   }
 
-  // 冷启动主动拉取信箱
+  // 主动去 iOS 硬盘拉取
   Future<void> _checkPendingAction() async {
     try {
       final res = await _siriChannel.invokeMethod('getPendingAction');
@@ -126,6 +128,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
       action = args["action"]?.toString() ?? "";
       targetName = args["device"]?.toString() ?? "";
     }
+
+    if (action.isEmpty) return;
 
     // 🌟 冷启动保护：循环等待网络设备列表拉取完毕（最多等 6 秒）
     int retry = 0;
@@ -152,7 +156,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
     }
   }
 
-  // ... (省略UI层代码，完全保持原样) ...
+  // ... (下方所有 UI 代码保持原样) ...
 
   void _showGlassBottomSheet(Widget child) {
     showGeneralDialog(
@@ -266,7 +270,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
       await _loadDeviceList();
       await _fetchRealHistoryData();
       
-      // 🌟 数据全部拉取完毕后，向原生端索要冷启动信箱里的指令
+      // 🌟 冷启动：所有数据拉取完毕后，去硬盘读取指令
       _checkPendingAction();
     }
   }
