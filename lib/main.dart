@@ -93,8 +93,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
     super.dispose();
   }
 
- // 🌟 增强版：带“等待数据就绪”逻辑的监听器
-  void _initSiriListener() {
+ void _initSiriListener() {
     _siriChannel.setMethodCallHandler((call) async {
       if (call.method == "executeAction") {
         final args = call.arguments;
@@ -108,31 +107,40 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
           action = args;
         }
 
-        // 👇 🌟 增量新增：如果设备列表还没加载完，最多循环等待 6 秒 (30次 * 200ms)
-        int retry = 0;
-        while (_deviceList.isEmpty && retry < 30) {
-          await Future.delayed(const Duration(milliseconds: 200));
-          retry++;
-        }
+        // 异步执行后续逻辑，不阻塞主线程
+        _processActionAsync(action, targetName);
 
-        if (action == "start") {
-          // 匹配设备逻辑
-          if (targetName.isNotEmpty && _deviceList.isNotEmpty) {
-            for (var d in _deviceList) {
-              String id = d["deviceInfId"].toString();
-              String name = _customRemarks[id] ?? d["deviceInfName"].toString();
-              if (name.contains(targetName) || targetName.contains(name)) {
-                setState(() => _selectedDeviceId = id);
-                break;
-              }
-            }
+        // 🌟 核心：立刻回复 Swift "Success"，让 Swift 停止重复发送！
+        return "Success"; 
+      }
+      return null;
+    });
+  }
+
+  // 将逻辑抽离出来，增加冷启动等待机制
+  Future<void> _processActionAsync(String action, String targetName) async {
+    // 🌟 如果冷启动设备列表还没加载完，最多等待 6 秒
+    int retry = 0;
+    while (_deviceList.isEmpty && retry < 30) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      retry++;
+    }
+
+    if (action == "start") {
+      if (targetName.isNotEmpty && _deviceList.isNotEmpty) {
+        for (var d in _deviceList) {
+          String id = d["deviceInfId"].toString();
+          String name = _customRemarks[id] ?? d["deviceInfName"].toString();
+          if (name.contains(targetName) || targetName.contains(name)) {
+            setState(() => _selectedDeviceId = id);
+            break;
           }
-          startWater(force: true);
-        } else if (action == "stop") {
-          stopWater();
         }
       }
-    });
+      startWater(force: true);
+    } else if (action == "stop") {
+      stopWater();
+    }
   }
 
   void _showGlassBottomSheet(Widget child) {

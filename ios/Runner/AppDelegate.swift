@@ -4,34 +4,59 @@ import AppIntents
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  override func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
+    
+    // 🌟 连环敲门核心
+    static var pendingAction: [String: String]?
+    static var retryTimer: Timer?
+    static var siriChannel: FlutterMethodChannel?
 
-  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-  }
-  // 👇 🌟 增量新增：拦截 URL Scheme 并转发给 Flutter
     override func application(
-        _ app: UIApplication, 
-        open url: URL, 
-        options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+        
+        if let controller = window?.rootViewController as? FlutterViewController {
+            AppDelegate.siriChannel = FlutterMethodChannel(name: "com.fakeuy.water/siri", binaryMessenger: controller.binaryMessenger)
+        }
+        return result
+    }
+
+    func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+        GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    }
+
+    // 🌟 核心分发中枢：直到 Flutter 回应才停止发送
+    static func deliverAction(action: String, deviceName: String) {
+        pendingAction = ["action": action, "device": deviceName]
+        
+        DispatchQueue.main.async {
+            retryTimer?.invalidate()
+            retryTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
+                guard let actionData = pendingAction else {
+                    timer.invalidate()
+                    return
+                }
+                
+                siriChannel?.invokeMethod("executeAction", arguments: actionData) { result in
+                    if let res = result as? String, res == "Success" {
+                        pendingAction = nil
+                        timer.invalidate()
+                    }
+                }
+            }
+            retryTimer?.fire()
+        }
+    }
+
+    // 🌟 URL 拦截
+    override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
         if url.scheme == "waterapp" {
             let action = url.host ?? "" 
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             let deviceName = components?.queryItems?.first(where: { $0.name == "device" })?.value ?? ""
-
-            // 延迟 0.8 秒，确保冷启动时 Flutter 引擎完全加载
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                if let controller = self.window?.rootViewController as? FlutterViewController {
-                    let channel = FlutterMethodChannel(name: "com.fakeuy.water/siri", binaryMessenger: controller.binaryMessenger)
-                    channel.invokeMethod("executeAction", arguments: ["action": action, "device": deviceName])
-                }
-            }
+            
+            AppDelegate.deliverAction(action: action, deviceName: deviceName)
             return true
         }
         return super.application(app, open: url, options: options)
@@ -39,54 +64,36 @@ import AppIntents
 }
 
 // ==========================================
-// 🌟 增强版：带唤醒逻辑的 Siri 意图
+// 🌟 Siri / 快捷指令意图
 // ==========================================
-
 @available(iOS 16.0, *)
 struct StartWaterIntent: AppIntent {
     static var title: LocalizedStringResource = "开启热水"
-    
-    // 设置 openAppWhenRun 为 true，当 App 在后台死掉时，系统会自动尝试拉起引擎
-    static var openAppWhenRun: Bool = false 
+    static var openAppWhenRun: Bool = true // 必须为 true，拉起 App 确保成功率
 
-    @Parameter(title: "设备备注")
-    var deviceName: String?
+    @Parameter(title: "设备备注") var deviceName: String?
 
-    @MainActor
-    func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        // 1. 尝试获取当前的 Flutter 控制器
-        var controller = UIApplication.shared.windows.first?.rootViewController as? FlutterViewController
-        
-        // 2. 如果控制器不存在，说明引擎完全没启动
-        if controller == nil {
-            // 这里返回一个特殊的 Dialog 引导用户手动打开一次，或者尝试静默等待
-            return .result(value: "请先打开App", dialog: "水控引擎未就绪，请先手动打开一次App。")
-        }
-        
-        // 3. 建立通讯频道
-        let channel = FlutterMethodChannel(name: "com.fakeuy.water/siri", binaryMessenger: controller!.binaryMessenger)
-        let targetDevice = deviceName ?? ""
-        
-        // 4. 发送指令给 Dart
-        channel.invokeMethod("executeAction", arguments: ["action": "start", "device": targetDevice])
-        
-        // 5. 提示成功
-        return .result(value: "已发送开水指令", dialog: "好的，已为你尝试开启 \(targetDevice) 热水。")
+    @MainActor func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        AppDelegate.deliverAction(action: "start", deviceName: deviceName ?? "")
+        return .result(value: "指令下达", dialog: "正在唤醒水控...")
+    }
+}
+
+@available(iOS 16.0, *)
+struct StopWaterIntent: AppIntent {
+    static var title: LocalizedStringResource = "停止用水"
+    static var openAppWhenRun: Bool = true // 必须为 true
+
+    @MainActor func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        AppDelegate.deliverAction(action: "stop", deviceName: "")
+        return .result(value: "指令下达", dialog: "正在关闭水源...")
     }
 }
 
 @available(iOS 16.0, *)
 struct WaterShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(
-            intent: StartWaterIntent(),
-            phrases: [
-                "使用 \(.applicationName) 开启热水",
-                "在 \(.applicationName) 里开水",
-                "嘿 Siri，用 \(.applicationName) 洗澡"
-            ],
-            shortTitle: "快速开水",
-            systemImageName: "drop.fill"
-        )
+        AppShortcut(intent: StartWaterIntent(), phrases: ["使用 \(.applicationName) 开启热水"], shortTitle: "开启热水", systemImageName: "drop.fill")
+        AppShortcut(intent: StopWaterIntent(), phrases: ["使用 \(.applicationName) 停止用水"], shortTitle: "停止用水", systemImageName: "xmark.circle.fill")
     }
 }
