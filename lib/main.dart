@@ -93,7 +93,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // 🌟 新增：监听来自 Siri / 快捷指令的操作
+ // 🌟 增强版：带“等待数据就绪”逻辑的监听器
   void _initSiriListener() {
     _siriChannel.setMethodCallHandler((call) async {
       if (call.method == "executeAction") {
@@ -108,20 +108,25 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin {
           action = args;
         }
 
+        // 👇 🌟 增量新增：如果设备列表还没加载完，最多循环等待 6 秒 (30次 * 200ms)
+        int retry = 0;
+        while (_deviceList.isEmpty && retry < 30) {
+          await Future.delayed(const Duration(milliseconds: 200));
+          retry++;
+        }
+
         if (action == "start") {
-          // 如果 Siri 传来了指定的设备名称，尝试匹配
+          // 匹配设备逻辑
           if (targetName.isNotEmpty && _deviceList.isNotEmpty) {
             for (var d in _deviceList) {
               String id = d["deviceInfId"].toString();
               String name = _customRemarks[id] ?? d["deviceInfName"].toString();
-              // 模糊匹配：只要语音包含备注名，或者备注名包含语音，就算匹配成功
               if (name.contains(targetName) || targetName.contains(name)) {
                 setState(() => _selectedDeviceId = id);
                 break;
               }
             }
           }
-          // Siri 触发时，带上 force: true 强制开启，跳过时段弹窗
           startWater(force: true);
         } else if (action == "stop") {
           stopWater();

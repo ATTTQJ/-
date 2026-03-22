@@ -14,6 +14,28 @@ import AppIntents
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
+  // 👇 🌟 增量新增：拦截 URL Scheme 并转发给 Flutter
+    override func application(
+        _ app: UIApplication, 
+        open url: URL, 
+        options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+    ) -> Bool {
+        if url.scheme == "waterapp" {
+            let action = url.host ?? "" 
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let deviceName = components?.queryItems?.first(where: { $0.name == "device" })?.value ?? ""
+
+            // 延迟 0.8 秒，确保冷启动时 Flutter 引擎完全加载
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                if let controller = self.window?.rootViewController as? FlutterViewController {
+                    let channel = FlutterMethodChannel(name: "com.fakeuy.water/siri", binaryMessenger: controller.binaryMessenger)
+                    channel.invokeMethod("executeAction", arguments: ["action": action, "device": deviceName])
+                }
+            }
+            return true
+        }
+        return super.application(app, open: url, options: options)
+    }
 }
 
 // ==========================================
