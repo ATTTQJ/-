@@ -3,19 +3,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
-
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 import 'package:http2/http2.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mobile_scanner/mobile_scanner.dart'; 
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = MyHttpOverrides();
-  await SharedPreferences.getInstance(); 
+  await SharedPreferences.getInstance();
   runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: WaterApp()));
 }
 
@@ -33,24 +32,23 @@ class WaterApp extends StatefulWidget {
   State<WaterApp> createState() => _WaterAppState();
 }
 
-// 🌟 引入 WidgetsBindingObserver，监听 App 切回前台的动作
 class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, WidgetsBindingObserver {
   String _token = "";
   String _userId = "";
   String _userPhone = "";
-  String _userName = "User"; 
-  String _balance = "0.00"; 
-  
-  String _orderNum = ""; 
-  String _tableName = ""; 
+  String _userName = "User";
+  String _balance = "0.00";
+
+  String _orderNum = "";
+  String _tableName = "";
   String _mac = "";
   bool _isRequesting = false;
   List<String> _history = [];
-  
-  List<Map<String, dynamic>> _deviceList = []; 
+
+  List<Map<String, dynamic>> _deviceList = [];
   String _selectedDeviceId = "";
-  bool _isDeviceExpanded = false; 
-  bool _isAlwaysExpanded = false; 
+  bool _isDeviceExpanded = false;
+  bool _isAlwaysExpanded = false;
   bool _isActionMenuCollapsed = false;
   Map<String, String> _customRemarks = {};
   bool _hasShownBalanceWarning = false;
@@ -58,7 +56,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
   DateTime? _startTime;
   Timer? _timer;
   String _runningTime = "00:00";
-  
+
   int _countdown = 0;
   Timer? _countdownTimer;
 
@@ -77,14 +75,14 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // 🌟 注册生命周期监听
+    WidgetsBinding.instance.addObserver(this);
     _loadFromLocal();
   }
 
   @override
-  void dispose() { 
-    WidgetsBinding.instance.removeObserver(this); // 🌟 移除监听
-    _timer?.cancel(); 
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
     _toastOverlayTimer?.cancel();
     _toastEntry?.remove();
     _countdownTimer?.cancel();
@@ -92,15 +90,10 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     super.dispose();
   }
 
-  // ==========================================
-  // 🌟 核心引擎：只要 App 被唤醒，立刻查收硬盘信件！
-  // ==========================================
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 当 App 从后台被 URL 或快捷指令唤醒到前台时触发
     if (state == AppLifecycleState.resumed) {
       if (_token.isNotEmpty) {
-        // 延时 500ms 确保 iOS 已经把最新指令写入了硬盘
         Future.delayed(const Duration(milliseconds: 500), () {
           _checkPendingAction();
         });
@@ -108,55 +101,42 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     }
   }
 
-  // 主动去 iOS 硬盘拉取
   Future<void> _checkPendingAction() async {
     try {
       final res = await _siriChannel.invokeMethod('getPendingAction');
       if (res != null && res is Map) {
-        _processActionAsync(res);
-      }
-    } catch (e) {
-      debugPrint("获取缓存指令失败: $e");
-    }
-  }
+        String action = res["action"]?.toString() ?? "";
+        String targetName = res["device"]?.toString() ?? "";
 
-  Future<void> _processActionAsync(dynamic args) async {
-    String action = "";
-    String targetName = "";
+        if (action.isEmpty) return;
 
-    if (args is Map) {
-      action = args["action"]?.toString() ?? "";
-      targetName = args["device"]?.toString() ?? "";
-    }
+        int retry = 0;
+        while (_deviceList.isEmpty && retry < 30) {
+          await Future.delayed(const Duration(milliseconds: 200));
+          retry++;
+        }
 
-    if (action.isEmpty) return;
-
-    // 🌟 冷启动保护：循环等待网络设备列表拉取完毕（最多等 6 秒）
-    int retry = 0;
-    while (_deviceList.isEmpty && retry < 30) {
-      await Future.delayed(const Duration(milliseconds: 200));
-      retry++;
-    }
-
-    if (action == "start") {
-      if (targetName.isNotEmpty && _deviceList.isNotEmpty) {
-        for (var d in _deviceList) {
-          String id = d["deviceInfId"].toString();
-          String name = (_customRemarks[id] ?? d["deviceInfName"].toString()).toLowerCase();
-          String search = targetName.toLowerCase();
-          if (name.contains(search) || search.contains(name)) {
-            setState(() => _selectedDeviceId = id);
-            break;
+        if (action == "start") {
+          if (targetName.isNotEmpty && _deviceList.isNotEmpty) {
+            for (var d in _deviceList) {
+              String id = d["deviceInfId"].toString();
+              String name = (_customRemarks[id] ?? d["deviceInfName"].toString()).toLowerCase();
+              String search = targetName.toLowerCase();
+              if (name.contains(search) || search.contains(name)) {
+                setState(() => _selectedDeviceId = id);
+                break;
+              }
+            }
           }
+          startWater(force: true);
+        } else if (action == "stop") {
+          stopWater();
         }
       }
-      startWater(force: true);
-    } else if (action == "stop") {
-      stopWater();
+    } catch (e) {
+      debugPrint(e.toString());
     }
   }
-
-  // ... (下方所有 UI 代码保持原样) ...
 
   void _showGlassBottomSheet(Widget child) {
     showGeneralDialog(
@@ -164,13 +144,13 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       barrierDismissible: true,
       barrierLabel: "GlassBottomSheet",
       barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 600), 
+      transitionDuration: const Duration(milliseconds: 600),
       pageBuilder: (context, anim1, anim2) {
         double kbHeight = MediaQuery.of(context).viewInsets.bottom;
         double screenH = MediaQuery.of(context).size.height;
         double maxDialogHeight = screenH - kbHeight - 80;
-      
-        if (maxDialogHeight < 200) maxDialogHeight = 200; 
+
+        if (maxDialogHeight < 200) maxDialogHeight = 200;
 
         return Stack(
           children: [
@@ -178,19 +158,19 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
             Align(
               alignment: Alignment.bottomCenter,
               child: AnimatedPadding(
-                padding: EdgeInsets.only(bottom: kbHeight), 
+                padding: EdgeInsets.only(bottom: kbHeight),
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
                 child: Container(
                   margin: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
                   width: double.infinity,
-                  constraints: BoxConstraints(maxHeight: maxDialogHeight), 
+                  constraints: BoxConstraints(maxHeight: maxDialogHeight),
                   decoration: ShapeDecoration(
-                    color: Colors.white.withOpacity(0.92), 
+                    color: Colors.white.withOpacity(0.92),
                     shape: ContinuousRectangleBorder(borderRadius: BorderRadius.circular(45))
                   ),
                   child: Material(
-                    color: Colors.transparent, 
+                    color: Colors.transparent,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22.5),
                       child: SingleChildScrollView(
@@ -213,11 +193,11 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
         return Stack(
           children: [
             BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 4.5 * curve.transform(anim1.value), sigmaY: 4.5 * curve.transform(anim1.value)), 
+              filter: ImageFilter.blur(sigmaX: 4.5 * curve.transform(anim1.value), sigmaY: 4.5 * curve.transform(anim1.value)),
               child: Container(color: Colors.transparent)
             ),
             SlideTransition(
-              position: Tween(begin: const Offset(0, 1.0), end: Offset.zero).animate(CurvedAnimation(parent: anim1, curve: curve)), 
+              position: Tween(begin: const Offset(0, 1.0), end: Offset.zero).animate(CurvedAnimation(parent: anim1, curve: curve)),
               child: child
             ),
           ]
@@ -234,17 +214,17 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       _userPhone = prefs.getString('userPhone') ?? "";
       _userName = prefs.getString('userName') ?? "User";
       _balance = prefs.getString('balance') ?? "0.00";
-      
+
       _orderNum = prefs.getString('water_orderNum') ?? "";
       _tableName = prefs.getString('water_tableName') ?? "";
       _mac = prefs.getString('water_mac') ?? "";
-      
+
       _history = prefs.getStringList('water_history') ?? [];
-      
+
       _isAlwaysExpanded = prefs.getBool('always_expanded') ?? false;
       if (_isAlwaysExpanded) {
         _isDeviceExpanded = true;
-        _isActionMenuCollapsed = true; 
+        _isActionMenuCollapsed = true;
       }
 
       String? remarksStr = prefs.getString('device_remarks');
@@ -266,11 +246,9 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
 
     if (_token.isNotEmpty) {
       await _silentTokenGuard();
-      await _fetchUserInfo(); 
+      await _fetchUserInfo();
       await _loadDeviceList();
       await _fetchRealHistoryData();
-      
-      // 🌟 冷启动：所有数据拉取完毕后，去硬盘读取指令
       _checkPendingAction();
     }
   }
@@ -294,7 +272,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
           const SizedBox(height: 16),
           Text("余额不足提醒", style: TextStyle(color: _deepTextColor, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          Text("您的当前余额为 ¥$_balance，已低于 5.00 元。\n\n为避免洗浴时突然断水，请前往「U易官方App」进行充值哦！", 
+          Text("您的当前余额为 ¥$_balance，已低于 5.00 元。\n\n为避免洗浴时突然断水，请前往「U易官方App」进行充值哦！",
                style: const TextStyle(color: Color(0xFF666666), fontSize: 14, height: 1.5), textAlign: TextAlign.center),
           const SizedBox(height: 28),
           SizedBox(
@@ -320,14 +298,14 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
           const SizedBox(height: 16),
           Text("非热水供应时段", style: TextStyle(color: _deepTextColor, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          const Text("当前不在规定的热水供应时段。\n(06:00-09:30、11:30-14:30、18:00-23:50)\n\n此时开启可能只有冷水，是否继续？", 
+          const Text("当前不在规定的热水供应时段。\n(06:00-09:30、11:30-14:30、18:00-23:50)\n\n此时开启可能只有冷水，是否继续？",
                style: TextStyle(color: Color(0xFF666666), fontSize: 14, height: 1.5), textAlign: TextAlign.center),
           const SizedBox(height: 28),
           Row(
             children: [
               Expanded(
                 child: TextButton(
-                  onPressed: () => Navigator.pop(context), 
+                  onPressed: () => Navigator.pop(context),
                   child: const Text("取消", style: TextStyle(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold))
                 )
               ),
@@ -337,7 +315,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: () {
                     Navigator.pop(context);
-                    startWater(force: true); 
+                    startWater(force: true);
                   },
                   child: const Text("继续使用", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 )
@@ -372,7 +350,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text("自定义设备备注", style: TextStyle(color: _deepTextColor, fontSize: 18, fontWeight: FontWeight.bold)),
-              if (_customRemarks.containsKey(id)) 
+              if (_customRemarks.containsKey(id))
                 GestureDetector(
                   onTap: () {
                     _saveDeviceRemark(id, "");
@@ -385,7 +363,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
           const SizedBox(height: 16),
           TextField(
             controller: editingController,
-            autofocus: true, 
+            autofocus: true,
             decoration: InputDecoration(
               hintText: "如：我的小电驴、536热水",
               filled: true,
@@ -423,8 +401,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
         onSuccess: () => _refreshDeviceListFromNet(),
         onToast: (msg) => _appToast(msg),
         onScan: () {
-          Navigator.pop(context); 
-          _openScanner();         
+          Navigator.pop(context);
+          _openScanner();
         },
       )
     );
@@ -449,7 +427,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       });
       if (res != null && (res["code"] == 0 || res["code"] == "0" || res["code"] == 200)) {
         _appToast("设备绑定成功！");
-        await _refreshDeviceListFromNet(); 
+        await _refreshDeviceListFromNet();
       } else {
         _appToast(res?["msg"] ?? "扫码绑定失败");
       }
@@ -494,7 +472,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     _showGlassBottomSheet(
       Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start, 
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("Logout", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _deepTextColor)),
           const SizedBox(height: 16),
@@ -510,7 +488,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                     await prefs.clear();
                     setState(() { _token = ""; _userId = ""; });
                     Navigator.pop(context);
-                  }, 
+                  },
                   child: const Text("退出登录", style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold))
                 )
               ),
@@ -583,7 +561,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
 
   String _generateSign(String dateTime, Map<String, String> extra) {
     Map<String, String> params = {"AndroidVersionName": "V2.9.2", "AndroidVersionCode": "92", "dateTime": dateTime};
-    if (_userId.isNotEmpty) params["userId"] = _userId; 
+    if (_userId.isNotEmpty) params["userId"] = _userId;
     if (_token.isNotEmpty) params["token"] = _token;
     params.addAll(extra);
     params.removeWhere((key, value) => value.toString().trim().isEmpty);
@@ -609,7 +587,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     if (res != null) {
       if (res["code"] == 0 || res["code"] == "0") {
         setState(() => _balance = res["data"]["uBalance"].toString());
-        _checkLowBalance(_balance); 
+        _checkLowBalance(_balance);
       } else if (res["code"] == 401 || res["code"] == "401") {
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
@@ -630,7 +608,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
             _selectedDeviceId = _deviceList[0]["deviceInfId"].toString();
           }
         });
-        return; 
+        return;
       } catch (e) {}
     }
     await _refreshDeviceListFromNet();
@@ -650,8 +628,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
           int bType = int.tryParse((item["deviceWayId"] ?? item["billType"] ?? 2).toString()) ?? 2;
           if (id.isNotEmpty) {
             processedList.add({
-              "deviceInfId": id, 
-              "deviceInfName": name, 
+              "deviceInfId": id,
+              "deviceInfName": name,
               "billType": bType,
               "commonlyId": commonlyId
             });
@@ -661,18 +639,18 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       processedList.sort((a, b) {
         int typeA = a["billType"] as int;
         int typeB = b["billType"] as int;
-        if (typeA != typeB) return typeB.compareTo(typeA); 
+        if (typeA != typeB) return typeB.compareTo(typeA);
         return a["deviceInfName"].toString().compareTo(b["deviceInfName"].toString());
       });
-      setState(() { 
-        _deviceList = processedList; 
+      setState(() {
+        _deviceList = processedList;
         if (_deviceList.isNotEmpty && !_deviceList.any((d) => d["deviceInfId"].toString() == _selectedDeviceId)) {
-           _selectedDeviceId = _deviceList[0]["deviceInfId"].toString(); 
+           _selectedDeviceId = _deviceList[0]["deviceInfId"].toString();
         } else if (_deviceList.isEmpty) {
            _selectedDeviceId = "";
         }
       });
-      _saveDeviceListToLocal(); 
+      _saveDeviceListToLocal();
     }
   }
 
@@ -686,11 +664,11 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     try {
       var res = await _http2Post("device/operationDeviceCommonly", {
         "commonlyId": commonlyId,
-        "type": "2" 
+        "type": "2"
       });
       if (res != null && (res["code"] == 0 || res["code"] == "0" || res["code"] == 200)) {
         _appToast("已移除常用设备");
-        await _refreshDeviceListFromNet(); 
+        await _refreshDeviceListFromNet();
       } else {
         _appToast(res?["msg"] ?? "删除失败，请重试");
       }
@@ -725,8 +703,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       stream.sendData(utf8.encode(body), endStream: true);
       List<int> resData = [];
       Map<String, String> resHeaders = {};
-      await for (var msg in stream.incomingMessages) { 
-        if (msg is HeadersStreamMessage) { 
+      await for (var msg in stream.incomingMessages) {
+        if (msg is HeadersStreamMessage) {
           for (var h in msg.headers) resHeaders[utf8.decode(h.name).toLowerCase()] = utf8.decode(h.value);
         } else if (msg is DataStreamMessage) {
           resData.addAll(msg.bytes);
@@ -735,24 +713,23 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       await transport.finish();
       String decoded = (resHeaders['content-encoding'] == 'gzip') ? utf8.decode(gzip.decode(resData)) : utf8.decode(resData);
       final res = jsonDecode(decoded);
-      if (res != null && (res["code"] == 0 || res["code"] == "0")) { 
+      if (res != null && (res["code"] == 0 || res["code"] == "0")) {
         _appToast("验证码已发送");
-        _startCountdown(); 
-      } else { 
+        _startCountdown();
+      } else {
         _appToast(res?["msg"] ?? "发送失败");
       }
     } catch (e) { _appToast("网络异常"); }
-    finally { setState(() => _isRequesting = false);
-    }
+    finally { setState(() => _isRequesting = false); }
   }
 
   void _startCountdown() {
     setState(() => _countdown = 60);
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) { 
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_countdown == 0) {
-        t.cancel(); 
+        t.cancel();
       } else if (mounted) {
-        setState(() => _countdown--); 
+        setState(() => _countdown--);
       }
     });
   }
@@ -783,8 +760,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       stream.sendData(utf8.encode(body), endStream: true);
       List<int> resData = [];
       Map<String, String> resHeaders = {};
-      await for (var msg in stream.incomingMessages) { 
-        if (msg is HeadersStreamMessage) { 
+      await for (var msg in stream.incomingMessages) {
+        if (msg is HeadersStreamMessage) {
           for (var h in msg.headers) resHeaders[utf8.decode(h.name).toLowerCase()] = utf8.decode(h.value);
         } else if (msg is DataStreamMessage) {
           resData.addAll(msg.bytes);
@@ -795,19 +772,18 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       final res = jsonDecode(decoded);
       if (res != null && (res["code"] == 0 || res["code"] == "0")) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString("userPhone", tel); 
-        await prefs.setString("token", res["data"]["token"]); 
+        await prefs.setString("userPhone", tel);
+        await prefs.setString("token", res["data"]["token"]);
         await prefs.setString("userId", res["data"]["userId"]);
         setState(() { _token = res["data"]["token"]; _userId = res["data"]["userId"]; _userPhone = tel; });
-        _silentTokenGuard(); 
-        _fetchUserInfo(); 
+        _silentTokenGuard();
+        _fetchUserInfo();
         _loadDeviceList();
-      } else { 
+      } else {
         _appToast("登录失败");
       }
     } catch (e) { _appToast("登录异常"); }
-    finally { setState(() => _isRequesting = false);
-    }
+    finally { setState(() => _isRequesting = false); }
   }
 
   Future<void> syncBalance() async {
@@ -822,24 +798,24 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
   Future<void> startWater({bool force = false}) async {
     if (_selectedDeviceId.isEmpty) { _appToast("请先选择设备");
       return; }
-    
+
     var device = _deviceList.firstWhere((d) => d["deviceInfId"].toString() == _selectedDeviceId, orElse: () => _deviceList[0]);
     String targetDeviceId = device["deviceInfId"].toString();
     String targetBillType = device["billType"].toString();
-    
+
     if (!force && targetBillType == "2") {
       DateTime now = DateTime.now();
       int currentMinutes = now.hour * 60 + now.minute;
-      
+
       bool inSlot1 = currentMinutes >= 6 * 60 && currentMinutes <= 9 * 60 + 30;
       bool inSlot2 = currentMinutes >= 11 * 60 + 30 && currentMinutes <= 14 * 60 + 30;
       bool inSlot3 = currentMinutes >= 18 * 60 && currentMinutes <= 23 * 60 + 50;
       if (!inSlot1 && !inSlot2 && !inSlot3) {
-        _showHotWaterTimeWarning(); 
+        _showHotWaterTimeWarning();
         return;
       }
     }
-    
+
     setState(() => _isRequesting = true);
     try {
       await _http2Post("device/useEquipment", {"orderWay": "1", "theConnectionMethod": "2", "deviceInfId": targetDeviceId, "billType": targetBillType, "lackBalance": "lackBalance", "type": "1"});
@@ -847,10 +823,10 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
       var res2 = await _http2Post("device/useEquipment", {"orderWay": "1", "theConnectionMethod": "2", "deviceInfId": targetDeviceId, "billType": targetBillType, "lackBalance": "lackBalance", "type": "0"});
       if (res2 != null && (res2["code"] == 0 || res2["code"] == "0")) {
         _startTime = DateTime.now();
-        setState(() { 
-          _orderNum = res2["data"]["orderNum"]?.toString() ?? ""; 
-          _tableName = res2["data"]["tableName"]?.toString() ?? ""; 
-          _mac = res2["data"]["mac"]?.toString() ?? ""; 
+        setState(() {
+          _orderNum = res2["data"]["orderNum"]?.toString() ?? "";
+          _tableName = res2["data"]["tableName"]?.toString() ?? "";
+          _mac = res2["data"]["mac"]?.toString() ?? "";
         });
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('water_orderNum', _orderNum);
@@ -864,43 +840,42 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
         });
         _appToast("已开启");
       } else { _appToast(res2?["msg"] ?? "开启失败"); }
-    } finally { setState(() => _isRequesting = false);
-    }
+    } finally { setState(() => _isRequesting = false); }
   }
 
   Future<void> stopWater() async {
-    if (_orderNum.isEmpty) { 
+    if (_orderNum.isEmpty) {
       _appToast("单号丢失，无法关水");
-      return; 
+      return;
     }
     String finalTime = _runningTime;
     final prefs = await SharedPreferences.getInstance();
     String savedInitialBal = prefs.getString('water_initial_balance') ?? _balance;
     double before = double.tryParse(savedInitialBal) ?? 0.0;
-    
+
     setState(() => _isRequesting = true);
     try {
       final res = await _http2Post("device/endEquipment", {"orderNum": _orderNum, "mac": _mac, "tableName": _tableName});
       if (res != null && (res["code"] == 0 || res["code"] == "0")) {
         _timer?.cancel();
-        await prefs.remove('water_orderNum'); 
-        await prefs.remove('water_tableName'); 
-        await prefs.remove('water_mac'); 
+        await prefs.remove('water_orderNum');
+        await prefs.remove('water_tableName');
+        await prefs.remove('water_mac');
         await prefs.remove('water_start_time');
         await prefs.remove('water_initial_balance');
         setState(() { _orderNum = ""; _tableName = ""; _mac = ""; _runningTime = "00:00"; });
         final syncRes = await _http2Post("user/queryUserWalletInfo", {});
         if (syncRes != null && (syncRes["code"] == 0 || syncRes["code"] == "0")) {
           setState(() => _balance = syncRes["data"]["uBalance"].toString());
-          _checkLowBalance(_balance); 
+          _checkLowBalance(_balance);
         }
-        
+
         double after = double.tryParse(_balance) ?? 0.0;
         double cost = before - after;
-        if (cost < 0) cost = 0.0; 
+        if (cost < 0) cost = 0.0;
         String costStr = cost.toStringAsFixed(2);
         _appToast("结算：¥$costStr，用时 $finalTime", durationMs: 4000);
-        
+
         String currentDeviceName = "";
         try {
           var d = _deviceList.firstWhere((d) => d["deviceInfId"].toString() == _selectedDeviceId, orElse: () => _deviceList[0]);
@@ -911,10 +886,10 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
 
         _history.insert(0, "${DateFormat('MM-dd HH:mm').format(DateTime.now())} ¥$costStr ($currentDeviceName 用时$finalTime)");
         await prefs.setStringList('water_history', _history);
-      } else { 
+      } else {
         _appToast(res?["msg"] ?? "结算失败");
       }
-    } finally { 
+    } finally {
       setState(() => _isRequesting = false);
     }
   }
@@ -928,27 +903,27 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
           final Map firstBill = list[0] as Map;
           if ((firstBill["expAmountStr"] ?? "").toString().contains("未结算")) {
              String timeStr = (firstBill["payTypeStr"] ?? firstBill["createTime"] ?? "").toString();
-             try { 
+             try {
                _startTime = DateTime.parse(timeStr.replaceAll('/', '-').replaceFirst(' ', 'T'));
              } catch (e) {}
           }
           return list.map<String>((item) {
             final Map m = item as Map;
-            
+
             String dName = (m["deviceName"] ?? m["deviceInfName"] ?? "").toString();
             if (dName.contains("-")) {
               dName = dName.split("-").last;
             } else {
               dName = dName.replaceAll(RegExp(r'^[12]-'), '');
             }
-            
+
             String title = (m["title"] ?? "").toString();
             if (title.contains("洗浴") || title.contains("热水") || title.contains("设备用水")) {
               title = "热水";
             } else if (title.contains("饮")) {
               title = "直饮水";
             }
-            
+
             String tag = dName.isNotEmpty ? "$dName$title" : title;
             if (tag.isEmpty) tag = "未知设备";
 
@@ -964,33 +939,33 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     final futureData = _fetchRealHistoryData();
     _showGlassBottomSheet(
       Column(
-        mainAxisSize: MainAxisSize.min, 
-        crossAxisAlignment: CrossAxisAlignment.start, 
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("用水记录", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _deepTextColor)), 
+              Text("用水记录", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _deepTextColor)),
               GestureDetector(
-                onTap: () async { 
-                  (await SharedPreferences.getInstance()).remove('water_history'); 
-                  setState(() => _history = []); 
-                  Navigator.pop(context); 
-                }, 
+                onTap: () async {
+                  (await SharedPreferences.getInstance()).remove('water_history');
+                  setState(() => _history = []);
+                  Navigator.pop(context);
+                },
                 child: const Text("清除", style: TextStyle(color: Colors.grey, fontSize: 13))
               )
             ]
-          ), 
-          const SizedBox(height: 16), 
+          ),
+          const SizedBox(height: 16),
           SizedBox(
-            height: 304, 
+            height: 304,
             child: FutureBuilder<List<String>>(
-              future: futureData, 
-              builder: (context, snapshot) { 
+              future: futureData,
+              builder: (context, snapshot) {
                 return AnimatedSwitcher(duration: const Duration(milliseconds: 300), child: _buildHistoryContent(snapshot));
               }
             )
-          ), 
+          ),
           const SizedBox(height: 10)
         ]
       )
@@ -1002,8 +977,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     List<String> list = snapshot.data ?? [];
     if (list.isEmpty) return Container(key: const ValueKey("empty"), height: 304, alignment: Alignment.center, child: const Text("暂无记录", style: TextStyle(color: Colors.grey)));
     return Column(
-      key: const ValueKey("list"), 
-      crossAxisAlignment: CrossAxisAlignment.start, 
+      key: const ValueKey("list"),
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: list.take(8).map((e) => Container(height: 38, alignment: Alignment.centerLeft, child: Text(e, style: const TextStyle(color: Color(0xFF666666), fontSize: 14)))).toList()
     );
   }
@@ -1011,42 +986,42 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F7), 
+      backgroundColor: const Color(0xFFF2F2F7),
       body: SafeArea(child: _token.isEmpty ? _buildLoginUI() : _buildMainUI())
     );
   }
 
   Widget _buildLoginUI() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40), 
+      padding: const EdgeInsets.symmetric(horizontal: 40),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center, 
-        crossAxisAlignment: CrossAxisAlignment.start, 
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Welcome", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: _deepTextColor)), 
-          const SizedBox(height: 40), 
-          TextField(controller: _phoneController, keyboardType: TextInputType.phone, 
-            decoration: const InputDecoration(labelText: "手机号")), 
-          const SizedBox(height: 20), 
+          Text("Welcome", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: _deepTextColor)),
+          const SizedBox(height: 40),
+          TextField(controller: _phoneController, keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(labelText: "手机号")),
+          const SizedBox(height: 20),
           Stack(
-            alignment: Alignment.centerRight, 
+            alignment: Alignment.centerRight,
             children: [
-              TextField(controller: _codeController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "验证码")), 
+              TextField(controller: _codeController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "验证码")),
               GestureDetector(
-                onTap: (_countdown > 0 || _isRequesting) ? null : sendCode, 
+                onTap: (_countdown > 0 || _isRequesting) ? null : sendCode,
                 child: _isRequesting && _countdown == 0 ?
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : 
+                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) :
                   Text(_countdown > 0 ? "$_countdown s" : "获取验证码", style: TextStyle(color: _countdown > 0 ? Colors.grey : _deepTextColor, fontWeight: FontWeight.bold))
               )
             ]
-          ), 
-          const SizedBox(height: 50), 
+          ),
+          const SizedBox(height: 50),
           SizedBox(
-            width: double.infinity, 
-            height: 54, 
+            width: double.infinity,
+            height: 54,
             child: ElevatedButton(
-              onPressed: login, 
-              style: ElevatedButton.styleFrom(backgroundColor: _deepTextColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), 
+              onPressed: login,
+              style: ElevatedButton.styleFrom(backgroundColor: _deepTextColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
               child: const Text("登录", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
             )
           )
@@ -1058,45 +1033,45 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
   Widget _buildMainUI() {
     bool working = _orderNum.isNotEmpty;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start, 
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, 
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                 const SizedBox(height: 40), 
+                const SizedBox(height: 40),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28), 
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
                   child: Text("你好, $_userName", style: TextStyle(color: Colors.grey[600], fontSize: 15, fontWeight: FontWeight.w600))
-                ), 
-                  const SizedBox(height: 12), 
+                ),
+                const SizedBox(height: 12),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28), 
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
                   child: GestureDetector(
-                    onTap: syncBalance, 
-                    behavior: HitTestBehavior.opaque, 
+                    onTap: syncBalance,
+                    behavior: HitTestBehavior.opaque,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start, 
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("钱包余额", style: TextStyle(color: Colors.grey, fontSize: 13)), 
-                        const SizedBox(height: 2), 
+                        const Text("钱包余额", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                        const SizedBox(height: 2),
                         FittedBox(child: Text("¥ $_balance", style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: _deepTextColor)))
                       ]
                     )
                   )
-                ), 
-                const SizedBox(height: 30), 
+                ),
+                const SizedBox(height: 30),
                 _buildSmartDeviceCard(),
                 Padding(
-                  padding: const EdgeInsets.only(left: 43, right: 28, top: 12), 
+                  padding: const EdgeInsets.only(left: 43, right: 28, top: 12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       GestureDetector(
-                        onTap: _showFloatingHistory, 
+                        onTap: _showFloatingHistory,
                         child: const Text("用水记录 >", style: TextStyle(color: Colors.grey, fontSize: 13))
                       ),
                       if (_isAlwaysExpanded)
@@ -1110,7 +1085,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                             height: 28,
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(100), 
+                              borderRadius: BorderRadius.circular(100),
                               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)]
                             ),
                             child: Icon(
@@ -1120,54 +1095,54 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                             ),
                           )
                         )
-                      else 
+                      else
                         const SizedBox(height: 28),
                     ]
                   )
-                ), 
+                ),
                 const SizedBox(height: 20),
               ],
             ),
           )
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28), 
+          padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-            crossAxisAlignment: CrossAxisAlignment.end, 
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(child: Text(_userPhone.length >= 11 ?
-                "*******${_userPhone.substring(7)}" : "*******", style: const TextStyle(color: Colors.grey, fontSize: 13))), 
+                "*******${_userPhone.substring(7)}" : "*******", style: const TextStyle(color: Colors.grey, fontSize: 13))),
               GestureDetector(
-                onTap: _isRequesting ? null : (working ? stopWater : () => startWater()), 
+                onTap: _isRequesting ? null : (working ? stopWater : () => startWater()),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300), 
-                  width: 115, height: 115, 
-                  decoration: ShapeDecoration(color: working ? Colors.redAccent : const Color(0xFF1660AB), shape: ContinuousRectangleBorder(borderRadius: BorderRadius.circular(50))), 
-                  alignment: Alignment.center, 
-                  child: _isRequesting ? 
-                    const ThreeDotsLoading() : 
+                  duration: const Duration(milliseconds: 300),
+                  width: 115, height: 115,
+                  decoration: ShapeDecoration(color: working ? Colors.redAccent : const Color(0xFF1660AB), shape: ContinuousRectangleBorder(borderRadius: BorderRadius.circular(50))),
+                  alignment: Alignment.center,
+                  child: _isRequesting ?
+                    const ThreeDotsLoading() :
                     Column(
-                      mainAxisAlignment: MainAxisAlignment.center, 
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(working ? "STOP" : "OPEN", style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)), 
+                        Text(working ? "STOP" : "OPEN", style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                         if (working) Text(_runningTime, style: const TextStyle(color: Colors.white70, fontSize: 13))
                       ]
                     )
                 )
-              ), 
+              ),
               Expanded(
                 child: Align(
-                  alignment: Alignment.bottomRight, 
+                  alignment: Alignment.bottomRight,
                   child: GestureDetector(
-                    onTap: _showLogoutConfirm, 
+                    onTap: _showLogoutConfirm,
                     child: const Text("退出登录", style: TextStyle(color: Colors.grey, fontSize: 13))
                   )
                 )
               )
             ]
           )
-        ), 
+        ),
         const SizedBox(height: 30)
       ]
     );
@@ -1178,16 +1153,16 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     _deviceList.firstWhere((d) => d["deviceInfId"].toString() == _selectedDeviceId, orElse: () => _deviceList[0]) : null;
     String title = selectedDevice != null ?
     (_customRemarks[selectedDevice["deviceInfId"].toString()] ?? selectedDevice["deviceInfName"].toString().replaceAll(RegExp(r'^[12]-'), '')) : "请先添加设备";
-    
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28), 
+      padding: const EdgeInsets.symmetric(horizontal: 28),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 350), 
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15)]), 
+        duration: const Duration(milliseconds: 350),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15)]),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18), 
+          borderRadius: BorderRadius.circular(18),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, 
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               GestureDetector(
                 onTap: () {
@@ -1198,52 +1173,52 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                   } else {
                     _showCascadingAddDeviceDialog();
                   }
-                }, 
-                behavior: HitTestBehavior.opaque, 
+                },
+                behavior: HitTestBehavior.opaque,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16), 
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   child: Row(
                     children: [
                       if (selectedDevice != null) ...[
                         Icon(selectedDevice["billType"] == 2 ?
-                          Icons.hot_tub : Icons.water_drop, color: selectedDevice["billType"] == 2 ? Colors.orange : Colors.blue, size: 22), 
-                        const SizedBox(width: 12), 
+                          Icons.hot_tub : Icons.water_drop, color: selectedDevice["billType"] == 2 ? Colors.orange : Colors.blue, size: 22),
+                        const SizedBox(width: 12),
                         Expanded(child: Text(title, style: TextStyle(color: _deepTextColor, fontSize: 16, fontWeight: FontWeight.bold)))
                       ] else ...[
                         const Icon(Icons.add_circle, color: Colors.blue, size: 22),
-                        const SizedBox(width: 12), 
+                        const SizedBox(width: 12),
                         Expanded(child: Text("添加你的第一个设备", style: TextStyle(color: _deepTextColor, fontSize: 16, fontWeight: FontWeight.bold)))
-                      ], 
+                      ],
                       if (!_isAlwaysExpanded)
                         Icon(_isDeviceExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.grey)
                     ]
                   )
                 )
-              ), 
+              ),
               AnimatedSize(
-                duration: const Duration(milliseconds: 400), 
-                curve: Curves.easeInOutCubic, 
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeInOutCubic,
                 child: _isDeviceExpanded ?
                   Column(
                     children: [
-                      Divider(height: 1, thickness: 1, color: Colors.grey[100]), 
+                      Divider(height: 1, thickness: 1, color: Colors.grey[100]),
                       ReorderableListView(
-                        shrinkWrap: true, 
-                        physics: const NeverScrollableScrollPhysics(), 
-                        onReorder: (old, newIdx) { 
-                          setState(() { 
-                            if (newIdx > old) newIdx--; 
-                            final item = _deviceList.removeAt(old); 
-                            _deviceList.insert(newIdx, item); 
-                            _saveDeviceListToLocal(); 
-                          }); 
-                        }, 
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onReorder: (old, newIdx) {
+                          setState(() {
+                            if (newIdx > old) newIdx--;
+                            final item = _deviceList.removeAt(old);
+                            _deviceList.insert(newIdx, item);
+                            _saveDeviceListToLocal();
+                          });
+                        },
                         children: _deviceList.map((d) => _buildDeviceItem(d)).toList()
-                      ), 
+                      ),
                       AnimatedSize(
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOutCubic,
-                        child: (_isAlwaysExpanded && _isActionMenuCollapsed) 
+                        child: (_isAlwaysExpanded && _isActionMenuCollapsed)
                           ?
                           const SizedBox(width: double.infinity, height: 0)
                           : Column(
@@ -1253,7 +1228,7 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                                     Expanded(child: _buildIconButton(Icons.refresh, "刷新", Colors.blue, () { if(!_isAlwaysExpanded) setState(() => _isDeviceExpanded = false);
                                       _refreshDeviceListFromNet(); })),
                                     Container(width: 1, height: 20, color: Colors.grey[200]),
-                                    Expanded(child: _buildIconButton(Icons.delete_outline, "删除", 
+                                    Expanded(child: _buildIconButton(Icons.delete_outline, "删除",
                                       Colors.redAccent, () {
                                       if (selectedDevice != null && selectedDevice["commonlyId"] != null && selectedDevice["commonlyId"].toString().isNotEmpty) {
                                         if(!_isAlwaysExpanded) setState(() => _isDeviceExpanded = false);
@@ -1287,8 +1262,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                                         height: 28,
                                         padding: const EdgeInsets.all(2),
                                         decoration: BoxDecoration(
-                                          color: Colors.grey[200], 
-                                          borderRadius: BorderRadius.circular(100), 
+                                          color: Colors.grey[200],
+                                          borderRadius: BorderRadius.circular(100),
                                         ),
                                         child: Stack(
                                           children: [
@@ -1300,8 +1275,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                                                 width: 45,
                                                 height: 24,
                                                 decoration: BoxDecoration(
-                                                  color: Colors.white, 
-                                                  borderRadius: BorderRadius.circular(100), 
+                                                  color: Colors.white,
+                                                  borderRadius: BorderRadius.circular(100),
                                                   boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))]
                                                 ),
                                               ),
@@ -1321,8 +1296,8 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
                               ],
                             ),
                       )
-                    ] 
-                  ) : 
+                    ]
+                  ) :
                   const SizedBox(width: double.infinity, height: 0)
               )
             ]
@@ -1334,15 +1309,15 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
 
   Widget _buildIconButton(IconData icon, String label, Color color, VoidCallback onTap) {
     return GestureDetector(
-      onTap: onTap, 
-      behavior: HitTestBehavior.opaque, 
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14), 
+        padding: const EdgeInsets.symmetric(vertical: 14),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center, 
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 16), 
-            const SizedBox(width: 4), 
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 4),
             Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold))
           ]
         )
@@ -1355,39 +1330,36 @@ class _WaterAppState extends State<WaterApp> with TickerProviderStateMixin, Widg
     bool isSelected = id == _selectedDeviceId;
     String name = _customRemarks[id] ?? device["deviceInfName"].toString().replaceAll(RegExp(r'^[12]-'), '');
     return GestureDetector(
-      key: ValueKey(id), 
-      onTap: () { 
+      key: ValueKey(id),
+      onTap: () {
         if (_orderNum.isNotEmpty) {
           _appToast("用水中，无法切换设备");
         } else {
-          setState(() { 
-            _selectedDeviceId = id; 
-            if (!_isAlwaysExpanded) _isDeviceExpanded = false; 
-          }); 
+          setState(() {
+            _selectedDeviceId = id;
+            if (!_isAlwaysExpanded) _isDeviceExpanded = false;
+          });
         }
-      }, 
-      behavior: HitTestBehavior.opaque, 
+      },
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        color: isSelected ? Colors.grey[50] : Colors.transparent, 
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), 
+        color: isSelected ? Colors.grey[50] : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         child: Row(
           children: [
-            Icon(Icons.drag_handle, color: Colors.grey[400], size: 20), 
-            const SizedBox(width: 12), 
-            Expanded(child: Text("$name (${device["billType"] == 2 ? "热水" : "直饮"})", style: TextStyle(color: isSelected ? _deepTextColor : Colors.grey[700], fontSize: 14, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))), 
-            if (isSelected) Icon(Icons.check, color: _deepTextColor, size: 18), 
-            const SizedBox(width: 16), 
+            Icon(Icons.drag_handle, color: Colors.grey[400], size: 20),
+            const SizedBox(width: 12),
+            Expanded(child: Text("$name (${device["billType"] == 2 ? "热水" : "直饮"})", style: TextStyle(color: isSelected ? _deepTextColor : Colors.grey[700], fontSize: 14, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))),
+            if (isSelected) Icon(Icons.check, color: _deepTextColor, size: 18),
+            const SizedBox(width: 16),
             GestureDetector(onTap: () => _showEditRemarkDialog(id, name), child: Icon(Icons.edit_note, color: Colors.grey[400], size: 22))
-          ] 
+          ]
         )
       )
     );
   }
 }
 
-// ==========================================
-// 🌟 独立组件：TopToastWidget 全局层级滑动通知
-// ==========================================
 class TopToastWidget extends StatefulWidget {
   final String message;
   final int durationMs;
@@ -1435,25 +1407,25 @@ class _TopToastWidgetState extends State<TopToastWidget> with SingleTickerProvid
         child: Center(
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22), 
+              borderRadius: BorderRadius.circular(22),
               boxShadow: [ BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 25, offset: const Offset(0, 10)) ]
-            ), 
+            ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(22), 
+              borderRadius: BorderRadius.circular(22),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12), 
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14), 
+                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.85), 
-                    borderRadius: BorderRadius.circular(22), 
+                    color: Colors.white.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(22),
                     border: Border.all(color: Colors.grey.withOpacity(0.2))
-                  ), 
+                  ),
                   child: Material(
                     color: Colors.transparent,
                     child: Text(
-                      widget.message, 
-                      textAlign: TextAlign.center, 
+                      widget.message,
+                      textAlign: TextAlign.center,
                       style: const TextStyle(color: Color(0xFF2C2C2E), fontSize: 14, fontWeight: FontWeight.w600)
                     ),
                   )
@@ -1467,21 +1439,18 @@ class _TopToastWidgetState extends State<TopToastWidget> with SingleTickerProvid
   }
 }
 
-// ==========================================
-// 🌟 独立组件：毛玻璃级联选择器
-// ==========================================
 class DeviceSelectorDialog extends StatefulWidget {
   final Future<Map<String, dynamic>?> Function(String, Map<String, String>) httpPost;
   final VoidCallback onSuccess;
   final Function(String) onToast;
-  final VoidCallback onScan; 
+  final VoidCallback onScan;
 
   const DeviceSelectorDialog({
-    super.key, 
-    required this.httpPost, 
-    required this.onSuccess, 
+    super.key,
+    required this.httpPost,
+    required this.onSuccess,
     required this.onToast,
-    required this.onScan, 
+    required this.onScan,
   });
   @override
   State<DeviceSelectorDialog> createState() => _DeviceSelectorDialogState();
@@ -1492,7 +1461,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
   int _step = 0;
   bool _isLoading = true;
   String _selectedWayId = "";
-  
+
   List<Map<String, String>> _currentList = [];
   final List<List<Map<String, String>>> _historyLists = [];
   final List<String> _titles = ["选择用水类型"];
@@ -1501,7 +1470,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
   @override
   void initState() {
     super.initState();
-    _fetchData(0, mySchoolId); 
+    _fetchData(0, mySchoolId);
   }
 
   String _extractId(Map m) {
@@ -1555,7 +1524,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
         for (var value in rawData.values) {
           if (value is List) {
             targetList = value;
-            break; 
+            break;
           }
         }
       }
@@ -1609,11 +1578,11 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
               "deviceTypeId": deviceTypeId,
               "deviceWayId": finalWayId,
               "deviceInfId": deviceInfId,
-              "type": "1" 
+              "type": "1"
             });
             if (addRes != null && (addRes["code"] == 0 || addRes["code"] == "0" || addRes["code"] == 200)) {
               widget.onToast("设备添加成功！");
-              widget.onSuccess(); 
+              widget.onSuccess();
               if (mounted) Navigator.pop(context);
               return;
             } else {
@@ -1628,7 +1597,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
       } else {
         widget.onToast(queryRes?["msg"] ?? "该位置暂无设备或设备离线");
       }
-      
+
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -1640,7 +1609,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
       setState(() {
         _step--;
         _titles.removeLast();
-        _currentList = _historyLists.removeLast(); 
+        _currentList = _historyLists.removeLast();
       });
     }
   }
@@ -1656,11 +1625,11 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _step > 0 
-                ? GestureDetector(onTap: _onBack, child: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF2C2C2E))) 
+              _step > 0
+                ? GestureDetector(onTap: _onBack, child: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF2C2C2E)))
                 : const SizedBox(width: 20),
               Text(_titles.last, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF2C2C2E))),
-              GestureDetector(onTap: widget.onScan, 
+              GestureDetector(onTap: widget.onScan,
               child: const Icon(Icons.qr_code_scanner, size: 22, color: Color(0xFF2C2C2E))),
             ]
           ),
@@ -1677,11 +1646,11 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
                       Text("${index + 1}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isActive ? const Color(0xFF34C759) : Colors.grey[400])),
                       const SizedBox(height: 8),
                       AnimatedContainer(
-                        duration: const Duration(milliseconds: 800), 
-                        curve: Curves.easeInOutCubic, 
-                        height: 8, 
+                        duration: const Duration(milliseconds: 800),
+                        curve: Curves.easeInOutCubic,
+                        height: 8,
                         decoration: BoxDecoration(
-                          color: isActive ? const Color(0xFF34C759) : Colors.grey[200], 
+                          color: isActive ? const Color(0xFF34C759) : Colors.grey[200],
                           borderRadius: BorderRadius.circular(100)
                         ),
                       ),
@@ -1694,12 +1663,12 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
           const SizedBox(height: 24),
           Container(
             height: 320,
-            alignment: Alignment.topCenter, 
+            alignment: Alignment.topCenter,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
               layoutBuilder: (currentChild, previousChildren) => Stack(alignment: Alignment.topCenter, children: <Widget>[...previousChildren, if (currentChild != null) currentChild]),
-              child: _isLoading 
-                ? const SkeletonList() 
+              child: _isLoading
+                ? const SkeletonList()
                 : _currentList.isEmpty
                   ? const Padding(padding: EdgeInsets.only(top: 40), child: Text("暂无数据", style: TextStyle(color: Colors.grey)))
                   : ListView.builder(
@@ -1720,50 +1689,47 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
   }
 }
 
-// ==========================================
-// 辅助动画组件
-// ==========================================
-class SkeletonList extends StatefulWidget { 
-  const SkeletonList({super.key}); 
-  @override 
+class SkeletonList extends StatefulWidget {
+  const SkeletonList({super.key});
+  @override
   State<SkeletonList> createState() => _SkeletonListState();
 }
 
-class _SkeletonListState extends State<SkeletonList> with SingleTickerProviderStateMixin { 
+class _SkeletonListState extends State<SkeletonList> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  @override 
-  void initState() { 
-    super.initState(); 
+  @override
+  void initState() {
+    super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat();
-  } 
-  
-  @override 
-  void dispose() { 
-    _controller.dispose(); 
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
     super.dispose();
-  } 
-  
-  @override 
-  Widget build(BuildContext context) { 
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: List.generate(8, (i) => Container(
-        height: 38, 
-        alignment: Alignment.centerLeft, 
+        height: 38,
+        alignment: Alignment.centerLeft,
         child: AnimatedBuilder(
-          animation: _controller, 
-          builder: (context, child) { 
+          animation: _controller,
+          builder: (context, child) {
             return ShaderMask(
-              shaderCallback: (rect) { 
+              shaderCallback: (rect) {
                 return LinearGradient(
-                  begin: Alignment.centerLeft, 
-                  end: Alignment.centerRight, 
-                  colors: [Colors.grey[200]!, Colors.grey[50]!, Colors.grey[200]!], 
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [Colors.grey[200]!, Colors.grey[50]!, Colors.grey[200]!],
                   stops: [_controller.value - 0.3, _controller.value, _controller.value + 0.3]
-                ).createShader(rect); 
-              }, 
+                ).createShader(rect);
+              },
               child: Container(
-                height: 14, 
-                width: i % 2 == 0 ? 130 : 100, 
+                height: 14,
+                width: i % 2 == 0 ? 130 : 100,
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(7))
               )
             );
@@ -1771,50 +1737,50 @@ class _SkeletonListState extends State<SkeletonList> with SingleTickerProviderSt
         )
       ))
     );
-  } 
+  }
 }
 
-class ThreeDotsLoading extends StatefulWidget { 
-  final Color color; 
+class ThreeDotsLoading extends StatefulWidget {
+  final Color color;
   const ThreeDotsLoading({super.key, this.color = Colors.white});
-  @override 
-  State<ThreeDotsLoading> createState() => _ThreeDotsLoadingState(); 
+  @override
+  State<ThreeDotsLoading> createState() => _ThreeDotsLoadingState();
 }
 
-class _ThreeDotsLoadingState extends State<ThreeDotsLoading> with TickerProviderStateMixin { 
+class _ThreeDotsLoadingState extends State<ThreeDotsLoading> with TickerProviderStateMixin {
   late AnimationController _controller;
-  @override 
-  void initState() { 
-    super.initState(); 
+  @override
+  void initState() {
+    super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat();
-  } 
-  
-  @override 
-  void dispose() { 
-    _controller.dispose(); 
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
     super.dispose();
-  } 
-  
-  @override 
-  Widget build(BuildContext context) { 
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min, 
-      children: List.generate(3, (index) { 
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (index) {
         return AnimatedBuilder(
-          animation: _controller, 
-          builder: (context, child) { 
-            double v = (sin((_controller.value * 2 * pi) - (index * 0.2 * 2 * pi)) + 1) / 2; 
+          animation: _controller,
+          builder: (context, child) {
+            double v = (sin((_controller.value * 2 * pi) - (index * 0.2 * 2 * pi)) + 1) / 2;
             return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2.5), 
-              width: 7, 
-              height: 7, 
+              margin: const EdgeInsets.symmetric(horizontal: 2.5),
+              width: 7,
+              height: 7,
               decoration: BoxDecoration(color: widget.color.withOpacity(0.4 + (v * 0.6)), shape: BoxShape.circle)
-            ); 
+            );
           }
-        ); 
+        );
       })
     );
-  } 
+  }
 }
 
 class QRScannerPage extends StatelessWidget {
