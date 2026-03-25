@@ -81,11 +81,10 @@ struct StopWaterIntent: AppIntent {
         return .result(value: "指令已接收", dialog: "正在打开水控...")
     }
 }
-
 @available(iOS 16.0, *)
 struct WaterShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: StartWaterIntent(), phrases: ["开启热水"], shortTitle: "开启热水", systemImageName: "drop.fill")
-        AppShortcut(intent: StopWaterIntent(), phrases: ["停止用水"], shortTitle: "停止用水", systemImageName: "xmark.circle.fill")
+        AppShortcut(intent: StartWaterIntent(), phrases: ["使用 \(.applicationName) 开启热水"], shortTitle: "开启热水", systemImageName: "drop.fill")
+        AppShortcut(intent: StopWaterIntent(), phrases: ["使用 \(.applicationName) 停止用水"], shortTitle: "停止用水", systemImageName: "xmark.circle.fill")
     }
 }
