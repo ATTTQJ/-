@@ -2,8 +2,8 @@ name: iOS Unsigned Build
 
 on:
   push:
-    branches: [ main ] # 当你 push 到 main 分支时触发
-  workflow_dispatch:   # 支持在 GitHub Actions 页面手动点击运行
+    branches: [ main ] # 如果你的主分支叫 master，请改为 master
+  workflow_dispatch:   # 支持手动点击按钮打包
 
 jobs:
   build:
@@ -15,34 +15,42 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          # 自动拉取最新的 stable 版本，确保支持 Dart 3.11+
           channel: 'stable'
-          flutter-version: '3.41.5' # 建议固定一个你本地测试过的版本
 
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          # 如果之前编译失败，建议在这里执行一次 clean
+          flutter clean
+          flutter pub get
 
-      # 🌟 核心补丁：物理抹除 Xcode 的签名校验逻辑
+      # 🌟 核心补丁：物理欺骗 Xcode 绕过签名校验
       - name: Patch Xcode Project for Unsigned Build
         run: |
-          # 1. 抹除所有关于 Team ID 的声明
-          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          # 1. 注入虚假 Team ID (7B38P92A8V)
+          # 这一步是为了满足 Xcode 15+ 对“特权插件”必须有归属的要求
+          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = 7B38P92A8V;/g' ios/Runner.xcodeproj/project.pbxproj
           
-          # 2. 强行关闭签名检查（针对 Release 环境）
+          # 2. 强制关闭所有签名和权限清单（Entitlements）的校验
+          # 抹除 Entitlements 引用是解决 Siri/蓝牙报错的关键
+          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;//g' ios/Runner.xcodeproj/project.pbxproj
+          
+          # 3. 修改 Flutter 配置文件，硬编码不签名标识
           echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
-          
-          # 3. 移除权限清单引用，防止 Xcode 校验 Siri/蓝牙等 Capability
-          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          echo "EXPANDED_CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
 
       - name: Build iOS App Bundle
         run: |
-          # 执行不签名编译，显式指定版本号
+          # 使用 --no-codesign 跳过物理签名阶段
           flutter build ios --release --no-codesign --build-name=1.0.0 --build-number=1
 
       - name: Create Unsigned IPA
         run: |
-          # 模拟手动打包流程
+          # 手动将 .app 封装为 .ipa 供下载安装（仅限自签名工具）
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r WaterApp_Unsigned.ipa Payload
