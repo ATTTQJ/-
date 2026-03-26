@@ -2,8 +2,8 @@ name: iOS Unsigned Build (Componentized)
 
 on:
   push:
-    branches: [ main ] # 如果你的主分支叫 master，请修改为 master
-  workflow_dispatch:   # 支持手动触发打包
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,7 +16,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          # 自动匹配你 pubspec.yaml 要求的 Dart SDK 版本
+          # 这里会自动匹配你 pubspec.yaml 要求的 Dart 版本
 
       - name: Install dependencies
         run: |
@@ -29,7 +29,7 @@ jobs:
       - name: Hard-Patch Xcode for Unsigned Build
         run: |
           # 1. 注入虚假 Team ID (占位符)
-          # 只要这个字段不为空，Xcode 预审就不会报错
+          # 只要这个字段不为空，Xcode 的预审逻辑就会闭嘴
           sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = 7B38P92A8V;/g' ios/Runner.xcodeproj/project.pbxproj
           
           # 2. 强行切断权限清单 (Entitlements) 的关联
@@ -41,30 +41,35 @@ jobs:
           echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
           
-          # 4. 针对 Pods 插件进行全局“去签名”处理 (解决 mobile_scanner 的校验)
+          # 4. 针对 Pods 插件进行全局“去签名”处理
+          # 使用 Ruby 精准注入，避免 "multiple post_install hooks" 报错
           cd ios
           pod install || true
           if [ -f "Podfile" ]; then
-            # 使用 Ruby 精准注入，避免 multiple post_install hooks 错误
             ruby -i -e '
             content = ARGF.read
+            # 找到现有的 post_install 块，并在其内部循环中插入禁用签名的代码
             if content.include?("post_install do |installer|")
-              content.gsub!(/installer.pods_project.targets.each do \|target\|/, "installer.pods_project.targets.each do |target|\n      target.build_configurations.each do |config|\n        config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n        config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n        config.build_settings[\"DEVELOPMENT_TEAM\"] = \"\"\n      end")
+              content.gsub!(/installer.pods_project.targets.each do \|target\|/, 
+                "installer.pods_project.targets.each do |target|\n      target.build_configurations.each do |config|\n        config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n        config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n        config.build_settings[\"DEVELOPMENT_TEAM\"] = \"\"\n      end")
               print content
+            else
+              # 如果没有块，则创建一个新的
+              print content + "\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n    target.build_configurations.each do |config|\n      config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n      config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n      config.build_settings[\"DEVELOPMENT_TEAM\"] = \"\"\n    end\n  end\nend\n"
             end
             ' Podfile
-            pod install
+            pod install # 重新同步配置
           fi
           cd ..
 
       - name: Build iOS App
         run: |
-          # 执行不签名编译
+          # 执行不签名编译，显式跳过签名阶段
           flutter build ios --release --no-codesign --build-name=1.0.0 --build-number=1
 
       - name: Create Unsigned IPA
         run: |
-          # 将编译产物封装为可安装的 IPA (适用于巨魔/越狱/自签工具)
+          # 封装为可供巨魔/自签工具安装的 IPA
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r WaterApp_Unsigned.ipa Payload
