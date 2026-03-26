@@ -25,43 +25,24 @@ jobs:
           flutter pub get
           flutter precache --ios
 
-      # 🌟 核心补丁：物理绕过 Xcode 15+ 的 Team ID 校验
-      - name: Hard-Patch Xcode for Unsigned Build
+      - name: Force Strip Capabilities for Unsigned Build
         run: |
-          # 1. 注入虚假 Team ID (占位符)
-          # 只要这个字段不为空，Xcode 的预审逻辑就会闭嘴
-          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = 7B38P92A8V;/g' ios/Runner.xcodeproj/project.pbxproj
+          # 1. 彻底物理删除 .entitlements 文件
+          # 只要这个文件存在，Xcode 15 就一定会找你要真实的 Team ID
+          find ios -name "*.entitlements" -delete
           
-          # 2. 强行切断权限清单 (Entitlements) 的关联
-          # 这一步最关键：它会让 Xcode 认为你不需要 Siri/扫码等特殊权限，从而不再校验签名合法性
+          # 2. 从工程文件中移除对权限清单文件的所有引用
+          # 这样 Xcode 编译时会认为这是一个没有 Siri、没有特权的普通 App
           sed -i '' 's/CODE_SIGN_ENTITLEMENTS = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
           
-          # 3. 锁定配置文件，强制关闭物理签名
+          # 3. 移除 SystemCapabilities 节点 (这是组件化后最容易触发校验的地方)
+          # 使用 perl 跨行匹配删除整个 SystemCapabilities 段落
+          perl -i -0777 -pe 's/SystemCapabilities = \{.*?\};/SystemCapabilities = {};/gs' ios/Runner.xcodeproj/project.pbxproj
+
+          # 4. 强制指定构建配置（这一步是最后防线）
           echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
-          
-          # 4. 针对 Pods 插件进行全局“去签名”处理
-          # 使用 Ruby 精准注入，避免 "multiple post_install hooks" 报错
-          cd ios
-          pod install || true
-          if [ -f "Podfile" ]; then
-            ruby -i -e '
-            content = ARGF.read
-            # 找到现有的 post_install 块，并在其内部循环中插入禁用签名的代码
-            if content.include?("post_install do |installer|")
-              content.gsub!(/installer.pods_project.targets.each do \|target\|/, 
-                "installer.pods_project.targets.each do |target|\n      target.build_configurations.each do |config|\n        config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n        config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n        config.build_settings[\"DEVELOPMENT_TEAM\"] = \"\"\n      end")
-              print content
-            else
-              # 如果没有块，则创建一个新的
-              print content + "\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n    target.build_configurations.each do |config|\n      config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n      config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n      config.build_settings[\"DEVELOPMENT_TEAM\"] = \"\"\n    end\n  end\nend\n"
-            end
-            ' Podfile
-            pod install # 重新同步配置
-          fi
-          cd ..
-
+          echo "PROVISIONING_PROFILE_SPECIFIER=" >> ios/Flutter/Release.xcconfig
       - name: Build iOS App
         run: |
           # 执行不签名编译，显式跳过签名阶段
