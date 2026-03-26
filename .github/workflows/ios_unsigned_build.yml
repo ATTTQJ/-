@@ -2,14 +2,13 @@ name: iOS Unsigned Build
 
 on:
   push:
-    branches: [ main ] # 推送代码到 main 分支时自动打包
-  workflow_dispatch:   # 支持手动点击按钮打包
+    branches: [ main ] # 当你 push 到 main 分支时触发
+  workflow_dispatch:   # 支持在 GitHub Actions 页面手动点击运行
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      # 🌟 已升级为 v4
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -17,23 +16,37 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.19.0' # 建议固定一个你本地测试过的版本
 
       - name: Install dependencies
         run: flutter pub get
 
-      # 执行不签名编译
+      # 🌟 核心补丁：物理抹除 Xcode 的签名校验逻辑
+      - name: Patch Xcode Project for Unsigned Build
+        run: |
+          # 1. 抹除所有关于 Team ID 的声明
+          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          
+          # 2. 强行关闭签名检查（针对 Release 环境）
+          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
+          
+          # 3. 移除权限清单引用，防止 Xcode 校验 Siri/蓝牙等 Capability
+          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
+
       - name: Build iOS App Bundle
         run: |
-          flutter build ios --release --no-codesign
+          # 执行不签名编译，显式指定版本号
+          flutter build ios --release --no-codesign --build-name=1.0.0 --build-number=1
 
-      # 手动封装成 IPA
       - name: Create Unsigned IPA
         run: |
+          # 模拟手动打包流程
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r WaterApp_Unsigned.ipa Payload
 
-      # 🌟 已升级为 v4
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
