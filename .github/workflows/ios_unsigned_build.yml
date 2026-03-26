@@ -1,9 +1,9 @@
-name: iOS Original Test Build
+name: iOS Unsigned Build (Componentized)
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ main ] # 如果你的主分支叫 master，请修改为 master
+  workflow_dispatch:   # 支持手动触发打包
 
 jobs:
   build:
@@ -16,15 +16,61 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          # 这里可以先不固定版本，看看最新环境的表现
-          
+          # 自动匹配你 pubspec.yaml 要求的 Dart SDK 版本
+
       - name: Install dependencies
         run: |
           flutter pub get
           flutter clean
           flutter pub get
+          flutter precache --ios
 
-      - name: Build iOS
+      # 🌟 核心补丁：物理绕过 Xcode 15+ 的 Team ID 校验
+      - name: Hard-Patch Xcode for Unsigned Build
         run: |
-          # 还原最原始的打包命令
-          flutter build ios --release --no-codesign
+          # 1. 注入虚假 Team ID (占位符)
+          # 只要这个字段不为空，Xcode 预审就不会报错
+          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = 7B38P92A8V;/g' ios/Runner.xcodeproj/project.pbxproj
+          
+          # 2. 强行切断权限清单 (Entitlements) 的关联
+          # 这一步最关键：它会让 Xcode 认为你不需要 Siri/扫码等特殊权限，从而不再校验签名合法性
+          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          
+          # 3. 锁定配置文件，强制关闭物理签名
+          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
+          
+          # 4. 针对 Pods 插件进行全局“去签名”处理 (解决 mobile_scanner 的校验)
+          cd ios
+          pod install || true
+          if [ -f "Podfile" ]; then
+            # 使用 Ruby 精准注入，避免 multiple post_install hooks 错误
+            ruby -i -e '
+            content = ARGF.read
+            if content.include?("post_install do |installer|")
+              content.gsub!(/installer.pods_project.targets.each do \|target\|/, "installer.pods_project.targets.each do |target|\n      target.build_configurations.each do |config|\n        config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n        config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n        config.build_settings[\"DEVELOPMENT_TEAM\"] = \"\"\n      end")
+              print content
+            end
+            ' Podfile
+            pod install
+          fi
+          cd ..
+
+      - name: Build iOS App
+        run: |
+          # 执行不签名编译
+          flutter build ios --release --no-codesign --build-name=1.0.0 --build-number=1
+
+      - name: Create Unsigned IPA
+        run: |
+          # 将编译产物封装为可安装的 IPA (适用于巨魔/越狱/自签工具)
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r WaterApp_Unsigned.ipa Payload
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Unsigned-IPA
+          path: WaterApp_Unsigned.ipa
