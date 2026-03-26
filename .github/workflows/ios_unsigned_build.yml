@@ -1,4 +1,4 @@
-name: iOS Unsigned Build
+name: iOS Original Test Build
 
 on:
   push:
@@ -16,60 +16,15 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.41.5'
-
+          # 这里可以先不固定版本，看看最新环境的表现
+          
       - name: Install dependencies
         run: |
           flutter pub get
-          # 这一步会确保 ios 目录结构完整，并生成基本的 Podfile
-          flutter precache --ios
+          flutter clean
+          flutter pub get
 
-     # 🌟 核心补丁：精准注入不签名逻辑，避免重复钩子报错
-      - name: Patch Xcode and Podfile
+      - name: Build iOS
         run: |
-          # 1. 物理抹除主工程中的 TeamID 占位符
-          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = "";/g' ios/Runner.xcodeproj/project.pbxproj
-          
-          # 2. 强制关闭 Release 环境下的物理签名校验
-          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
-          
-          # 3. 运行一次 precache 确保 iOS 目录被初始化（如果 Podfile 不存在会生成它）
-          flutter precache --ios
-          
-          # 4. 使用 Ruby 脚本寻找已有的 post_install 块并注入不签名代码
-          # 这会避免 "multiple post_install hooks" 错误
-          ruby -i -e '
-          podfile = ARGF.read
-          patch_code = "      target.build_configurations.each do |config|\n        config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n        config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n        config.build_settings[\"DEVELOPMENT_TEAM\"] = \"\"\n      end"
-          
-          if podfile.include?("post_install do |installer|")
-            # 在现有的 post_install 循环内部插入逻辑
-            podfile.gsub!(/installer.pods_project.targets.each do \|target\|/, "installer.pods_project.targets.each do |target|\n#{patch_code}")
-            print podfile
-          else
-            # 如果万一没有，则创建一个（虽然 Flutter 默认都会有）
-            print podfile + "\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n#{patch_code}\n  end\nend\n"
-          end
-          ' ios/Podfile
-          
-          # 5. 应用修改后的 Podfile 并同步 CocoaPods 状态
-          cd ios && pod install && cd ..
-
-      - name: Build iOS App Bundle
-        run: |
-          # 关键：通过 --no-codesign 参数执行构建
+          # 还原最原始的打包命令
           flutter build ios --release --no-codesign
-
-      - name: Create Unsigned IPA
-        run: |
-          mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r WaterApp_Unsigned.ipa Payload
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Unsigned-IPA
-          path: WaterApp_Unsigned.ipa
