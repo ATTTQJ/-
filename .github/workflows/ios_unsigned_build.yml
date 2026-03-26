@@ -24,35 +24,38 @@ jobs:
           # 这一步会确保 ios 目录结构完整，并生成基本的 Podfile
           flutter precache --ios
 
+     # 🌟 核心补丁：精准注入不签名逻辑，避免重复钩子报错
       - name: Patch Xcode and Podfile
         run: |
-          # 1. 物理注入一个虚假的 Team ID (7B38P92A8V)
-          # 这是绕过 Xcode 15+ "Development Team" 预审的关键
-          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = 7B38P92A8V;/g' ios/Runner.xcodeproj/project.pbxproj
+          # 1. 物理抹除主工程中的 TeamID 占位符
+          sed -i '' 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = "";/g' ios/Runner.xcodeproj/project.pbxproj
           
-          # 2. 强行关闭 Release 环境下的签名校验
+          # 2. 强制关闭 Release 环境下的物理签名校验
           echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
           
-          # 3. 如果 Podfile 还没生成，手动触发一次 pod install 以生成它
-          # 然后通过脚本强行关闭所有第三方插件（Pods）的签名要求
-          cd ios
-          pod install || true 
-          if [ -f "Podfile" ]; then
-            echo "post_install do |installer|
-              installer.pods_project.targets.each do |target|
-                flutter_additional_ios_build_settings(target)
-                target.build_configurations.each do |config|
-                  config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
-                  config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
-                  config.build_settings['DEVELOPMENT_TEAM'] = ''
-                end
-              end
-            end" >> Podfile
-            pod install # 重新应用不签名配置
-          fi
-          cd ..
+          # 3. 运行一次 precache 确保 iOS 目录被初始化（如果 Podfile 不存在会生成它）
+          flutter precache --ios
+          
+          # 4. 使用 Ruby 脚本寻找已有的 post_install 块并注入不签名代码
+          # 这会避免 "multiple post_install hooks" 错误
+          ruby -i -e '
+          podfile = ARGF.read
+          patch_code = "      target.build_configurations.each do |config|\n        config.build_settings[\"CODE_SIGNING_ALLOWED\"] = \"NO\"\n        config.build_settings[\"CODE_SIGNING_REQUIRED\"] = \"NO\"\n        config.build_settings[\"DEVELOPMENT_TEAM\"] = \"\"\n      end"
+          
+          if podfile.include?("post_install do |installer|")
+            # 在现有的 post_install 循环内部插入逻辑
+            podfile.gsub!(/installer.pods_project.targets.each do \|target\|/, "installer.pods_project.targets.each do |target|\n#{patch_code}")
+            print podfile
+          else
+            # 如果万一没有，则创建一个（虽然 Flutter 默认都会有）
+            print podfile + "\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n#{patch_code}\n  end\nend\n"
+          end
+          ' ios/Podfile
+          
+          # 5. 应用修改后的 Podfile 并同步 CocoaPods 状态
+          cd ios && pod install && cd ..
 
       - name: Build iOS App Bundle
         run: |
