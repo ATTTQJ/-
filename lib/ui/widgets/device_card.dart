@@ -15,6 +15,8 @@ class DeviceCard extends StatefulWidget {
 }
 
 class _DeviceCardState extends State<DeviceCard> {
+  static const double _deviceItemHeight = 60;
+
   bool _isDeviceExpanded = false;
   bool _isActionMenuCollapsed = true;
 
@@ -24,7 +26,7 @@ class _DeviceCardState extends State<DeviceCard> {
       builder: (context, deviceProvider, waterProvider, child) {
         final selectedDevice = _selectedDevice(deviceProvider);
         final title = selectedDevice == null
-            ? '请先添加设备'
+            ? '\u8bf7\u5148\u6dfb\u52a0\u8bbe\u5907'
             : _deviceDisplayName(deviceProvider, selectedDevice);
         final shouldShowContent =
             _isDeviceExpanded || deviceProvider.isAlwaysExpanded;
@@ -102,7 +104,7 @@ class _DeviceCardState extends State<DeviceCard> {
                             const SizedBox(width: 12),
                             const Expanded(
                               child: Text(
-                                '添加你的第一个设备',
+                                '\u6dfb\u52a0\u4f60\u7684\u7b2c\u4e00\u4e2a\u8bbe\u5907',
                                 style: TextStyle(
                                   color: Color(0xFF2C2C2E),
                                   fontSize: 16,
@@ -123,12 +125,8 @@ class _DeviceCardState extends State<DeviceCard> {
                                         !_isActionMenuCollapsed;
                                   });
                                 },
-                                child: Container(
+                                child: Padding(
                                   padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[100],
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
                                   child: Icon(
                                     _isActionMenuCollapsed
                                         ? Icons.tune_rounded
@@ -150,8 +148,6 @@ class _DeviceCardState extends State<DeviceCard> {
                       ),
                     ),
                   ),
-                  
-                  // 🌟 核心展开区域
                   ClipRect(
                     child: AnimatedSize(
                       duration: const Duration(milliseconds: 400),
@@ -164,42 +160,49 @@ class _DeviceCardState extends State<DeviceCard> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Container(height: 1, color: Colors.grey[100]),
-                                  
-                                  // 🌟 真正能拖拽的列表：使用 MediaQuery.removePadding 防留白，使用 builder 防闪退
                                   MediaQuery.removePadding(
                                     context: context,
                                     removeTop: true,
                                     removeBottom: true,
-                                    child: ReorderableListView.builder(
-                                      buildDefaultDragHandles: false, // 禁用默认手柄，我们自定义
-                                      padding: EdgeInsets.zero,
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: deviceProvider.deviceList.length,
-                                      onReorder: (oldIdx, newIdx) {
-                                        setState(() {
-                                          if (newIdx > oldIdx) {
-                                            newIdx--;
-                                          }
-                                          final item = deviceProvider.deviceList.removeAt(oldIdx);
-                                          deviceProvider.deviceList.insert(newIdx, item);
-                                        });
-                                        // 💡 如果你的 DeviceProvider 有保存顺序的方法，请在这里调用，例如：
-                                        // deviceProvider.saveDeviceOrder();
-                                      },
-                                      itemBuilder: (context, index) {
-                                        final device = deviceProvider.deviceList[index];
-                                        return _buildDeviceItem(
-                                          context,
-                                          device,
-                                          deviceProvider,
-                                          waterProvider,
-                                          index, // 传入 index，用于绑定拖拽器
-                                        );
-                                      },
+                                    child: SizedBox(
+                                      height: deviceProvider.deviceList.length *
+                                          _deviceItemHeight,
+                                      child: ReorderableListView.builder(
+                                        buildDefaultDragHandles: false,
+                                        padding: EdgeInsets.zero,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        itemExtent: _deviceItemHeight,
+                                        itemCount:
+                                            deviceProvider.deviceList.length,
+                                        onReorder: (oldIdx, newIdx) {
+                                          setState(() {
+                                            if (newIdx > oldIdx) {
+                                              newIdx--;
+                                            }
+                                            final item = deviceProvider
+                                                .deviceList
+                                                .removeAt(oldIdx);
+                                            deviceProvider.deviceList.insert(
+                                              newIdx,
+                                              item,
+                                            );
+                                          });
+                                        },
+                                        itemBuilder: (context, index) {
+                                          final device =
+                                              deviceProvider.deviceList[index];
+                                          return _buildDeviceItem(
+                                            context,
+                                            device,
+                                            deviceProvider,
+                                            waterProvider,
+                                            index,
+                                          );
+                                        },
+                                      ),
                                     ),
                                   ),
-
                                   AnimatedSize(
                                     duration: const Duration(milliseconds: 350),
                                     curve: Curves.fastOutSlowIn,
@@ -215,7 +218,7 @@ class _DeviceCardState extends State<DeviceCard> {
                                                     Expanded(
                                                       child: _buildIconButton(
                                                         Icons.refresh,
-                                                        '刷新',
+                                                        '\u5237\u65b0',
                                                         Colors.blue,
                                                         () {
                                                           if (!deviceProvider
@@ -244,7 +247,7 @@ class _DeviceCardState extends State<DeviceCard> {
                                                     Expanded(
                                                       child: _buildIconButton(
                                                         Icons.delete_outline,
-                                                        '删除',
+                                                        '\u5220\u9664',
                                                         Colors.redAccent,
                                                         () {
                                                           if (selectedDevice !=
@@ -269,7 +272,7 @@ class _DeviceCardState extends State<DeviceCard> {
                                                             );
                                                           } else {
                                                             ToastService.show(
-                                                              '无法删除此设备',
+                                                              '\u65e0\u6cd5\u5220\u9664\u6b64\u8bbe\u5907',
                                                             );
                                                           }
                                                         },
@@ -283,7 +286,7 @@ class _DeviceCardState extends State<DeviceCard> {
                                                     Expanded(
                                                       child: _buildIconButton(
                                                         Icons.add_circle_outline,
-                                                        '添加',
+                                                        '\u6dfb\u52a0',
                                                         Colors.blue,
                                                         () {
                                                           DialogUtils.showCascadingAddDeviceDialog(
@@ -328,7 +331,9 @@ class _DeviceCardState extends State<DeviceCard> {
                                                         width: 94,
                                                         height: 28,
                                                         padding:
-                                                            const EdgeInsets.all(2),
+                                                            const EdgeInsets.all(
+                                                          2,
+                                                        ),
                                                         decoration: BoxDecoration(
                                                           color: Colors.grey[200],
                                                           borderRadius:
@@ -341,7 +346,8 @@ class _DeviceCardState extends State<DeviceCard> {
                                                             AnimatedAlign(
                                                               duration:
                                                                   const Duration(
-                                                                milliseconds: 250,
+                                                                milliseconds:
+                                                                    250,
                                                               ),
                                                               curve: Curves
                                                                   .easeInOutCubic,
@@ -355,8 +361,8 @@ class _DeviceCardState extends State<DeviceCard> {
                                                                 width: 45,
                                                                 height: 24,
                                                                 decoration: BoxDecoration(
-                                                                  color:
-                                                                      Colors.white,
+                                                                  color: Colors
+                                                                      .white,
                                                                   borderRadius:
                                                                       BorderRadius.circular(
                                                                     100,
@@ -365,8 +371,10 @@ class _DeviceCardState extends State<DeviceCard> {
                                                                     BoxShadow(
                                                                       color: Colors
                                                                           .black12,
-                                                                      blurRadius: 2,
-                                                                      offset: Offset(
+                                                                      blurRadius:
+                                                                          2,
+                                                                      offset:
+                                                                          Offset(
                                                                         0,
                                                                         1,
                                                                       ),
@@ -380,9 +388,11 @@ class _DeviceCardState extends State<DeviceCard> {
                                                                 Expanded(
                                                                   child: Center(
                                                                     child: Text(
-                                                                      '默认',
-                                                                      style: TextStyle(
-                                                                        fontSize: 11,
+                                                                      '\u9ed8\u8ba4',
+                                                                      style:
+                                                                          TextStyle(
+                                                                        fontSize:
+                                                                            11,
                                                                         fontWeight:
                                                                             FontWeight.bold,
                                                                         color: !deviceProvider
@@ -396,9 +406,11 @@ class _DeviceCardState extends State<DeviceCard> {
                                                                 Expanded(
                                                                   child: Center(
                                                                     child: Text(
-                                                                      '常驻',
-                                                                      style: TextStyle(
-                                                                        fontSize: 11,
+                                                                      '\u5e38\u9a7b',
+                                                                      style:
+                                                                          TextStyle(
+                                                                        fontSize:
+                                                                            11,
                                                                         fontWeight:
                                                                             FontWeight.bold,
                                                                         color: deviceProvider
@@ -421,7 +433,9 @@ class _DeviceCardState extends State<DeviceCard> {
                                             ),
                                           )
                                         : const SizedBox(
-                                            width: double.infinity, height: 0),
+                                            width: double.infinity,
+                                            height: 0,
+                                          ),
                                   ),
                                 ],
                               ),
@@ -494,7 +508,7 @@ class _DeviceCardState extends State<DeviceCard> {
     Map<String, dynamic> device,
     DeviceProvider deviceProvider,
     WaterProvider waterProvider,
-    int index, // 🌟 接收 index，为了绑定拖拽手柄
+    int index,
   ) {
     final id = device['deviceInfId'].toString();
     final isSelected = id == deviceProvider.selectedDeviceId;
@@ -502,14 +516,13 @@ class _DeviceCardState extends State<DeviceCard> {
         deviceProvider.customRemarks[id] ??
         device['deviceInfName'].toString().replaceAll(RegExp(r'^[12]-'), '');
 
-    // 🌟 在外层套一个透明的 Material 是防止拖拽时背景变黑变虚的最佳实践
     return Material(
       key: ValueKey(id),
-      color: Colors.transparent, 
+      color: Colors.transparent,
       child: GestureDetector(
         onTap: () {
           if (waterProvider.orderNum.isNotEmpty) {
-            ToastService.show('用水中，无法切换设备');
+            ToastService.show('\u7528\u6c34\u4e2d\uff0c\u65e0\u6cd5\u5207\u6362\u8bbe\u5907');
             return;
           }
 
@@ -526,24 +539,28 @@ class _DeviceCardState extends State<DeviceCard> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: Row(
             children: [
-              // 🌟 真正激活拖拽能力的神器：ReorderableDragStartListener
               ReorderableDragStartListener(
                 index: index,
                 child: Container(
-                  color: Colors.transparent, // 扩大触摸响应面积
+                  color: Colors.transparent,
                   padding: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
-                  child: const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
+                  child: const Icon(
+                    Icons.drag_handle,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
                 ),
               ),
               Expanded(
                 child: Text(
-                  '$name (${device['billType'] == 2 ? '热水' : '直饮'})',
+                  '$name (${device['billType'] == 2 ? '\u70ed\u6c34' : '\u76f4\u996e'})',
                   style: TextStyle(
                     color: isSelected
                         ? const Color(0xFF2C2C2E)
                         : Colors.grey[700],
                     fontSize: 14,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    fontWeight:
+                        isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
               ),

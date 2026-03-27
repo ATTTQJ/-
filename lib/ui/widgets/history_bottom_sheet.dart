@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../models/water_usage_history_entry.dart';
 import '../../providers/water_provider.dart';
-import 'dialog_utils.dart';
 
 class HistoryBottomSheet extends StatelessWidget {
   const HistoryBottomSheet({super.key});
@@ -22,41 +21,17 @@ class HistoryBottomSheet extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  '用水记录',
+                  '\u7528\u6c34\u8bb0\u5f55',
                   style: TextStyle(
                     color: Color(0xFF2C2C2E),
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (history.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      DialogUtils.showClearHistoryConfirmDialog(context);
-                    },
-                    child: Row(
-                      children: [
-                        Text(
-                          '共 ${history.length} 条',
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.delete_outline,
-                          color: Colors.redAccent,
-                          size: 18,
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  const Text(
-                    '共 0 条',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
+                Text(
+                  '\u5171 ${history.length} \u6761',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -65,7 +40,7 @@ class HistoryBottomSheet extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(
                   child: Text(
-                    '暂无历史记录',
+                    '\u6682\u65e0\u5386\u53f2\u8bb0\u5f55',
                     style: TextStyle(color: Colors.grey, fontSize: 14),
                   ),
                 ),
@@ -135,7 +110,7 @@ class _HistoryItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '用水时长：${entry.formattedDuration}',
+                  '\u7528\u6c34\u65f6\u957f\uff1a${entry.formattedDuration}',
                   style: TextStyle(color: Colors.grey[700], fontSize: 12),
                 ),
               ],
@@ -149,7 +124,7 @@ class _HistoryItem extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
-              '¥${entry.formattedAmount}',
+              '\u00A5${entry.formattedAmount}',
               style: const TextStyle(
                 color: Color(0xFFD85B00),
                 fontSize: 14,

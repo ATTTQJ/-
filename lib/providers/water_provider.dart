@@ -206,7 +206,7 @@ class WaterProvider extends ChangeNotifier {
         }
 
         _startRunningTimer();
-        ToastService.show('设备已开启，正在出水...');
+        ToastService.show('设备已开启，出水中...');
         return true;
       }
     } finally {
@@ -297,9 +297,6 @@ class WaterProvider extends ChangeNotifier {
             orderNum: currentOrderNum,
           ),
         );
-        if (history.length > 50) {
-          history = history.sublist(0, 50);
-        }
         await _persistHistory();
       }
     } finally {
@@ -318,7 +315,7 @@ class WaterProvider extends ChangeNotifier {
     }
 
     final localSnapshot = List<WaterUsageHistoryEntry>.from(history);
-    final serverItems = await ApiService.fetchBillHistory(
+    final serverItems = await ApiService.fetchAllBillHistory(
       token: token,
       userId: userId,
       muteToast: muteToast,

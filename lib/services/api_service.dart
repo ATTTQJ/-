@@ -152,7 +152,7 @@ class ApiService {
   static Future<List<Map<String, dynamic>>?> fetchBillHistory({
     required String token,
     required String userId,
-    int limit = 10,
+    int limit = 100,
     int begin = 0,
     String type = 'bill_0',
     bool muteToast = true,
@@ -187,6 +187,45 @@ class ApiService {
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
+  }
+
+  static Future<List<Map<String, dynamic>>?> fetchAllBillHistory({
+    required String token,
+    required String userId,
+    int pageSize = 100,
+    String type = 'bill_0',
+    bool muteToast = true,
+  }) async {
+    final allItems = <Map<String, dynamic>>[];
+    var begin = 0;
+
+    while (true) {
+      final page = await fetchBillHistory(
+        token: token,
+        userId: userId,
+        limit: pageSize,
+        begin: begin,
+        type: type,
+        muteToast: muteToast,
+      );
+
+      if (page == null) {
+        return null;
+      }
+
+      if (page.isEmpty) {
+        break;
+      }
+
+      allItems.addAll(page);
+      if (page.length < pageSize) {
+        break;
+      }
+
+      begin += page.length;
+    }
+
+    return allItems;
   }
 
   static bool _isSuccessCode(Object? code) {

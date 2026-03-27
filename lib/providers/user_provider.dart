@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/toast_service.dart';
 import '../services/api_service.dart';
 
 class UserProvider extends ChangeNotifier {
@@ -66,7 +68,7 @@ class UserProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<void> silentTokenGuard() async {
+  Future<bool> silentTokenGuard({bool showSuccessToast = false}) async {
     final res = await ApiService.post(
       "user/queryUserWalletInfo",
       {},
@@ -77,12 +79,19 @@ class UserProvider extends ChangeNotifier {
     if (res != null) {
       if (res["code"] == 0 || res["code"] == "0") {
         balance = res["data"]["uBalance"].toString();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString("balance", balance);
         checkLowBalance();
         notifyListeners();
+        if (showSuccessToast) {
+          ToastService.show('\u4f59\u989d\u5df2\u5237\u65b0');
+        }
+        return true;
       } else if (res["code"] == 401 || res["code"] == "401") {
         await logout();
       }
     }
+    return false;
   }
 
   Future<void> fetchUserInfo() async {
@@ -103,8 +112,8 @@ class UserProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> syncBalance() async {
-    await silentTokenGuard();
+  Future<void> syncBalance({bool showToast = false}) async {
+    await silentTokenGuard(showSuccessToast: showToast);
   }
 
   Future<void> setBalance(String newBalance) async {
