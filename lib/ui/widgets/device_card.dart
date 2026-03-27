@@ -151,7 +151,7 @@ class _DeviceCardState extends State<DeviceCard> {
                     ),
                   ),
                   
-                  // 🌟 动画修复与空白彻底消除核心区域
+                  // 🌟 核心展开区域
                   ClipRect(
                     child: AnimatedSize(
                       duration: const Duration(milliseconds: 400),
@@ -164,39 +164,42 @@ class _DeviceCardState extends State<DeviceCard> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Container(height: 1, color: Colors.grey[100]),
-                                  // 🌟 核心修复区：强制吃掉状态栏和底部的系统留白
+                                  
+                                  // 🌟 真正能拖拽的列表：使用 MediaQuery.removePadding 防留白，使用 builder 防闪退
                                   MediaQuery.removePadding(
                                     context: context,
                                     removeTop: true,
                                     removeBottom: true,
-                                    child: ReorderableListView(
-                                      buildDefaultDragHandles: false,
+                                    child: ReorderableListView.builder(
+                                      buildDefaultDragHandles: false, // 禁用默认手柄，我们自定义
                                       padding: EdgeInsets.zero,
                                       shrinkWrap: true,
                                       physics: const NeverScrollableScrollPhysics(),
+                                      itemCount: deviceProvider.deviceList.length,
                                       onReorder: (oldIdx, newIdx) {
-                                        if (newIdx > oldIdx) {
-                                          newIdx--;
-                                        }
-                                        final item = deviceProvider.deviceList
-                                            .removeAt(oldIdx);
-                                        deviceProvider.deviceList.insert(
-                                          newIdx,
-                                          item,
+                                        setState(() {
+                                          if (newIdx > oldIdx) {
+                                            newIdx--;
+                                          }
+                                          final item = deviceProvider.deviceList.removeAt(oldIdx);
+                                          deviceProvider.deviceList.insert(newIdx, item);
+                                        });
+                                        // 💡 如果你的 DeviceProvider 有保存顺序的方法，请在这里调用，例如：
+                                        // deviceProvider.saveDeviceOrder();
+                                      },
+                                      itemBuilder: (context, index) {
+                                        final device = deviceProvider.deviceList[index];
+                                        return _buildDeviceItem(
+                                          context,
+                                          device,
+                                          deviceProvider,
+                                          waterProvider,
+                                          index, // 传入 index，用于绑定拖拽器
                                         );
                                       },
-                                      children: deviceProvider.deviceList
-                                          .map(
-                                            (device) => _buildDeviceItem(
-                                              context,
-                                              device,
-                                              deviceProvider,
-                                              waterProvider,
-                                            ),
-                                          )
-                                          .toList(),
                                     ),
                                   ),
+
                                   AnimatedSize(
                                     duration: const Duration(milliseconds: 350),
                                     curve: Curves.fastOutSlowIn,
@@ -491,6 +494,7 @@ class _DeviceCardState extends State<DeviceCard> {
     Map<String, dynamic> device,
     DeviceProvider deviceProvider,
     WaterProvider waterProvider,
+    int index, // 🌟 接收 index，为了绑定拖拽手柄
   ) {
     final id = device['deviceInfId'].toString();
     final isSelected = id == deviceProvider.selectedDeviceId;
@@ -498,51 +502,62 @@ class _DeviceCardState extends State<DeviceCard> {
         deviceProvider.customRemarks[id] ??
         device['deviceInfName'].toString().replaceAll(RegExp(r'^[12]-'), '');
 
-    return GestureDetector(
+    // 🌟 在外层套一个透明的 Material 是防止拖拽时背景变黑变虚的最佳实践
+    return Material(
       key: ValueKey(id),
-      onTap: () {
-        if (waterProvider.orderNum.isNotEmpty) {
-          ToastService.show('用水中，无法切换设备');
-          return;
-        }
+      color: Colors.transparent, 
+      child: GestureDetector(
+        onTap: () {
+          if (waterProvider.orderNum.isNotEmpty) {
+            ToastService.show('用水中，无法切换设备');
+            return;
+          }
 
-        deviceProvider.selectDevice(id);
-        if (!deviceProvider.isAlwaysExpanded) {
-          setState(() {
-            _isDeviceExpanded = false;
-          });
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        color: isSelected ? Colors.grey[50] : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Row(
-          children: [
-            const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                '$name (${device['billType'] == 2 ? '热水' : '直饮'})',
-                style: TextStyle(
-                  color: isSelected
-                      ? const Color(0xFF2C2C2E)
-                      : Colors.grey[700],
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          deviceProvider.selectDevice(id);
+          if (!deviceProvider.isAlwaysExpanded) {
+            setState(() {
+              _isDeviceExpanded = false;
+            });
+          }
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          color: isSelected ? Colors.grey[50] : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              // 🌟 真正激活拖拽能力的神器：ReorderableDragStartListener
+              ReorderableDragStartListener(
+                index: index,
+                child: Container(
+                  color: Colors.transparent, // 扩大触摸响应面积
+                  padding: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
+                  child: const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
                 ),
               ),
-            ),
-            if (isSelected)
-              const Icon(Icons.check, color: Color(0xFF2C2C2E), size: 18),
-            const SizedBox(width: 16),
-            GestureDetector(
-              onTap: () {
-                DialogUtils.showEditRemarkDialog(context, id, name);
-              },
-              child: Icon(Icons.edit_note, color: Colors.grey[400], size: 22),
-            ),
-          ],
+              Expanded(
+                child: Text(
+                  '$name (${device['billType'] == 2 ? '热水' : '直饮'})',
+                  style: TextStyle(
+                    color: isSelected
+                        ? const Color(0xFF2C2C2E)
+                        : Colors.grey[700],
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                const Icon(Icons.check, color: Color(0xFF2C2C2E), size: 18),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: () {
+                  DialogUtils.showEditRemarkDialog(context, id, name);
+                },
+                child: Icon(Icons.edit_note, color: Colors.grey[400], size: 22),
+              ),
+            ],
+          ),
         ),
       ),
     );
