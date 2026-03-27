@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>易水控</string>
+	<string>UY Water</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -24,26 +24,32 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.fakeuy.water</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>waterapp</string>
+			</array>
+		</dict>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
-
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>我们需要访问您的本地网络以发现并连接附近的智能水控设备</string>
 	<key>NSCameraUsageDescription</key>
-	<string>我们需要使用您的相机来扫描设备二维码</string>
-	
-	
-
-
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-
+	<string>The app uses the camera to scan device QR codes.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The app uses your local network to discover nearby water devices.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -83,19 +89,6 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLName</key>
-			<string>com.fakeuy.water</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>waterapp</string>
-			</array>
-		</dict>
 	</array>
 </dict>
 </plist>
