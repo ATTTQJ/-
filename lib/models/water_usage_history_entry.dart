@@ -7,16 +7,18 @@ class WaterUsageHistoryEntry {
     required this.createdAt,
     required this.deviceName,
     required this.amount,
-    required this.durationSeconds,
     required this.orderNum,
+    this.durationSeconds,
+    this.durationLabel,
     this.legacyText,
   });
 
   final DateTime createdAt;
   final String deviceName;
   final double amount;
-  final int durationSeconds;
   final String orderNum;
+  final int? durationSeconds;
+  final String? durationLabel;
   final String? legacyText;
 
   String get formattedAmount => amount.toStringAsFixed(2);
@@ -24,30 +26,65 @@ class WaterUsageHistoryEntry {
   String get formattedDate => DateFormat('MM-dd HH:mm').format(createdAt);
 
   String get formattedDuration {
-    final minutes = durationSeconds ~/ 60;
-    final seconds = durationSeconds % 60;
-    return '${minutes}分${seconds}秒';
-  }
-
-  String get displayDeviceName =>
-      deviceName.trim().isEmpty ? '未命名设备' : deviceName.trim();
-
-  String get detailText {
-    if (legacyText != null && legacyText!.trim().isNotEmpty) {
-      return legacyText!.trim();
+    final label = durationLabel?.trim() ?? '';
+    if (label.isNotEmpty) {
+      return label;
     }
-    return '$displayDeviceName  用水时长：$formattedDuration';
+    if (durationSeconds == null) {
+      return '--';
+    }
+
+    final minutes = durationSeconds! ~/ 60;
+    final seconds = durationSeconds! % 60;
+    return '${minutes}\u5206${seconds}\u79d2';
   }
+
+  String get displayDeviceName {
+    final name = deviceName.trim();
+    return name.isEmpty ? '\u672a\u547d\u540d\u8bbe\u5907' : name;
+  }
+
+  DateTime get minutePrecisionTime => DateTime(
+    createdAt.year,
+    createdAt.month,
+    createdAt.day,
+    createdAt.hour,
+    createdAt.minute,
+  );
 
   Map<String, dynamic> toJson() {
     return {
       'createdAt': createdAt.toIso8601String(),
       'deviceName': deviceName,
       'amount': amount,
-      'durationSeconds': durationSeconds,
       'orderNum': orderNum,
+      'durationSeconds': durationSeconds,
+      'durationLabel': durationLabel,
       'legacyText': legacyText,
     };
+  }
+
+  WaterUsageHistoryEntry copyWith({
+    DateTime? createdAt,
+    String? deviceName,
+    double? amount,
+    String? orderNum,
+    int? durationSeconds,
+    String? durationLabel,
+    String? legacyText,
+    bool clearDuration = false,
+  }) {
+    return WaterUsageHistoryEntry(
+      createdAt: createdAt ?? this.createdAt,
+      deviceName: deviceName ?? this.deviceName,
+      amount: amount ?? this.amount,
+      orderNum: orderNum ?? this.orderNum,
+      durationSeconds: clearDuration
+          ? null
+          : (durationSeconds ?? this.durationSeconds),
+      durationLabel: clearDuration ? null : (durationLabel ?? this.durationLabel),
+      legacyText: legacyText ?? this.legacyText,
+    );
   }
 
   factory WaterUsageHistoryEntry.fromStorage(String raw) {
@@ -57,48 +94,72 @@ class WaterUsageHistoryEntry {
         return WaterUsageHistoryEntry.fromJson(decoded);
       }
       if (decoded is Map) {
-        return WaterUsageHistoryEntry.fromJson(
-          Map<String, dynamic>.from(decoded),
-        );
+        return WaterUsageHistoryEntry.fromJson(Map<String, dynamic>.from(decoded));
       }
     } catch (_) {
-      // Fallback to legacy text parsing.
+      // Keep backward compatibility with legacy plain-text cache.
     }
+
     return WaterUsageHistoryEntry.fromLegacyText(raw);
   }
 
   factory WaterUsageHistoryEntry.fromJson(Map<String, dynamic> json) {
     return WaterUsageHistoryEntry(
       createdAt:
-          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          _parseStoredDateTime(json['createdAt']) ??
+          _parseServerDateTime(json['payTypeStr']) ??
           DateTime.now(),
-      deviceName: json['deviceName']?.toString() ?? '',
-      amount: _parseAmount(json['amount']) ?? 0,
-      durationSeconds: _parseDurationSeconds(json['durationSeconds']) ?? 0,
-      orderNum: json['orderNum']?.toString() ?? '',
+      deviceName:
+          json['deviceName']?.toString() ??
+          json['displayDeviceName']?.toString() ??
+          '',
+      amount:
+          _parseAmount(json['amount']) ??
+          _parseAmount(json['expAmountStr']) ??
+          0,
+      orderNum: json['orderNum']?.toString() ?? json['id']?.toString() ?? '',
+      durationSeconds: _parseDurationSeconds(
+        json['durationSeconds'] ?? json['formattedDuration'],
+      ),
+      durationLabel: _normalizeDurationLabel(
+        json['durationLabel'] ?? json['formattedDuration'],
+      ),
       legacyText: json['legacyText']?.toString(),
     );
   }
 
   factory WaterUsageHistoryEntry.fromLegacyText(String raw) {
     final trimmed = raw.trim();
-    final dateMatch = RegExp(r'(\d{2}-\d{2}\s\d{2}:\d{2})').firstMatch(trimmed);
-    DateTime createdAt = DateTime.now();
-    if (dateMatch != null) {
-      final year = DateTime.now().year;
-      final parsed = DateFormat(
-        'yyyy-MM-dd HH:mm',
-      ).parse('$year-${dateMatch.group(1)!}', true);
-      createdAt = parsed.toLocal();
-    }
-
     return WaterUsageHistoryEntry(
-      createdAt: createdAt,
-      deviceName: '',
+      createdAt: _parseHistoryDate(trimmed) ?? DateTime.now(),
+      deviceName: _parseLegacyDeviceName(trimmed),
       amount: _parseAmount(trimmed) ?? 0,
-      durationSeconds: _parseDurationSeconds(trimmed) ?? 0,
       orderNum: '',
+      durationSeconds: _parseDurationSeconds(trimmed),
       legacyText: trimmed,
+    );
+  }
+
+  factory WaterUsageHistoryEntry.fromServerBill(Map<String, dynamic> json) {
+    return WaterUsageHistoryEntry(
+      createdAt:
+          _parseServerDateTime(json['payTypeStr'] ?? json['createTime']) ??
+          DateTime.now(),
+      deviceName: _buildCompactDeviceName(
+        time: (json['time'] ?? json['deviceName'] ?? json['deviceInfName'] ?? '')
+            .toString(),
+        title: (json['title'] ?? '').toString(),
+      ),
+      amount:
+          _parseAmount(
+            json['expAmountStr']
+                ?.toString()
+                .replaceAll('\u5143', '')
+                .trim(),
+          ) ??
+          _parseAmount(json['expAmount']) ??
+          0,
+      orderNum: json['orderNum']?.toString() ?? json['id']?.toString() ?? '',
     );
   }
 
@@ -126,25 +187,141 @@ class WaterUsageHistoryEntry {
     }
 
     final text = raw.toString().trim();
-    if (text.isEmpty) {
+    if (text.isEmpty || text == '--') {
       return null;
     }
 
-    final minuteSecondMatch = RegExp(r'(\d+)\s*分\s*(\d+)\s*秒').firstMatch(text);
+    final minuteSecondMatch = RegExp(
+      r'(\d+)\s*\u5206\s*(\d+)\s*\u79d2',
+    ).firstMatch(text);
     if (minuteSecondMatch != null) {
       final minutes = int.tryParse(minuteSecondMatch.group(1)!) ?? 0;
       final seconds = int.tryParse(minuteSecondMatch.group(2)!) ?? 0;
       return minutes * 60 + seconds;
     }
 
-    final colonMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(text);
-    if (colonMatch != null) {
-      final minutes = int.tryParse(colonMatch.group(1)!) ?? 0;
-      final seconds = int.tryParse(colonMatch.group(2)!) ?? 0;
+    final clockMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(text);
+    if (clockMatch != null) {
+      final minutes = int.tryParse(clockMatch.group(1)!) ?? 0;
+      final seconds = int.tryParse(clockMatch.group(2)!) ?? 0;
       return minutes * 60 + seconds;
     }
 
-    final numeric = int.tryParse(text.replaceAll(RegExp(r'[^0-9]'), ''));
-    return numeric;
+    final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digits);
+  }
+
+  static String? _normalizeDurationLabel(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+
+    final text = raw.toString().trim();
+    if (text.isEmpty || text == '--') {
+      return null;
+    }
+    return text;
+  }
+
+  static DateTime? _parseStoredDateTime(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+    return DateTime.tryParse(raw.toString());
+  }
+
+  static DateTime? _parseHistoryDate(String raw) {
+    final match = RegExp(r'(\d{2}-\d{2}\s\d{2}:\d{2})').firstMatch(raw);
+    if (match == null) {
+      return null;
+    }
+
+    final year = DateTime.now().year;
+    try {
+      return DateFormat('yyyy-MM-dd HH:mm').parseStrict(
+        '$year-${match.group(1)!}',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static DateTime? _parseServerDateTime(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+
+    final text = raw.toString().trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final normalized = text.replaceAll('/', '-');
+    final withYear = RegExp(r'^\d{4}-').hasMatch(normalized)
+        ? normalized
+        : '${DateTime.now().year}-$normalized';
+
+    for (final pattern in const ['yyyy-MM-dd HH:mm:ss', 'yyyy-MM-dd HH:mm']) {
+      try {
+        return DateFormat(pattern).parseStrict(withYear);
+      } catch (_) {
+        // Try the next known server format.
+      }
+    }
+    return null;
+  }
+
+  static String _buildCompactDeviceName({
+    required String time,
+    required String title,
+  }) {
+    final source = time.trim();
+    final roomMatch = RegExp(r'(\d+)\s*$').firstMatch(source);
+    final roomNumber = roomMatch?.group(1) ?? _compactRoomFallback(source);
+    final normalizedTitle = _normalizeBillTitle(title);
+
+    if (roomNumber.isEmpty) {
+      return normalizedTitle;
+    }
+    return '$roomNumber$normalizedTitle';
+  }
+
+  static String _compactRoomFallback(String value) {
+    final segments = value.split('-').map((item) => item.trim()).toList();
+    if (segments.isEmpty) {
+      return '';
+    }
+    return segments.last.replaceAll(RegExp(r'\s+'), '');
+  }
+
+  static String _normalizeBillTitle(String rawTitle) {
+    final title = rawTitle.trim();
+    if (title.contains('\u6d17\u6d74') ||
+        title.contains('\u70ed\u6c34') ||
+        title.contains('\u8bbe\u5907\u7528\u6c34')) {
+      return '\u70ed\u6c34';
+    }
+    if (title.contains('\u996e')) {
+      return '\u76f4\u996e';
+    }
+    return title;
+  }
+
+  static String _parseLegacyDeviceName(String raw) {
+    final bracketMatch = RegExp(r'\(([^()]*)\)').firstMatch(raw);
+    if (bracketMatch == null) {
+      return '';
+    }
+
+    final content = bracketMatch.group(1)!.trim();
+    final withoutDuration = content
+        .replaceAll(
+          RegExp(
+            r'\u7528\u65f6[:\uff1a]?\s*\d+(?::|\u5206)\d+(?:\u79d2)?',
+          ),
+          '',
+        )
+        .trim();
+    return withoutDuration;
   }
 }

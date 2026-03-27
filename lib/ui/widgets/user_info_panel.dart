@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../providers/water_provider.dart';
 import '../../providers/user_provider.dart';
 import 'dialog_utils.dart';
 import 'history_bottom_sheet.dart';
@@ -29,6 +33,12 @@ class UserInfoPanel extends StatelessWidget {
                   ),
                   GestureDetector(
                     onTap: () {
+                      unawaited(
+                        context.read<WaterProvider>().syncHistoryFromServer(
+                          token: userProvider.token,
+                          userId: userProvider.userId,
+                        ),
+                      );
                       DialogUtils.showGlassBottomSheet(context, const HistoryBottomSheet());
                     },
                     behavior: HitTestBehavior.opaque,

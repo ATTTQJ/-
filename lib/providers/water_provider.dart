@@ -308,6 +308,37 @@ class WaterProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> syncHistoryFromServer({
+    required String token,
+    required String userId,
+    bool muteToast = false,
+  }) async {
+    if (token.trim().isEmpty || userId.trim().isEmpty) {
+      return false;
+    }
+
+    final localSnapshot = List<WaterUsageHistoryEntry>.from(history);
+    final serverItems = await ApiService.fetchBillHistory(
+      token: token,
+      userId: userId,
+      muteToast: muteToast,
+    );
+
+    if (serverItems == null) {
+      return false;
+    }
+
+    final mergedHistory = _mergeServerHistoryWithLocalDurations(
+      serverItems: serverItems,
+      localHistory: localSnapshot,
+    );
+
+    history = mergedHistory;
+    await _persistHistory();
+    notifyListeners();
+    return true;
+  }
+
   Future<void> clearHistory() async {
     history.clear();
     final prefs = await SharedPreferences.getInstance();
@@ -437,6 +468,96 @@ class WaterProvider extends ChangeNotifier {
       return syncRes['data']['uBalance']?.toString();
     }
     return null;
+  }
+
+  List<WaterUsageHistoryEntry> _mergeServerHistoryWithLocalDurations({
+    required List<Map<String, dynamic>> serverItems,
+    required List<WaterUsageHistoryEntry> localHistory,
+  }) {
+    final merged = <WaterUsageHistoryEntry>[];
+    final usedLocalIndexes = <int>{};
+
+    for (final item in serverItems) {
+      final serverEntry = WaterUsageHistoryEntry.fromServerBill(item);
+      final matchIndex = _findBestLocalHistoryMatch(
+        target: serverEntry,
+        localHistory: localHistory,
+        usedLocalIndexes: usedLocalIndexes,
+      );
+
+      if (matchIndex == null) {
+        merged.add(serverEntry.copyWith(clearDuration: true));
+        continue;
+      }
+
+      usedLocalIndexes.add(matchIndex);
+      final localEntry = localHistory[matchIndex];
+      merged.add(
+        serverEntry.copyWith(
+          durationSeconds: localEntry.durationSeconds,
+          durationLabel: _durationLabelForMerge(localEntry),
+        ),
+      );
+    }
+
+    return merged;
+  }
+
+  int? _findBestLocalHistoryMatch({
+    required WaterUsageHistoryEntry target,
+    required List<WaterUsageHistoryEntry> localHistory,
+    required Set<int> usedLocalIndexes,
+  }) {
+    int? bestIndex;
+    var bestDiffSeconds = 61;
+    final targetName = _normalizeHistoryDeviceName(target.displayDeviceName);
+    final targetMinute = target.minutePrecisionTime;
+
+    for (var index = 0; index < localHistory.length; index++) {
+      if (usedLocalIndexes.contains(index)) {
+        continue;
+      }
+
+      final candidate = localHistory[index];
+      if (_normalizeHistoryDeviceName(candidate.displayDeviceName) != targetName) {
+        continue;
+      }
+
+      final diffSeconds = candidate.minutePrecisionTime
+          .difference(targetMinute)
+          .inSeconds
+          .abs();
+      if (diffSeconds > 60 || diffSeconds >= bestDiffSeconds) {
+        continue;
+      }
+
+      bestIndex = index;
+      bestDiffSeconds = diffSeconds;
+    }
+
+    return bestIndex;
+  }
+
+  String? _durationLabelForMerge(WaterUsageHistoryEntry entry) {
+    final rawLabel = entry.durationLabel?.trim() ?? '';
+    if (rawLabel.isNotEmpty && rawLabel != '--') {
+      return rawLabel;
+    }
+
+    final derived = entry.formattedDuration.trim();
+    if (derived.isEmpty || derived == '--') {
+      return null;
+    }
+    return derived;
+  }
+
+  String _normalizeHistoryDeviceName(String name) {
+    var normalized = name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    normalized = normalized.replaceAll('\u76f4\u996e\u6c34', '\u76f4\u996e');
+    normalized =
+        normalized.replaceAll('\u8bbe\u5907\u7528\u6c34', '\u70ed\u6c34');
+    normalized = normalized.replaceAll('\u6d17\u6d74', '\u70ed\u6c34');
+    return normalized;
   }
 
   double _resolveSettlementAmount({
