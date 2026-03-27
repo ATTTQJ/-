@@ -344,4 +344,78 @@ class DialogUtils {
       ),
     );
   }
+
+  static void showHotWaterTimeWarningDialog(
+    BuildContext context, {
+    required VoidCallback onContinue,
+  }) {
+    showGlassBottomSheet(
+      context,
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.access_time_rounded, color: Colors.orange[400], size: 48),
+          const SizedBox(height: 16),
+          const Text(
+            '\u975e\u70ed\u6c34\u4f9b\u5e94\u65f6\u6bb5',
+            style: TextStyle(
+              color: Color(0xFF2C2C2E),
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '\u5f53\u524d\u4e0d\u5728\u89c4\u5b9a\u7684\u70ed\u6c34\u4f9b\u5e94\u65f6\u6bb5\u3002\n(06:00-09:30\u300111:30-14:30\u300118:00-23:50)\n\n\u6b64\u65f6\u5f00\u542f\u53ef\u80fd\u53ea\u6709\u51b7\u6c34\uff0c\u662f\u5426\u7ee7\u7eed\uff1f',
+            style: TextStyle(
+              color: Color(0xFF666666),
+              fontSize: 14,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 28),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    '\u53d6\u6d88',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    onContinue();
+                  },
+                  child: const Text(
+                    '\u7ee7\u7eed\u4f7f\u7528',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

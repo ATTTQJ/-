@@ -15,8 +15,6 @@ class DeviceCard extends StatefulWidget {
 }
 
 class _DeviceCardState extends State<DeviceCard> {
-  static const double _deviceItemHeight = 60;
-
   bool _isDeviceExpanded = false;
   bool _isActionMenuCollapsed = true;
 
@@ -164,43 +162,39 @@ class _DeviceCardState extends State<DeviceCard> {
                                     context: context,
                                     removeTop: true,
                                     removeBottom: true,
-                                    child: SizedBox(
-                                      height: deviceProvider.deviceList.length *
-                                          _deviceItemHeight,
-                                      child: ReorderableListView.builder(
-                                        buildDefaultDragHandles: false,
-                                        padding: EdgeInsets.zero,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        itemExtent: _deviceItemHeight,
-                                        itemCount:
-                                            deviceProvider.deviceList.length,
-                                        onReorder: (oldIdx, newIdx) {
-                                          setState(() {
-                                            if (newIdx > oldIdx) {
-                                              newIdx--;
-                                            }
-                                            final item = deviceProvider
-                                                .deviceList
-                                                .removeAt(oldIdx);
-                                            deviceProvider.deviceList.insert(
-                                              newIdx,
-                                              item,
-                                            );
-                                          });
-                                        },
-                                        itemBuilder: (context, index) {
-                                          final device =
-                                              deviceProvider.deviceList[index];
-                                          return _buildDeviceItem(
-                                            context,
-                                            device,
-                                            deviceProvider,
-                                            waterProvider,
-                                            index,
+                                    child: ReorderableListView.builder(
+                                      buildDefaultDragHandles: false,
+                                      padding: EdgeInsets.zero,
+                                      shrinkWrap: true,
+                                      primary: false,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      itemCount:
+                                          deviceProvider.deviceList.length,
+                                      onReorder: (oldIdx, newIdx) {
+                                        setState(() {
+                                          if (newIdx > oldIdx) {
+                                            newIdx--;
+                                          }
+                                          final item = deviceProvider.deviceList
+                                              .removeAt(oldIdx);
+                                          deviceProvider.deviceList.insert(
+                                            newIdx,
+                                            item,
                                           );
-                                        },
-                                      ),
+                                        });
+                                      },
+                                      itemBuilder: (context, index) {
+                                        final device =
+                                            deviceProvider.deviceList[index];
+                                        return _buildDeviceItem(
+                                          context,
+                                          device,
+                                          deviceProvider,
+                                          waterProvider,
+                                          index,
+                                        );
+                                      },
                                     ),
                                   ),
                                   AnimatedSize(
