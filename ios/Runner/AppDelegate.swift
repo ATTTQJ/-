@@ -126,25 +126,25 @@ struct StopWaterIntent: AppIntent {
 @available(iOS 16.0, *)
 struct WaterShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        [
-            AppShortcut(
-                intent: StartWaterIntent(),
-                phrases: [
-                    "Start water with \(.applicationName)",
-                    "Turn on water with \(.applicationName)"
-                ],
-                shortTitle: "Start Water",
-                systemImageName: "drop.fill"
-            ),
-            AppShortcut(
-                intent: StopWaterIntent(),
-                phrases: [
-                    "Stop water with \(.applicationName)",
-                    "Turn off water with \(.applicationName)"
-                ],
-                shortTitle: "Stop Water",
-                systemImageName: "xmark.circle.fill"
-            )
-        ]
+        // ✅ 修复点：移除方括号和逗号，采用 Builder 模式并列排布
+        AppShortcut(
+            intent: StartWaterIntent(),
+            phrases: [
+                "Start water with \(.applicationName)",
+                "Turn on water with \(.applicationName)"
+            ],
+            shortTitle: "Start Water",
+            systemImageName: "drop.fill"
+        )
+        
+        AppShortcut(
+            intent: StopWaterIntent(),
+            phrases: [
+                "Stop water with \(.applicationName)",
+                "Turn off water with \(.applicationName)"
+            ],
+            shortTitle: "Stop Water",
+            systemImageName: "xmark.circle.fill"
+        )
     }
 }
