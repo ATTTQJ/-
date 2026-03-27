@@ -17,6 +17,8 @@ class DeviceCard extends StatefulWidget {
 class _DeviceCardState extends State<DeviceCard> {
   bool _isDeviceExpanded = false;
   bool _isActionMenuCollapsed = true;
+  String? _draggingDeviceId;
+  int? _dragTargetIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -158,44 +160,10 @@ class _DeviceCardState extends State<DeviceCard> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Container(height: 1, color: Colors.grey[100]),
-                                  MediaQuery.removePadding(
-                                    context: context,
-                                    removeTop: true,
-                                    removeBottom: true,
-                                    child: ReorderableListView.builder(
-                                      buildDefaultDragHandles: false,
-                                      padding: EdgeInsets.zero,
-                                      shrinkWrap: true,
-                                      primary: false,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      itemCount:
-                                          deviceProvider.deviceList.length,
-                                      onReorder: (oldIdx, newIdx) {
-                                        setState(() {
-                                          if (newIdx > oldIdx) {
-                                            newIdx--;
-                                          }
-                                          final item = deviceProvider.deviceList
-                                              .removeAt(oldIdx);
-                                          deviceProvider.deviceList.insert(
-                                            newIdx,
-                                            item,
-                                          );
-                                        });
-                                      },
-                                      itemBuilder: (context, index) {
-                                        final device =
-                                            deviceProvider.deviceList[index];
-                                        return _buildDeviceItem(
-                                          context,
-                                          device,
-                                          deviceProvider,
-                                          waterProvider,
-                                          index,
-                                        );
-                                      },
-                                    ),
+                                  _buildDeviceList(
+                                    context,
+                                    deviceProvider,
+                                    waterProvider,
                                   ),
                                   AnimatedSize(
                                     duration: const Duration(milliseconds: 350),
@@ -446,6 +414,145 @@ class _DeviceCardState extends State<DeviceCard> {
     );
   }
 
+  Widget _buildDeviceList(
+    BuildContext context,
+    DeviceProvider deviceProvider,
+    WaterProvider waterProvider,
+  ) {
+    final children = <Widget>[];
+    for (var index = 0; index <= deviceProvider.deviceList.length; index++) {
+      children.add(_buildDropTarget(deviceProvider, index));
+      if (index < deviceProvider.deviceList.length) {
+        children.add(
+          _buildDraggableDeviceItem(
+            context,
+            deviceProvider.deviceList[index],
+            deviceProvider,
+            waterProvider,
+            index,
+          ),
+        );
+      }
+    }
+    return Column(mainAxisSize: MainAxisSize.min, children: children);
+  }
+
+  Widget _buildDropTarget(DeviceProvider deviceProvider, int index) {
+    final isActive = _draggingDeviceId != null && _dragTargetIndex == index;
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) {
+        setState(() {
+          _dragTargetIndex = index;
+        });
+        return details.data != null;
+      },
+      onAcceptWithDetails: (details) {
+        _reorderDevices(deviceProvider, details.data, index);
+      },
+      onLeave: (_) {
+        if (_dragTargetIndex == index) {
+          setState(() {
+            _dragTargetIndex = null;
+          });
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: isActive ? 12 : 0,
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: Colors.blue.withValues(alpha: isActive ? 0.18 : 0),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        );
+      },
+    );
+  }
+
+  void _reorderDevices(
+    DeviceProvider deviceProvider,
+    String draggedDeviceId,
+    int targetIndex,
+  ) {
+    final oldIndex = deviceProvider.deviceList.indexWhere(
+      (device) => device['deviceInfId'].toString() == draggedDeviceId,
+    );
+    if (oldIndex < 0) {
+      _clearDragState();
+      return;
+    }
+
+    var newIndex = targetIndex;
+    if (newIndex > oldIndex) {
+      newIndex--;
+    }
+
+    setState(() {
+      final item = deviceProvider.deviceList.removeAt(oldIndex);
+      final safeIndex = newIndex.clamp(0, deviceProvider.deviceList.length);
+      deviceProvider.deviceList.insert(safeIndex, item);
+      _clearDragState();
+    });
+  }
+
+  void _clearDragState() {
+    _draggingDeviceId = null;
+    _dragTargetIndex = null;
+  }
+
+  Widget _buildDraggableDeviceItem(
+    BuildContext context,
+    Map<String, dynamic> device,
+    DeviceProvider deviceProvider,
+    WaterProvider waterProvider,
+    int index,
+  ) {
+    final id = device['deviceInfId'].toString();
+    final width = MediaQuery.of(context).size.width - 56;
+
+    return LongPressDraggable<String>(
+      data: id,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      onDragStarted: () {
+        setState(() {
+          _draggingDeviceId = id;
+          _dragTargetIndex = index;
+        });
+      },
+      onDraggableCanceled: (_, __) => setState(_clearDragState),
+      onDragEnd: (_) => setState(_clearDragState),
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(
+          width: width,
+          child: _buildDeviceItemBody(
+            context,
+            device,
+            deviceProvider,
+            waterProvider,
+            dragging: true,
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.22,
+        child: _buildDeviceItemBody(
+          context,
+          device,
+          deviceProvider,
+          waterProvider,
+        ),
+      ),
+      child: _buildDeviceItemBody(
+        context,
+        device,
+        deviceProvider,
+        waterProvider,
+      ),
+    );
+  }
+
   Map<String, dynamic>? _selectedDevice(DeviceProvider deviceProvider) {
     if (deviceProvider.deviceList.isEmpty) {
       return null;
@@ -497,13 +604,13 @@ class _DeviceCardState extends State<DeviceCard> {
     );
   }
 
-  Widget _buildDeviceItem(
+  Widget _buildDeviceItemBody(
     BuildContext context,
     Map<String, dynamic> device,
     DeviceProvider deviceProvider,
-    WaterProvider waterProvider,
-    int index,
-  ) {
+    WaterProvider waterProvider, {
+    bool dragging = false,
+  }) {
     final id = device['deviceInfId'].toString();
     final isSelected = id == deviceProvider.selectedDeviceId;
     final name =
@@ -515,6 +622,9 @@ class _DeviceCardState extends State<DeviceCard> {
       color: Colors.transparent,
       child: GestureDetector(
         onTap: () {
+          if (dragging) {
+            return;
+          }
           if (waterProvider.orderNum.isNotEmpty) {
             ToastService.show('\u7528\u6c34\u4e2d\uff0c\u65e0\u6cd5\u5207\u6362\u8bbe\u5907');
             return;
@@ -529,20 +639,21 @@ class _DeviceCardState extends State<DeviceCard> {
         },
         behavior: HitTestBehavior.opaque,
         child: Container(
-          color: isSelected ? Colors.grey[50] : Colors.transparent,
+          color: dragging
+              ? Colors.white.withValues(alpha: 0.96)
+              : isSelected
+                  ? Colors.grey[50]
+                  : Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: Row(
             children: [
-              ReorderableDragStartListener(
-                index: index,
-                child: Container(
-                  color: Colors.transparent,
-                  padding: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
-                  child: const Icon(
-                    Icons.drag_handle,
-                    color: Colors.grey,
-                    size: 20,
-                  ),
+              Container(
+                color: Colors.transparent,
+                padding: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
+                child: const Icon(
+                  Icons.drag_handle,
+                  color: Colors.grey,
+                  size: 20,
                 ),
               ),
               Expanded(
@@ -562,9 +673,11 @@ class _DeviceCardState extends State<DeviceCard> {
                 const Icon(Icons.check, color: Color(0xFF2C2C2E), size: 18),
               const SizedBox(width: 16),
               GestureDetector(
-                onTap: () {
-                  DialogUtils.showEditRemarkDialog(context, id, name);
-                },
+                onTap: dragging
+                    ? null
+                    : () {
+                        DialogUtils.showEditRemarkDialog(context, id, name);
+                      },
                 child: Icon(Icons.edit_note, color: Colors.grey[400], size: 22),
               ),
             ],
