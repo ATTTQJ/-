@@ -202,6 +202,8 @@ class DialogUtils {
     String commonlyId,
     String deviceName,
   ) {
+    final userProvider = context.read<UserProvider>();
+    final deviceProvider = context.read<DeviceProvider>();
     showGlassBottomSheet(
       context,
       Column(
@@ -248,14 +250,11 @@ class DialogUtils {
                   ),
                   onPressed: () async {
                     Navigator.pop(context);
-                    final userProvider = context.read<UserProvider>();
-                    final success = await context
-                        .read<DeviceProvider>()
-                        .deleteDevice(
-                          commonlyId,
-                          userProvider.token,
-                          userProvider.userId,
-                        );
+                    final success = await deviceProvider.deleteDevice(
+                      commonlyId,
+                      userProvider.token,
+                      userProvider.userId,
+                    );
                     if (success) {
                       ToastService.show('Device removed');
                     }

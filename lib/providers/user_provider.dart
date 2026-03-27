@@ -34,14 +34,20 @@ class UserProvider extends ChangeNotifier {
   Future<void> sendCode(String tel) async {
     if (tel.length != 11) return;
     setRequesting(true);
-    await ApiService.post("user/sendRegisterMsg", {"tel": tel}, muteToast: false);
+    await ApiService.post("user/sendRegisterMsg", {
+      "tel": tel,
+    }, muteToast: false);
     setRequesting(false);
   }
 
   Future<bool> login(String tel, String code) async {
     if (tel.isEmpty || code.isEmpty) return false;
     setRequesting(true);
-    final res = await ApiService.post("user/register", {"tel": tel, "code": code, "type": "5"});
+    final res = await ApiService.post("user/register", {
+      "tel": tel,
+      "code": code,
+      "type": "5",
+    });
     setRequesting(false);
 
     if (res != null && (res["code"] == 0 || res["code"] == "0")) {
@@ -61,7 +67,13 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<void> silentTokenGuard() async {
-    final res = await ApiService.post("user/queryUserWalletInfo", {}, token: token, userId: userId, muteToast: true);
+    final res = await ApiService.post(
+      "user/queryUserWalletInfo",
+      {},
+      token: token,
+      userId: userId,
+      muteToast: true,
+    );
     if (res != null) {
       if (res["code"] == 0 || res["code"] == "0") {
         balance = res["data"]["uBalance"].toString();
@@ -74,8 +86,16 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<void> fetchUserInfo() async {
-    final res = await ApiService.post("user/queryUserInfo", {}, token: token, userId: userId, muteToast: true);
-    if (res != null && (res["code"] == 0 || res["code"] == "0") && res["data"] != null) {
+    final res = await ApiService.post(
+      "user/queryUserInfo",
+      {},
+      token: token,
+      userId: userId,
+      muteToast: true,
+    );
+    if (res != null &&
+        (res["code"] == 0 || res["code"] == "0") &&
+        res["data"] != null) {
       userName = res["data"]["userName"] ?? res["data"]["nickname"] ?? "User";
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString("userName", userName);
@@ -85,6 +105,14 @@ class UserProvider extends ChangeNotifier {
 
   Future<void> syncBalance() async {
     await silentTokenGuard();
+  }
+
+  Future<void> setBalance(String newBalance) async {
+    balance = newBalance;
+    checkLowBalance();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("balance", balance);
+    notifyListeners();
   }
 
   void checkLowBalance() {

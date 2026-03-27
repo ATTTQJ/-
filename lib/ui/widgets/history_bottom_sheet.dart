@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../models/water_usage_history_entry.dart';
 import '../../providers/water_provider.dart';
 import 'dialog_utils.dart';
 
@@ -19,7 +21,14 @@ class HistoryBottomSheet extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("用水记录", style: TextStyle(color: Color(0xFF2C2C2E), fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text(
+                  '用水记录',
+                  style: TextStyle(
+                    color: Color(0xFF2C2C2E),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 if (history.isNotEmpty)
                   GestureDetector(
                     onTap: () {
@@ -27,56 +36,129 @@ class HistoryBottomSheet extends StatelessWidget {
                     },
                     child: Row(
                       children: [
-                        Text("共 ${history.length} 条", style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                        Text(
+                          '共 ${history.length} 条',
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 13,
+                          ),
+                        ),
                         const SizedBox(width: 8),
-                        const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                        const Icon(
+                          Icons.delete_outline,
+                          color: Colors.redAccent,
+                          size: 18,
+                        ),
                       ],
                     ),
                   )
                 else
-                  const Text("共 0 条", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  const Text(
+                    '共 0 条',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
               ],
             ),
             const SizedBox(height: 16),
             if (history.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: Text("暂无历史记录", style: TextStyle(color: Colors.grey, fontSize: 14))),
+                child: Center(
+                  child: Text(
+                    '暂无历史记录',
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                ),
               )
             else
               ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
+                ),
                 child: ListView.separated(
+                  padding: EdgeInsets.zero,
                   shrinkWrap: true,
                   physics: const BouncingScrollPhysics(),
                   itemCount: history.length,
-                  separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[100]),
+                  separatorBuilder: (context, index) =>
+                      Divider(height: 1, color: Colors.grey[100]),
                   itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
-                            child: const Icon(Icons.history, color: Colors.blue, size: 16),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              history[index],
-                              style: const TextStyle(color: Color(0xFF2C2C2E), fontSize: 14),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
+                    return _HistoryItem(entry: history[index]);
                   },
                 ),
               ),
           ],
         );
-      }
+      },
+    );
+  }
+}
+
+class _HistoryItem extends StatelessWidget {
+  const _HistoryItem({required this.entry});
+
+  final WaterUsageHistoryEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.history, color: Colors.blue, size: 16),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.displayDeviceName,
+                  style: const TextStyle(
+                    color: Color(0xFF2C2C2E),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  entry.formattedDate,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '用水时长：${entry.formattedDuration}',
+                  style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF4EA),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              '¥${entry.formattedAmount}',
+              style: const TextStyle(
+                color: Color(0xFFD85B00),
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

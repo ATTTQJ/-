@@ -91,6 +91,8 @@ class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
       token: userProvider.token,
       userId: userProvider.userId,
       selectedDeviceId: deviceProvider.selectedDeviceId,
+      currentBalance: userProvider.balance,
+      onBalanceUpdated: userProvider.setBalance,
     );
   }
 

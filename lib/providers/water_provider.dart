@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/toast_service.dart';
+import '../models/water_usage_history_entry.dart';
 import '../services/api_service.dart';
+
+typedef BalanceUpdateCallback = Future<void> Function(String balance);
 
 class WaterProvider extends ChangeNotifier {
   WaterProvider();
@@ -19,7 +22,7 @@ class WaterProvider extends ChangeNotifier {
   String tableName = '';
   String mac = '';
   bool isRequesting = false;
-  List<String> history = [];
+  List<WaterUsageHistoryEntry> history = [];
 
   DateTime? startTime;
   Timer? timer;
@@ -32,7 +35,9 @@ class WaterProvider extends ChangeNotifier {
     orderNum = prefs.getString('water_orderNum') ?? '';
     tableName = prefs.getString('water_tableName') ?? '';
     mac = prefs.getString('water_mac') ?? '';
-    history = prefs.getStringList('water_history') ?? [];
+    history = (prefs.getStringList('water_history') ?? [])
+        .map(WaterUsageHistoryEntry.fromStorage)
+        .toList();
 
     final savedStartTime = prefs.getInt('water_start_time') ?? 0;
     if (orderNum.isNotEmpty && savedStartTime > 0) {
@@ -55,6 +60,8 @@ class WaterProvider extends ChangeNotifier {
     String token = '',
     String userId = '',
     String selectedDeviceId = '',
+    String currentBalance = '',
+    BalanceUpdateCallback? onBalanceUpdated,
   }) async {
     if (_isHandlingPendingAction) {
       return;
@@ -84,7 +91,7 @@ class WaterProvider extends ChangeNotifier {
           selectedDeviceId: selectedDeviceId,
         );
         if (targetDevice == null) {
-          ToastService.show('No matching device found');
+          ToastService.show('未找到匹配设备');
           return;
         }
 
@@ -94,7 +101,12 @@ class WaterProvider extends ChangeNotifier {
         }
 
         if (token.isNotEmpty && userId.isNotEmpty && orderNum.isEmpty) {
-          await startWater(token, userId, targetDevice);
+          await startWater(
+            token,
+            userId,
+            targetDevice,
+            currentBalance: currentBalance,
+          );
         }
         return;
       }
@@ -109,7 +121,13 @@ class WaterProvider extends ChangeNotifier {
           customRemarks: customRemarks,
           selectedDeviceId: selectedDeviceId,
         );
-        await stopWater(token, userId, currentDeviceName);
+        await stopWater(
+          token,
+          userId,
+          currentDeviceName,
+          currentBalance: currentBalance,
+          onBalanceUpdated: onBalanceUpdated,
+        );
       }
     } on MissingPluginException catch (error) {
       debugPrint('Siri channel is not ready yet: $error');
@@ -124,8 +142,9 @@ class WaterProvider extends ChangeNotifier {
   Future<bool> startWater(
     String token,
     String userId,
-    Map<String, dynamic> device,
-  ) async {
+    Map<String, dynamic> device, {
+    String currentBalance = '',
+  }) async {
     if (isRequesting) {
       return false;
     }
@@ -154,7 +173,7 @@ class WaterProvider extends ChangeNotifier {
 
       await Future.delayed(const Duration(milliseconds: 550));
 
-      final res2 = await ApiService.post(
+      final res = await ApiService.post(
         'device/useEquipment',
         {
           'orderWay': '1',
@@ -168,11 +187,11 @@ class WaterProvider extends ChangeNotifier {
         userId: userId,
       );
 
-      if (res2 != null && (res2['code'] == 0 || res2['code'] == '0')) {
+      if (res != null && (res['code'] == 0 || res['code'] == '0')) {
         startTime = DateTime.now();
-        orderNum = res2['data']['orderNum']?.toString() ?? '';
-        tableName = res2['data']['tableName']?.toString() ?? '';
-        mac = res2['data']['mac']?.toString() ?? '';
+        orderNum = res['data']['orderNum']?.toString() ?? '';
+        tableName = res['data']['tableName']?.toString() ?? '';
+        mac = res['data']['mac']?.toString() ?? '';
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('water_orderNum', orderNum);
@@ -182,9 +201,12 @@ class WaterProvider extends ChangeNotifier {
           'water_start_time',
           startTime!.millisecondsSinceEpoch,
         );
+        if (currentBalance.trim().isNotEmpty) {
+          await prefs.setString('water_initial_balance', currentBalance.trim());
+        }
 
         _startRunningTimer();
-        ToastService.show('Water started');
+        ToastService.show('设备已开启，正在出水...');
         return true;
       }
     } finally {
@@ -198,8 +220,10 @@ class WaterProvider extends ChangeNotifier {
   Future<void> stopWater(
     String token,
     String userId,
-    String currentDeviceName,
-  ) async {
+    String currentDeviceName, {
+    String currentBalance = '',
+    BalanceUpdateCallback? onBalanceUpdated,
+  }) async {
     if (orderNum.isEmpty || isRequesting) {
       return;
     }
@@ -208,6 +232,10 @@ class WaterProvider extends ChangeNotifier {
     notifyListeners();
 
     final finalTime = runningTime;
+    final currentOrderNum = orderNum;
+    final currentStartTime = startTime;
+    final prefs = await SharedPreferences.getInstance();
+    final savedInitialBalance = prefs.getString('water_initial_balance') ?? '';
 
     try {
       final res = await ApiService.post(
@@ -218,14 +246,19 @@ class WaterProvider extends ChangeNotifier {
       );
 
       if (res != null && (res['code'] == 0 || res['code'] == '0')) {
+        final syncedBalance = await _syncBalance(token, userId);
+        if (syncedBalance != null && onBalanceUpdated != null) {
+          await onBalanceUpdated(syncedBalance);
+        }
+
         timer?.cancel();
         timer = null;
 
-        final prefs = await SharedPreferences.getInstance();
         await prefs.remove('water_orderNum');
         await prefs.remove('water_tableName');
         await prefs.remove('water_mac');
         await prefs.remove('water_start_time');
+        await prefs.remove('water_initial_balance');
 
         orderNum = '';
         tableName = '';
@@ -233,19 +266,41 @@ class WaterProvider extends ChangeNotifier {
         startTime = null;
         runningTime = '00:00';
 
-        ToastService.show('Water stopped after $finalTime', durationMs: 4000);
-
+        final amount = _resolveSettlementAmount(
+          response: res,
+          initialBalance: savedInitialBalance.isNotEmpty
+              ? savedInitialBalance
+              : currentBalance,
+          syncedBalance: syncedBalance ?? currentBalance,
+        );
+        final durationSeconds = _resolveDurationSeconds(
+          response: res,
+          startedAt: currentStartTime,
+          fallbackRunningTime: finalTime,
+        );
         final safeDeviceName = currentDeviceName.trim().isEmpty
-            ? 'Device'
+            ? '未命名设备'
             : currentDeviceName.trim();
+
+        ToastService.show(
+          '已关水\n扣费金额：¥${amount.toStringAsFixed(2)}\n用水时长：${_formatDuration(durationSeconds)}',
+          durationMs: 4200,
+        );
+
         history.insert(
           0,
-          '${DateFormat('MM-dd HH:mm').format(DateTime.now())} ($safeDeviceName $finalTime)',
+          WaterUsageHistoryEntry(
+            createdAt: DateTime.now(),
+            deviceName: safeDeviceName,
+            amount: amount,
+            durationSeconds: durationSeconds,
+            orderNum: currentOrderNum,
+          ),
         );
         if (history.length > 50) {
           history = history.sublist(0, 50);
         }
-        await prefs.setStringList('water_history', history);
+        await _persistHistory();
       }
     } finally {
       isRequesting = false;
@@ -264,6 +319,14 @@ class WaterProvider extends ChangeNotifier {
   void dispose() {
     timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _persistHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'water_history',
+      history.map((entry) => jsonEncode(entry.toJson())).toList(),
+    );
   }
 
   Future<List<Map<String, dynamic>>> _waitForDeviceList(
@@ -347,9 +410,7 @@ class WaterProvider extends ChangeNotifier {
     final baseName = (customName == null || customName.trim().isEmpty)
         ? _stripDevicePrefix(backendName)
         : customName.trim();
-    final suffix = resolvedDevice['billType'] == 2
-        ? ' hot water'
-        : ' drinking water';
+    final suffix = resolvedDevice['billType'] == 2 ? '热水' : '直饮水';
     return '$baseName$suffix';
   }
 
@@ -359,6 +420,229 @@ class WaterProvider extends ChangeNotifier {
 
   String _stripDevicePrefix(String value) {
     return value.replaceFirst(RegExp(r'^[12]-'), '');
+  }
+
+  Future<String?> _syncBalance(String token, String userId) async {
+    final syncRes = await ApiService.post(
+      'user/queryUserWalletInfo',
+      {},
+      token: token,
+      userId: userId,
+      muteToast: true,
+    );
+
+    if (syncRes != null &&
+        (syncRes['code'] == 0 || syncRes['code'] == '0') &&
+        syncRes['data'] != null) {
+      return syncRes['data']['uBalance']?.toString();
+    }
+    return null;
+  }
+
+  double _resolveSettlementAmount({
+    required Map<String, dynamic> response,
+    required String initialBalance,
+    required String syncedBalance,
+  }) {
+    final extractedAmount = _extractSettlementAmount(response);
+    if (extractedAmount != null) {
+      return extractedAmount;
+    }
+
+    final before = double.tryParse(initialBalance) ?? 0;
+    final after = double.tryParse(syncedBalance) ?? 0;
+    final diff = before - after;
+    return diff > 0 ? diff : 0;
+  }
+
+  int _resolveDurationSeconds({
+    required Map<String, dynamic> response,
+    required DateTime? startedAt,
+    required String fallbackRunningTime,
+  }) {
+    final extractedDuration = _extractDurationSeconds(response);
+    if (extractedDuration != null && extractedDuration >= 0) {
+      return extractedDuration;
+    }
+
+    if (startedAt != null) {
+      final diff = DateTime.now().difference(startedAt).inSeconds;
+      if (diff >= 0) {
+        return diff;
+      }
+    }
+
+    return _parseClockDurationToSeconds(fallbackRunningTime);
+  }
+
+  double? _extractSettlementAmount(Map<String, dynamic> response) {
+    final value = _findFirstMatchingValue(response, const [
+      'expAmount',
+      'expAmountStr',
+      'cost',
+      'costStr',
+      'amount',
+      'amountStr',
+      'money',
+      'fee',
+      'feeStr',
+      'deductAmount',
+      'deductAmountStr',
+      'consumeAmount',
+      'payAmount',
+    ]);
+    return _parseMoneyValue(value);
+  }
+
+  int? _extractDurationSeconds(Map<String, dynamic> response) {
+    final directValue = _findFirstMatchingValue(response, const [
+      'durationSeconds',
+      'useSeconds',
+      'useSecond',
+      'timeLength',
+      'timeLen',
+      'useLong',
+      'useTimeLong',
+      'duration',
+      'useTime',
+      'timeStr',
+    ]);
+    final directDuration = _parseDurationValue(directValue);
+    if (directDuration != null) {
+      return directDuration;
+    }
+
+    final startRaw = _findFirstMatchingValue(response, const [
+      'startTime',
+      'beginTime',
+      'beginDate',
+      'openTime',
+      'createTime',
+    ]);
+    final endRaw = _findFirstMatchingValue(response, const [
+      'endTime',
+      'stopTime',
+      'finishTime',
+      'closeTime',
+      'updateTime',
+    ]);
+
+    final start = _parseDateTimeValue(startRaw);
+    final end = _parseDateTimeValue(endRaw);
+    if (start != null && end != null) {
+      final diff = end.difference(start).inSeconds;
+      if (diff >= 0) {
+        return diff;
+      }
+    }
+
+    return null;
+  }
+
+  Object? _findFirstMatchingValue(Object? source, List<String> candidateKeys) {
+    if (source is Map) {
+      for (final entry in source.entries) {
+        final key = entry.key.toString().toLowerCase();
+        if (candidateKeys.any((candidate) => candidate.toLowerCase() == key)) {
+          return entry.value;
+        }
+      }
+
+      for (final entry in source.entries) {
+        final nested = _findFirstMatchingValue(entry.value, candidateKeys);
+        if (nested != null) {
+          return nested;
+        }
+      }
+    }
+
+    if (source is Iterable) {
+      for (final item in source) {
+        final nested = _findFirstMatchingValue(item, candidateKeys);
+        if (nested != null) {
+          return nested;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  double? _parseMoneyValue(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw is num) {
+      return raw.toDouble();
+    }
+
+    final normalized = raw.toString().replaceAll(RegExp(r'[^0-9.\-]'), '');
+    return double.tryParse(normalized);
+  }
+
+  int? _parseDurationValue(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw is int) {
+      return raw;
+    }
+    if (raw is double) {
+      return raw.round();
+    }
+
+    final text = raw.toString().trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final minuteSecondMatch = RegExp(r'(\d+)\s*分\s*(\d+)\s*秒').firstMatch(text);
+    if (minuteSecondMatch != null) {
+      final minutes = int.tryParse(minuteSecondMatch.group(1)!) ?? 0;
+      final seconds = int.tryParse(minuteSecondMatch.group(2)!) ?? 0;
+      return minutes * 60 + seconds;
+    }
+
+    final clockMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(text);
+    if (clockMatch != null) {
+      final minutes = int.tryParse(clockMatch.group(1)!) ?? 0;
+      final seconds = int.tryParse(clockMatch.group(2)!) ?? 0;
+      return minutes * 60 + seconds;
+    }
+
+    final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digits);
+  }
+
+  DateTime? _parseDateTimeValue(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+
+    final text = raw.toString().trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final normalized = text.replaceAll('/', '-').replaceFirst(' ', 'T');
+    return DateTime.tryParse(normalized);
+  }
+
+  int _parseClockDurationToSeconds(String value) {
+    final parts = value.split(':');
+    if (parts.length != 2) {
+      return 0;
+    }
+
+    final minutes = int.tryParse(parts[0]) ?? 0;
+    final seconds = int.tryParse(parts[1]) ?? 0;
+    return minutes * 60 + seconds;
+  }
+
+  String _formatDuration(int durationSeconds) {
+    final minutes = durationSeconds ~/ 60;
+    final seconds = durationSeconds % 60;
+    return '${minutes}分${seconds}秒';
   }
 
   void _startRunningTimer() {
