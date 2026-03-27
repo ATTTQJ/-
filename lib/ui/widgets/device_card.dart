@@ -41,8 +41,7 @@ class _DeviceCardState extends State<DeviceCard> {
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  // 顺手帮你修复了 withOpacity 的弃用警告
-                  color: Colors.black.withValues(alpha: 0.04), 
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 15,
                 ),
               ],
@@ -152,7 +151,7 @@ class _DeviceCardState extends State<DeviceCard> {
                     ),
                   ),
                   
-                  // 🌟 动画修复核心区域
+                  // 🌟 动画修复与空白彻底消除核心区域
                   ClipRect(
                     child: AnimatedSize(
                       duration: const Duration(milliseconds: 400),
@@ -160,37 +159,43 @@ class _DeviceCardState extends State<DeviceCard> {
                       alignment: Alignment.topCenter,
                       child: shouldShowContent
                           ? SizedBox(
-                              width: double.infinity, // 强制占满宽度，防止斜向动画
+                              width: double.infinity,
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Container(height: 1, color: Colors.grey[100]),
-                                  ReorderableListView(
-                                    buildDefaultDragHandles: false,
-                                    padding: EdgeInsets.zero,
-                                    shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    onReorder: (oldIdx, newIdx) {
-                                      if (newIdx > oldIdx) {
-                                        newIdx--;
-                                      }
-                                      final item = deviceProvider.deviceList
-                                          .removeAt(oldIdx);
-                                      deviceProvider.deviceList.insert(
-                                        newIdx,
-                                        item,
-                                      );
-                                    },
-                                    children: deviceProvider.deviceList
-                                        .map(
-                                          (device) => _buildDeviceItem(
-                                            context,
-                                            device,
-                                            deviceProvider,
-                                            waterProvider,
-                                          ),
-                                        )
-                                        .toList(),
+                                  // 🌟 核心修复区：强制吃掉状态栏和底部的系统留白
+                                  MediaQuery.removePadding(
+                                    context: context,
+                                    removeTop: true,
+                                    removeBottom: true,
+                                    child: ReorderableListView(
+                                      buildDefaultDragHandles: false,
+                                      padding: EdgeInsets.zero,
+                                      shrinkWrap: true,
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      onReorder: (oldIdx, newIdx) {
+                                        if (newIdx > oldIdx) {
+                                          newIdx--;
+                                        }
+                                        final item = deviceProvider.deviceList
+                                            .removeAt(oldIdx);
+                                        deviceProvider.deviceList.insert(
+                                          newIdx,
+                                          item,
+                                        );
+                                      },
+                                      children: deviceProvider.deviceList
+                                          .map(
+                                            (device) => _buildDeviceItem(
+                                              context,
+                                              device,
+                                              deviceProvider,
+                                              waterProvider,
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
                                   ),
                                   AnimatedSize(
                                     duration: const Duration(milliseconds: 350),
@@ -198,7 +203,7 @@ class _DeviceCardState extends State<DeviceCard> {
                                     alignment: Alignment.topCenter,
                                     child: shouldShowActionBar
                                         ? SizedBox(
-                                            width: double.infinity, // 强制占满宽度
+                                            width: double.infinity,
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
