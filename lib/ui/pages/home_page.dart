@@ -24,7 +24,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // 状态栏全透明，亮色图标
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
@@ -32,7 +31,6 @@ class _HomePageState extends State<HomePage> {
 
     return Consumer3<UserProvider, WaterProvider, DeviceProvider>(
       builder: (context, userProvider, waterProvider, deviceProvider, child) {
-        // 保证 4 张卡片，如果少于4张则补齐虚位卡片
         final List<Map<String, dynamic>> displayDevices = 
             List<Map<String, dynamic>>.from(deviceProvider.deviceList);
         while (displayDevices.length < 4) {
@@ -49,7 +47,6 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           backgroundColor: const Color(0xFF0E0E11),
-          // 🌟 彻底抛弃外层滚动，真正的一页满铺
           body: Stack(
             children: [
               const Positioned.fill(child: _BackdropLayer()),
@@ -123,7 +120,6 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                    // 🌟 核心：设备甲板区域。固定上边界，下边界贴底，内部可独立滑动
                     Positioned(
                       top: 340, 
                       left: 19,
@@ -491,7 +487,6 @@ class _DeviceDeck extends StatelessWidget {
       return ae ? 1 : -1; 
     });
 
-    // 🌟 精确计算内部 Stack 的总高度，支持 5+ 台设备自动触发滚动
     double maxStackHeight = 0;
     
     final stackChildren = ordered.map((entry) {
@@ -512,12 +507,12 @@ class _DeviceDeck extends StatelessWidget {
         } else if (index == expandedIndex) {
           top = index * 55.0; 
         } else {
-          // 展开高度降为 240，下一张卡片被推到 240 + 10 = 250 的位置
-          top = expandedIndex * 55.0 + 250.0 + (index - expandedIndex - 1) * 60.0; 
+          // 🌟 高度精算更新：展开后的卡片增高到了 270，所以下方的卡片推开距离加 30 像素（280）
+          top = expandedIndex * 55.0 + 280.0 + (index - expandedIndex - 1) * 60.0; 
         }
       }
 
-      final double cardHeight = expanded ? 240.0 : 180.0;
+      final double cardHeight = expanded ? 270.0 : 180.0;
       if (top + cardHeight > maxStackHeight) {
         maxStackHeight = top + cardHeight;
       }
@@ -546,12 +541,11 @@ class _DeviceDeck extends StatelessWidget {
       );
     }).toList();
 
-    // 🌟 将卡片区域包裹在独立的滚动视图中，完美支持 5台+ 设备
     return SingleChildScrollView(
       physics: devices.length > 4 
-          ? const BouncingScrollPhysics() // 设备超过 4 台，开启弹性滑动
-          : const BouncingScrollPhysics(), // 少于 4 台时高度未溢出，本身就不需要滑（保持原生回弹手感）
-      padding: const EdgeInsets.only(bottom: 60), // 底部多留点空间避免被 Home 条遮挡
+          ? const BouncingScrollPhysics() 
+          : const BouncingScrollPhysics(), 
+      padding: const EdgeInsets.only(bottom: 60), 
       clipBehavior: Clip.none,
       child: SizedBox(
         height: maxStackHeight,
@@ -564,7 +558,6 @@ class _DeviceDeck extends StatelessWidget {
   }
 }
 
-// “添加设备”卡片
 class _AddDeviceCard extends StatelessWidget {
   final VoidCallback onTap;
   const _AddDeviceCard({required this.onTap});
@@ -632,8 +625,8 @@ class _DeckCard extends StatelessWidget {
       child: AnimatedContainer( 
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
-        // 🌟 优化：展开高度降低到了 240，刚好完美展示完下方的 Usage
-        height: expanded ? 240 : 180, 
+        // 🌟 容纳新按钮：高度增加到了 270
+        height: expanded ? 270 : 180, 
         decoration: BoxDecoration(
           gradient: palette.gradient,
           borderRadius: BorderRadius.circular(40), 
@@ -674,7 +667,6 @@ class _DeckCard extends StatelessWidget {
                         child: Icon(
                           palette.icon,
                           color: palette.foreground,
-                          // 🌟 优化：图标放大了 1 个 size (26 -> 28)
                           size: 28,
                         ),
                       ),
@@ -688,7 +680,6 @@ class _DeckCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: palette.foreground,
-                              // 🌟 优化：字体放大了 1 个 size (16 -> 18)
                               fontSize: 18, 
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.2,
@@ -698,7 +689,6 @@ class _DeckCard extends StatelessWidget {
                         ),
                       ),
                       _VerticalSlideSwitch(
-                        // 🌟 优化：开关彻底解绑，不会随着卡片展开而激活
                         active: false, 
                         foreground: palette.foreground,
                         rail: palette.switchRail,
@@ -706,16 +696,17 @@ class _DeckCard extends StatelessWidget {
                     ],
                   ),
                   if (expanded) ...[
-                    const SizedBox(height: 24),
+                    // 🌟 优化：把这部分的间距缩紧，重心上移
+                    const SizedBox(height: 12),
                     Text(
-                      'Today usage',
+                      '已使用', // 中文化
                       style: TextStyle(
                         color: palette.secondaryText,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     RichText(
                       text: TextSpan(
                         children: [
@@ -729,7 +720,7 @@ class _DeckCard extends StatelessWidget {
                             ),
                           ),
                           TextSpan(
-                            text: ' uses',
+                            text: ' 次', // 中文化
                             style: TextStyle(
                               color: palette.secondaryText,
                               fontSize: 18,
@@ -739,8 +730,82 @@ class _DeckCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    // 🌟 新增：底部三大快捷操作按钮
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _CardActionButton(
+                          icon: Icons.location_on_rounded,
+                          label: '位置',
+                          color: palette.foreground,
+                          bgColor: Colors.black.withOpacity(0.06),
+                          onTap: () {},
+                        ),
+                        _CardActionButton(
+                          icon: Icons.edit_rounded,
+                          label: '重命名',
+                          color: palette.foreground,
+                          bgColor: Colors.black.withOpacity(0.06),
+                          onTap: () {},
+                        ),
+                        _CardActionButton(
+                          icon: Icons.delete_rounded,
+                          label: '删除',
+                          color: const Color(0xFFE53935), // 警示红
+                          bgColor: const Color(0xFFE53935).withOpacity(0.12), // 红色微透底色
+                          onTap: () {},
+                        ),
+                      ],
+                    ),
                   ],
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 🌟 新增：底部卡片快捷操作按钮 UI
+class _CardActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color bgColor;
+  final VoidCallback onTap;
+
+  const _CardActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.bgColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20), // 优美的圆角
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label, 
+              style: TextStyle(
+                fontSize: 13, 
+                fontWeight: FontWeight.w600, 
+                color: color,
               ),
             ),
           ],
@@ -754,7 +819,6 @@ class _CornerLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      // 🌟 优化：极度提亮左上角的白线透明度，可读性更强
       ..color = Colors.white.withOpacity(0.85) 
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5
