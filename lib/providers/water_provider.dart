@@ -473,10 +473,28 @@ class WaterProvider extends ChangeNotifier {
   }) {
     final merged = <WaterUsageHistoryEntry>[];
     final usedLocalIndexes = <int>{};
+    final localByOrderNum = <String, int>{};
+
+    for (var index = 0; index < localHistory.length; index++) {
+      final orderNum = localHistory[index].orderNum.trim();
+      if (orderNum.isNotEmpty) {
+        localByOrderNum[orderNum] = index;
+      }
+    }
 
     for (final item in serverItems) {
       final serverEntry = WaterUsageHistoryEntry.fromServerBill(item);
-      final matchIndex = _findBestLocalHistoryMatch(
+      final orderNum = serverEntry.orderNum.trim();
+      int? matchIndex;
+
+      if (orderNum.isNotEmpty) {
+        final exactMatch = localByOrderNum[orderNum];
+        if (exactMatch != null && !usedLocalIndexes.contains(exactMatch)) {
+          matchIndex = exactMatch;
+        }
+      }
+
+      matchIndex ??= _findBestLocalHistoryMatch(
         target: serverEntry,
         localHistory: localHistory,
         usedLocalIndexes: usedLocalIndexes,
@@ -497,7 +515,69 @@ class WaterProvider extends ChangeNotifier {
       );
     }
 
-    return merged;
+    for (var index = 0; index < localHistory.length; index++) {
+      if (usedLocalIndexes.contains(index)) {
+        continue;
+      }
+      merged.add(localHistory[index]);
+    }
+
+    final deduped = <String, WaterUsageHistoryEntry>{};
+    for (final entry in merged) {
+      final key = _historyMergeKey(entry);
+      final existing = deduped[key];
+      if (existing == null) {
+        deduped[key] = entry;
+        continue;
+      }
+      deduped[key] = _preferHistoryEntry(existing, entry);
+    }
+
+    final result = deduped.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
+  }
+
+  String _historyMergeKey(WaterUsageHistoryEntry entry) {
+    final orderKey = entry.orderNum.trim();
+    if (orderKey.isNotEmpty) {
+      return 'order:$orderKey';
+    }
+
+    final normalizedName = _normalizeHistoryDeviceName(entry.displayDeviceName);
+    final amountKey = entry.amount.toStringAsFixed(2);
+    final timeKey = entry.minutePrecisionTime.toIso8601String();
+    return 'fallback:$normalizedName|$amountKey|$timeKey';
+  }
+
+  WaterUsageHistoryEntry _preferHistoryEntry(
+    WaterUsageHistoryEntry current,
+    WaterUsageHistoryEntry candidate,
+  ) {
+    final currentHasDuration = _hasDuration(current);
+    final candidateHasDuration = _hasDuration(candidate);
+    if (candidateHasDuration && !currentHasDuration) {
+      return candidate;
+    }
+    if (currentHasDuration && !candidateHasDuration) {
+      return current;
+    }
+
+    final currentHasOrder = current.orderNum.trim().isNotEmpty;
+    final candidateHasOrder = candidate.orderNum.trim().isNotEmpty;
+    if (candidateHasOrder && !currentHasOrder) {
+      return candidate;
+    }
+    if (currentHasOrder && !candidateHasOrder) {
+      return current;
+    }
+
+    return candidate.createdAt.isAfter(current.createdAt) ? candidate : current;
+  }
+
+  bool _hasDuration(WaterUsageHistoryEntry entry) {
+    final label = entry.durationLabel?.trim() ?? '';
+    return entry.durationSeconds != null || (label.isNotEmpty && label != '--');
   }
 
   int? _findBestLocalHistoryMatch({

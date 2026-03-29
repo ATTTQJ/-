@@ -43,6 +43,25 @@ class DeviceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> moveDeviceToPosition(String deviceId, int targetIndex) async {
+    final currentIndex = deviceList.indexWhere(
+      (device) => device["deviceInfId"].toString() == deviceId,
+    );
+    if (currentIndex < 0 || deviceList.isEmpty) {
+      return;
+    }
+
+    final boundedIndex = targetIndex.clamp(0, deviceList.length - 1);
+    if (currentIndex == boundedIndex) {
+      return;
+    }
+
+    final item = deviceList.removeAt(currentIndex);
+    deviceList.insert(boundedIndex, item);
+    await _persistDeviceList();
+    notifyListeners();
+  }
+
   void setAlwaysExpanded(bool val) async {
     isAlwaysExpanded = val;
     final prefs = await SharedPreferences.getInstance();
@@ -100,8 +119,7 @@ class DeviceProvider extends ChangeNotifier {
       }
       
       notifyListeners();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('saved_device_list', jsonEncode(deviceList));
+      await _persistDeviceList();
     }
   }
 
@@ -120,5 +138,10 @@ class DeviceProvider extends ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  Future<void> _persistDeviceList() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_device_list', jsonEncode(deviceList));
   }
 }

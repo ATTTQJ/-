@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/toast_service.dart';
 import '../../providers/device_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/water_provider.dart';
@@ -21,6 +22,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   String? _expandedId;
+  String? _historySyncKey;
+
+  static const Duration _switchMotionDuration = Duration(milliseconds: 320);
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +48,20 @@ class _HomePageState extends State<HomePage> {
 
         final selectedId = deviceProvider.selectedDeviceId;
         final working = waterProvider.orderNum.isNotEmpty;
+        final usageCounts = _buildUsageCounts(
+          deviceProvider: deviceProvider,
+          history: waterProvider.history,
+        );
+        final lastUsedDevice = _resolveLastUsedDevice(
+          deviceProvider: deviceProvider,
+          history: waterProvider.history,
+        );
+
+        _scheduleHistorySync(
+          userProvider: userProvider,
+          waterProvider: waterProvider,
+          deviceProvider: deviceProvider,
+        );
 
         return Scaffold(
           backgroundColor: const Color(0xFF0E0E11),
@@ -114,10 +132,21 @@ class _HomePageState extends State<HomePage> {
                         working: working,
                         runningTime: waterProvider.runningTime,
                         activeDevicesCount: working ? 1 : 0,
-                        totalDevicesCount: deviceProvider.deviceList.length, 
-                        onActionTap: () {
-                          DialogUtils.showCascadingAddDeviceDialog(context);
-                        },
+                        totalDevicesCount: deviceProvider.deviceList.length,
+                        lastUsedDeviceName: lastUsedDevice == null
+                            ? 'No recent device'
+                            : _deviceName(deviceProvider, lastUsedDevice),
+                        onActionTap: lastUsedDevice == null ||
+                                working ||
+                                waterProvider.isRequesting
+                            ? null
+                            : () => _handleDevicePowerTap(
+                                  context,
+                                  lastUsedDevice,
+                                  userProvider,
+                                  waterProvider,
+                                  deviceProvider,
+                                ),
                       ),
                     ),
 
@@ -135,7 +164,9 @@ class _HomePageState extends State<HomePage> {
                         devices: displayDevices,
                         selectedId: selectedId,
                         expandedId: _expandedId,
-                        historyCount: waterProvider.history.length,
+                        working: working,
+                        loading: waterProvider.isRequesting,
+                        usageCounts: usageCounts,
                         nameOf: (device) => _deviceName(deviceProvider, device),
                         onTapCard: (device) {
                           if (device['isAddCard'] == true) {
@@ -148,6 +179,37 @@ class _HomePageState extends State<HomePage> {
                             _expandedId = _expandedId == id ? null : id;
                           });
                         },
+                        onTogglePower: (device) =>
+                            _handleDevicePowerTap(
+                          context,
+                          device,
+                          userProvider,
+                          waterProvider,
+                          deviceProvider,
+                        ),
+                        onMove: (device) => _showMoveDeviceDialog(
+                          context,
+                          device,
+                          deviceProvider,
+                        ),
+                        onRename: (device) => DialogUtils.showEditRemarkDialog(
+                          context,
+                          device['deviceInfId'].toString(),
+                          _deviceName(deviceProvider, device),
+                        ),
+                        onDelete: (device) {
+                          final commonlyId =
+                              (device['commonlyId'] ?? '').toString();
+                          if (commonlyId.isEmpty) {
+                            ToastService.show('Unable to delete this device');
+                            return;
+                          }
+                          DialogUtils.showDeleteConfirmDialog(
+                            context,
+                            commonlyId,
+                            _deviceName(deviceProvider, device),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -158,6 +220,38 @@ class _HomePageState extends State<HomePage> {
         );
       },
     );
+  }
+
+  void _scheduleHistorySync({
+    required UserProvider userProvider,
+    required WaterProvider waterProvider,
+    required DeviceProvider deviceProvider,
+  }) {
+    if (userProvider.token.trim().isEmpty ||
+        userProvider.userId.trim().isEmpty ||
+        deviceProvider.deviceList.isEmpty) {
+      return;
+    }
+
+    final syncKey =
+        '${userProvider.userId}:${deviceProvider.deviceList.length}:${deviceProvider.deviceList.map((e) => e['deviceInfId']).join(',')}';
+    if (_historySyncKey == syncKey) {
+      return;
+    }
+    _historySyncKey = syncKey;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        waterProvider.syncHistoryFromServer(
+          token: userProvider.token,
+          userId: userProvider.userId,
+          muteToast: true,
+        ),
+      );
+    });
   }
 
   String _deviceName(
@@ -172,6 +266,257 @@ class _HomePageState extends State<HomePage> {
       return remark.trim();
     }
     return device['deviceInfName'].toString().replaceFirst(RegExp(r'^[12]-'), '');
+  }
+
+  Map<String, int> _buildUsageCounts({
+    required DeviceProvider deviceProvider,
+    required List<dynamic> history,
+  }) {
+    final counts = <String, int>{};
+    for (final device in deviceProvider.deviceList) {
+      counts[device['deviceInfId'].toString()] = 0;
+    }
+
+    for (final entry in history) {
+      final matchedId = _resolveUsageHistoryDeviceId(
+        deviceProvider: deviceProvider,
+        entryName: entry.displayDeviceName.toString(),
+      );
+      if (matchedId == null) {
+        continue;
+      }
+      counts[matchedId] = (counts[matchedId] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Map<String, dynamic>? _resolveLastUsedDevice({
+    required DeviceProvider deviceProvider,
+    required List<dynamic> history,
+  }) {
+    if (history.isEmpty || deviceProvider.deviceList.isEmpty) {
+      return null;
+    }
+
+    final matchedId = _resolveUsageHistoryDeviceId(
+      deviceProvider: deviceProvider,
+      entryName: history.first.displayDeviceName.toString(),
+    );
+    for (final device in deviceProvider.deviceList) {
+      if (device['deviceInfId']?.toString() == matchedId) {
+        return device;
+      }
+    }
+
+    return deviceProvider.deviceList.first;
+  }
+
+  String? _resolveUsageHistoryDeviceId({
+    required DeviceProvider deviceProvider,
+    required String entryName,
+  }) {
+    final normalizedEntry = _normalizeUsageHistoryDeviceName(entryName);
+    if (normalizedEntry.isEmpty) {
+      return null;
+    }
+
+    String? bestId;
+    var bestScore = -1;
+
+    for (final device in deviceProvider.deviceList) {
+      final deviceId = device['deviceInfId'].toString();
+      final candidates = <String>{
+        _normalizeUsageHistoryDeviceName(_deviceName(deviceProvider, device)),
+        _normalizeUsageHistoryDeviceName(device['deviceInfName']?.toString() ?? ''),
+      }..removeWhere((value) => value.isEmpty);
+
+      var score = 0;
+      for (final candidate in candidates) {
+        if (normalizedEntry == candidate) {
+          score = math.max(score, 100);
+        } else if (normalizedEntry.contains(candidate) ||
+            candidate.contains(normalizedEntry)) {
+          score = math.max(score, 70);
+        }
+      }
+
+      final expectsHot = (device['billType']?.toString() ?? '') == '2';
+      final hasHot = normalizedEntry.contains('hot');
+      final hasCold = normalizedEntry.contains('cold');
+      if (expectsHot && hasHot) {
+        score += 20;
+      }
+      if (!expectsHot && hasCold) {
+        score += 20;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestId = deviceId;
+      }
+    }
+
+    return bestScore > 0 ? bestId : null;
+  }
+
+  String _normalizeUsageHistoryDeviceName(String name) {
+    return name
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll('\u70ed\u6c34', 'hot')
+        .replaceAll('\u76f4\u996e\u6c34', 'cold')
+        .replaceAll('\u76f4\u996e', 'cold')
+        .replaceAll('\u8bbe\u5907\u7528\u6c34', 'hot')
+        .replaceAll('\u6d17\u6d74', 'hot')
+        .replaceAll('drink', 'cold')
+        .replaceAll('adddevice', '');
+  }
+
+  String _normalizeHistoryDeviceName(String name) {
+    return name
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll('热水', 'hot')
+        .replaceAll('直饮水', 'cold')
+        .replaceAll('直饮', 'cold')
+        .replaceAll('设备用水', 'hot')
+        .replaceAll('洗浴', 'hot')
+        .replaceAll('adddevice', '');
+  }
+
+  Future<void> _handleDevicePowerTap(
+    BuildContext context,
+    Map<String, dynamic> device,
+    UserProvider userProvider,
+    WaterProvider waterProvider,
+    DeviceProvider deviceProvider,
+  ) async {
+    if (device['isAddCard'] == true || waterProvider.isRequesting) {
+      return;
+    }
+
+    final deviceId = device['deviceInfId'].toString();
+
+    if (waterProvider.orderNum.isNotEmpty) {
+      Map<String, dynamic>? activeDevice;
+      if (deviceProvider.selectedDeviceId.isNotEmpty) {
+        for (final item in deviceProvider.deviceList) {
+          if (item['deviceInfId']?.toString() == deviceProvider.selectedDeviceId) {
+            activeDevice = item;
+            break;
+          }
+        }
+      }
+      final stopTarget = activeDevice ?? device;
+      final currentName =
+          '${_deviceName(deviceProvider, stopTarget)}${stopTarget['billType'] == 2 ? 'Hot' : 'Cold'}';
+      await waterProvider.stopWater(
+        userProvider.token,
+        userProvider.userId,
+        currentName,
+        currentBalance: userProvider.balance,
+        onBalanceUpdated: userProvider.setBalance,
+      );
+      return;
+    }
+
+    deviceProvider.selectDevice(deviceId);
+    await waterProvider.startWater(
+      userProvider.token,
+      userProvider.userId,
+      device,
+      currentBalance: userProvider.balance,
+    );
+  }
+
+  void _showMoveDeviceDialog(
+    BuildContext context,
+    Map<String, dynamic> device,
+    DeviceProvider deviceProvider,
+  ) {
+    final controller = TextEditingController();
+    final maxPosition = deviceProvider.deviceList.length;
+
+    DialogUtils.showGlassBottomSheet(
+      context,
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Move Device',
+            style: TextStyle(
+              color: Color(0xFF2C2C2E),
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Enter a position between 1 and $maxPosition.',
+            style: const TextStyle(
+              color: Color(0xFF666666),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: 'Position',
+              filled: true,
+              fillColor: Colors.grey[100],
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C2C2E),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () async {
+                    final parsed = int.tryParse(controller.text.trim());
+                    if (parsed == null || parsed < 1 || parsed > maxPosition) {
+                      ToastService.show('Invalid position');
+                      return;
+                    }
+                    await deviceProvider.moveDeviceToPosition(
+                      device['deviceInfId'].toString(),
+                      parsed - 1,
+                    );
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   void _showLogoutConfirm(BuildContext context) {
@@ -230,6 +575,7 @@ class _DashboardCard extends StatelessWidget {
     required this.runningTime,
     required this.activeDevicesCount,
     required this.totalDevicesCount,
+    required this.lastUsedDeviceName,
     required this.onActionTap,
   });
 
@@ -238,7 +584,8 @@ class _DashboardCard extends StatelessWidget {
   final String runningTime;
   final int activeDevicesCount;
   final int totalDevicesCount;
-  final VoidCallback onActionTap;
+  final String lastUsedDeviceName;
+  final VoidCallback? onActionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -333,22 +680,26 @@ class _DashboardCard extends StatelessWidget {
             child: Container(
               height: 48, 
               decoration: BoxDecoration(
-                color: const Color(0xFF7A58FF), 
+                color: onActionTap == null
+                    ? const Color(0xFF7A58FF).withOpacity(0.45)
+                    : const Color(0xFF7A58FF), 
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.add_circle_outline_rounded, 
-                    color: Colors.white,
+                  Icon(
+                    Icons.history_toggle_off_rounded, 
+                    color: onActionTap == null ? Colors.white54 : Colors.white,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Add New Device',
+                  Text(
+                    lastUsedDeviceName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white,
+                      color: onActionTap == null ? Colors.white54 : Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -460,19 +811,31 @@ class _DeviceDeck extends StatelessWidget {
     required this.devices,
     required this.selectedId,
     required this.expandedId,
-    required this.historyCount,
+    required this.working,
+    required this.loading,
+    required this.usageCounts,
     required this.nameOf,
     required this.paddingTop,
     required this.onTapCard,
+    required this.onTogglePower,
+    required this.onMove,
+    required this.onRename,
+    required this.onDelete,
   });
 
   final List<Map<String, dynamic>> devices;
   final String selectedId;
   final String? expandedId;
-  final int historyCount;
+  final bool working;
+  final bool loading;
+  final Map<String, int> usageCounts;
   final double paddingTop;
   final String Function(Map<String, dynamic>) nameOf;
   final ValueChanged<Map<String, dynamic>> onTapCard;
+  final ValueChanged<Map<String, dynamic>> onTogglePower;
+  final ValueChanged<Map<String, dynamic>> onMove;
+  final ValueChanged<Map<String, dynamic>> onRename;
+  final ValueChanged<Map<String, dynamic>> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -540,10 +903,16 @@ class _DeviceDeck extends StatelessWidget {
             : _DeckCard(
                 palette: _paletteFor(index, device['billType'] == 2),
                 title: nameOf(device),
-                count: math.max(1, historyCount ~/ (index + 1)),
+                count: usageCounts[id] ?? 0,
                 selected: selected,
+                working: working,
+                loading: loading && selected,
                 expanded: expanded,
                 onTap: () => onTapCard(device),
+                onTogglePower: () => onTogglePower(device),
+                onMove: () => onMove(device),
+                onRename: () => onRename(device),
+                onDelete: () => onDelete(device),
               ),
         ),
       );
@@ -615,16 +984,28 @@ class _DeckCard extends StatelessWidget {
     required this.title,
     required this.count,
     required this.selected,
+    required this.working,
+    required this.loading,
     required this.expanded,
     required this.onTap,
+    required this.onTogglePower,
+    required this.onMove,
+    required this.onRename,
+    required this.onDelete,
   });
 
   final _CardPalette palette;
   final String title;
   final int count;
   final bool selected;
+  final bool working;
+  final bool loading;
   final bool expanded;
   final VoidCallback onTap;
+  final VoidCallback onTogglePower;
+  final VoidCallback onMove;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -697,9 +1078,11 @@ class _DeckCard extends StatelessWidget {
                         ),
                       ),
                       _VerticalSlideSwitch(
-                        active: false, 
+                        active: working && selected,
+                        loading: loading,
                         foreground: palette.foreground,
                         rail: palette.switchRail,
+                        onTap: onTogglePower,
                       ),
                     ],
                   ),
@@ -749,7 +1132,7 @@ class _DeckCard extends StatelessWidget {
                           label: '位置',
                           color: palette.foreground,
                           bgColor: Colors.black.withOpacity(0.06),
-                          onTap: () {},
+                          onTap: onMove,
                         ),
                         const SizedBox(width: 8), // 缩紧间距
                         _CardActionButton(
@@ -757,7 +1140,7 @@ class _DeckCard extends StatelessWidget {
                           label: '重命名',
                           color: palette.foreground,
                           bgColor: Colors.black.withOpacity(0.06),
-                          onTap: () {},
+                          onTap: onRename,
                         ),
                         const SizedBox(width: 8),
                         _CardActionButton(
@@ -765,7 +1148,7 @@ class _DeckCard extends StatelessWidget {
                           label: '删除',
                           color: const Color(0xFFE53935), 
                           bgColor: const Color(0xFFE53935).withOpacity(0.12), 
-                          onTap: () {},
+                          onTap: onDelete,
                         ),
                       ],
                     ),
@@ -941,44 +1324,68 @@ _CardPalette _paletteFor(int index, bool hotWater) {
 class _VerticalSlideSwitch extends StatelessWidget {
   const _VerticalSlideSwitch({
     required this.active,
+    required this.loading,
     required this.foreground,
     required this.rail,
+    required this.onTap,
   });
 
   final bool active;
+  final bool loading;
   final Color foreground;
   final Color rail;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 36, 
-      height: 64, 
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: rail,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Align(
-        alignment: active ? Alignment.bottomCenter : Alignment.topCenter,
-        child: Container(
-          width: 28, 
-          height: 28,
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.92),
-            shape: BoxShape.circle,
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x40000000),
-                blurRadius: 10,
-                offset: Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.power_settings_new_rounded,
-            color: active ? const Color(0xFF4CAF50) : Colors.white, 
-            size: 16, 
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36, 
+        height: 64, 
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: rail,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: AnimatedAlign(
+          duration: _HomePageState._switchMotionDuration,
+          curve: Curves.easeInOutCubic,
+          alignment: active ? Alignment.bottomCenter : Alignment.topCenter,
+          child: Container(
+            width: 28, 
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.92),
+              shape: BoxShape.circle,
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x40000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 5),
+                ),
+              ],
+            ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: loading
+                  ? const Padding(
+                      key: ValueKey('loading'),
+                      padding: EdgeInsets.all(6),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Icon(
+                      Icons.power_settings_new_rounded,
+                      key: ValueKey<bool>(active),
+                      color: active ? const Color(0xFF4CAF50) : Colors.white, 
+                      size: 16, 
+                    ),
+            ),
           ),
         ),
       ),
