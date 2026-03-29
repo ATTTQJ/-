@@ -24,6 +24,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // 状态栏全透明，亮色图标
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
@@ -31,6 +32,7 @@ class _HomePageState extends State<HomePage> {
 
     return Consumer3<UserProvider, WaterProvider, DeviceProvider>(
       builder: (context, userProvider, waterProvider, deviceProvider, child) {
+        // 保证 4 张卡片，如果少于4张则补齐虚位卡片
         final List<Map<String, dynamic>> displayDevices = 
             List<Map<String, dynamic>>.from(deviceProvider.deviceList);
         while (displayDevices.length < 4) {
@@ -47,6 +49,7 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           backgroundColor: const Color(0xFF0E0E11),
+          // 🌟 彻底抛弃外层滚动，真正的一页满铺
           body: Stack(
             children: [
               const Positioned.fill(child: _BackdropLayer()),
@@ -120,11 +123,12 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
+                    // 🌟 核心：设备甲板区域。固定上边界，下边界贴底，内部可独立滑动
                     Positioned(
                       top: 340, 
                       left: 19,
                       right: 19,
-                      bottom: -100, 
+                      bottom: 0, 
                       child: _DeviceDeck(
                         devices: displayDevices,
                         selectedId: selectedId,
@@ -487,53 +491,75 @@ class _DeviceDeck extends StatelessWidget {
       return ae ? 1 : -1; 
     });
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: ordered.map((entry) {
-        final index = entry.key;
-        final device = entry.value;
-        final isAddCard = device['isAddCard'] == true;
-        final id = device['deviceInfId'].toString();
-        
-        final expanded = isAddCard ? false : expandedId == id;
-        final selected = selectedId == id;
-        
-        double top = 0.0;
-        if (expandedIndex == null) {
-          top = index * 100.0; 
+    // 🌟 精确计算内部 Stack 的总高度，支持 5+ 台设备自动触发滚动
+    double maxStackHeight = 0;
+    
+    final stackChildren = ordered.map((entry) {
+      final index = entry.key;
+      final device = entry.value;
+      final isAddCard = device['isAddCard'] == true;
+      final id = device['deviceInfId'].toString();
+      
+      final expanded = isAddCard ? false : expandedId == id;
+      final selected = selectedId == id;
+      
+      double top = 0.0;
+      if (expandedIndex == null) {
+        top = index * 100.0; 
+      } else {
+        if (index < expandedIndex) {
+          top = index * 55.0; 
+        } else if (index == expandedIndex) {
+          top = index * 55.0; 
         } else {
-          if (index < expandedIndex) {
-            top = index * 55.0; 
-          } else if (index == expandedIndex) {
-            top = index * 55.0; 
-          } else {
-            top = expandedIndex * 55.0 + 240.0 + (index - expandedIndex - 1) * 60.0; 
-          }
+          // 展开高度降为 240，下一张卡片被推到 240 + 10 = 250 的位置
+          top = expandedIndex * 55.0 + 250.0 + (index - expandedIndex - 1) * 60.0; 
         }
+      }
 
-        return AnimatedPositioned(
-          key: ValueKey(id),
+      final double cardHeight = expanded ? 240.0 : 180.0;
+      if (top + cardHeight > maxStackHeight) {
+        maxStackHeight = top + cardHeight;
+      }
+
+      return AnimatedPositioned(
+        key: ValueKey(id),
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic, 
+        top: top,
+        left: 4,
+        right: 4,
+        child: AnimatedScale(
           duration: const Duration(milliseconds: 380),
-          curve: Curves.easeOutCubic, 
-          top: top,
-          left: 4,
-          right: 4,
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 380),
-            scale: expanded ? 1.02 : 1, 
-            child: isAddCard 
-              ? _AddDeviceCard(onTap: () => onTapCard(device))
-              : _DeckCard(
-                  palette: _paletteFor(index, device['billType'] == 2),
-                  title: nameOf(device),
-                  count: math.max(1, historyCount ~/ (index + 1)),
-                  selected: selected,
-                  expanded: expanded,
-                  onTap: () => onTapCard(device),
-                ),
-          ),
-        );
-      }).toList(),
+          scale: expanded ? 1.02 : 1, 
+          child: isAddCard 
+            ? _AddDeviceCard(onTap: () => onTapCard(device))
+            : _DeckCard(
+                palette: _paletteFor(index, device['billType'] == 2),
+                title: nameOf(device),
+                count: math.max(1, historyCount ~/ (index + 1)),
+                selected: selected,
+                expanded: expanded,
+                onTap: () => onTapCard(device),
+              ),
+        ),
+      );
+    }).toList();
+
+    // 🌟 将卡片区域包裹在独立的滚动视图中，完美支持 5台+ 设备
+    return SingleChildScrollView(
+      physics: devices.length > 4 
+          ? const BouncingScrollPhysics() // 设备超过 4 台，开启弹性滑动
+          : const BouncingScrollPhysics(), // 少于 4 台时高度未溢出，本身就不需要滑（保持原生回弹手感）
+      padding: const EdgeInsets.only(bottom: 60), // 底部多留点空间避免被 Home 条遮挡
+      clipBehavior: Clip.none,
+      child: SizedBox(
+        height: maxStackHeight,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: stackChildren,
+        ),
+      ),
     );
   }
 }
@@ -606,7 +632,8 @@ class _DeckCard extends StatelessWidget {
       child: AnimatedContainer( 
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
-        height: expanded ? 290 : 180, 
+        // 🌟 优化：展开高度降低到了 240，刚好完美展示完下方的 Usage
+        height: expanded ? 240 : 180, 
         decoration: BoxDecoration(
           gradient: palette.gradient,
           borderRadius: BorderRadius.circular(40), 
@@ -634,29 +661,26 @@ class _DeckCard extends StatelessWidget {
               ),
             ),
             
-            // 🌟 优化：稍微收紧整体 Top Padding，把对齐权交给里面的元素
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 20, 22, 22), 
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 🌟 彻底解绑：不再居中对齐，改为顶部对齐（CrossAxisAlignment.start）
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        // 🌟 精准下推：刚好对齐白色立体弧线的圆心视觉位置
                         padding: const EdgeInsets.only(top: 12), 
                         child: Icon(
                           palette.icon,
                           color: palette.foreground,
-                          size: 26,
+                          // 🌟 优化：图标放大了 1 个 size (26 -> 28)
+                          size: 28,
                         ),
                       ),
                       const SizedBox(width: 8), 
                       Expanded(
                         child: Padding(
-                          // 🌟 文字比图标多推 3 像素，达到完美的基线视觉居中
                           padding: const EdgeInsets.only(top: 15),
                           child: Text(
                             title,
@@ -664,7 +688,8 @@ class _DeckCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: palette.foreground,
-                              fontSize: 16, 
+                              // 🌟 优化：字体放大了 1 个 size (16 -> 18)
+                              fontSize: 18, 
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.2,
                               height: 1.1,
@@ -672,9 +697,9 @@ class _DeckCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // 🌟 高个子的滑动开关，保持原位，不再影响左侧元素的对齐
                       _VerticalSlideSwitch(
-                        active: expanded,
+                        // 🌟 优化：开关彻底解绑，不会随着卡片展开而激活
+                        active: false, 
                         foreground: palette.foreground,
                         rail: palette.switchRail,
                       ),
@@ -729,7 +754,8 @@ class _CornerLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.55)
+      // 🌟 优化：极度提亮左上角的白线透明度，可读性更强
+      ..color = Colors.white.withOpacity(0.85) 
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5
       ..strokeCap = StrokeCap.round; 
