@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -134,6 +133,11 @@ class _HomePageState extends State<HomePage> {
                         runningTime: waterProvider.runningTime,
                         activeDevicesCount: working ? 1 : 0,
                         totalDevicesCount: deviceProvider.deviceList.length,
+                        onStatusTap: working
+                            ? null
+                            : () => DialogUtils.showCascadingAddDeviceDialog(
+                                  context,
+                                ),
                         lastUsedDeviceName: lastUsedDevice == null
                             ? 'No recent device'
                             : _deviceName(deviceProvider, lastUsedDevice),
@@ -275,6 +279,21 @@ class _HomePageState extends State<HomePage> {
     return '${_deviceName(provider, device)}$suffix';
   }
 
+  Set<String> _historyAliases(
+    DeviceProvider provider,
+    Map<String, dynamic> device,
+  ) {
+    final suffix = device['billType'] == 2 ? '\u70ed\u6c34' : '\u76f4\u996e';
+    final rawName = device['deviceInfName']?.toString() ?? '';
+    final strippedRaw = rawName.replaceFirst(RegExp(r'^[12]-'), '');
+    final aliases = <String>{
+      _normalizeUsageHistoryDeviceName('${_deviceName(provider, device)}$suffix'),
+      _normalizeUsageHistoryDeviceName('$strippedRaw$suffix'),
+      _normalizeUsageHistoryDeviceName('$rawName$suffix'),
+    }..removeWhere((value) => value.isEmpty);
+    return aliases;
+  }
+
   Map<String, int> _buildUsageCounts({
     required DeviceProvider deviceProvider,
     required List<dynamic> history,
@@ -327,43 +346,14 @@ class _HomePageState extends State<HomePage> {
       return null;
     }
 
-    String? bestId;
-    var bestScore = -1;
-
     for (final device in deviceProvider.deviceList) {
       final deviceId = device['deviceInfId'].toString();
-      final candidates = <String>{
-        _normalizeUsageHistoryDeviceName(_deviceName(deviceProvider, device)),
-        _normalizeUsageHistoryDeviceName(device['deviceInfName']?.toString() ?? ''),
-      }..removeWhere((value) => value.isEmpty);
-
-      var score = 0;
-      for (final candidate in candidates) {
-        if (normalizedEntry == candidate) {
-          score = math.max(score, 100);
-        } else if (normalizedEntry.contains(candidate) ||
-            candidate.contains(normalizedEntry)) {
-          score = math.max(score, 70);
-        }
-      }
-
-      final expectsHot = (device['billType']?.toString() ?? '') == '2';
-      final hasHot = normalizedEntry.contains('hot');
-      final hasCold = normalizedEntry.contains('cold');
-      if (expectsHot && hasHot) {
-        score += 20;
-      }
-      if (!expectsHot && hasCold) {
-        score += 20;
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestId = deviceId;
+      if (_historyAliases(deviceProvider, device).contains(normalizedEntry)) {
+        return deviceId;
       }
     }
 
-    return bestScore > 0 ? bestId : null;
+    return null;
   }
 
   String _normalizeUsageHistoryDeviceName(String name) {
@@ -585,6 +575,7 @@ class _DashboardCard extends StatelessWidget {
     required this.runningTime,
     required this.activeDevicesCount,
     required this.totalDevicesCount,
+    required this.onStatusTap,
     required this.lastUsedDeviceName,
     required this.onActionTap,
   });
@@ -594,6 +585,7 @@ class _DashboardCard extends StatelessWidget {
   final String runningTime;
   final int activeDevicesCount;
   final int totalDevicesCount;
+  final VoidCallback? onStatusTap;
   final String lastUsedDeviceName;
   final VoidCallback? onActionTap;
 
@@ -650,39 +642,43 @@ class _DashboardCard extends StatelessWidget {
                   ),
                 ],
               ),
-              SizedBox(
-                width: 116,
-                child: Row(
-                  children: [
-                    Icon(
-                      working ? Icons.waves_rounded : Icons.important_devices_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          working ? runningTime : '$activeDevicesCount/$totalDevicesCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            height: 1.1,
+              GestureDetector(
+                onTap: onStatusTap,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 116,
+                  child: Row(
+                    children: [
+                      Icon(
+                        working ? Icons.waves_rounded : Icons.important_devices_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            working ? runningTime : '$activeDevicesCount/$totalDevicesCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              height: 1.1,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          working ? 'Running' : 'Active Device',
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 11,
+                          const SizedBox(height: 2),
+                          Text(
+                            working ? 'Running' : 'Active Device',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
