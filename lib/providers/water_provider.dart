@@ -21,6 +21,7 @@ class WaterProvider extends ChangeNotifier {
   String orderNum = '';
   String tableName = '';
   String mac = '';
+  String activeDeviceId = '';
   bool isRequesting = false;
   List<WaterUsageHistoryEntry> history = [];
 
@@ -35,6 +36,7 @@ class WaterProvider extends ChangeNotifier {
     orderNum = prefs.getString('water_orderNum') ?? '';
     tableName = prefs.getString('water_tableName') ?? '';
     mac = prefs.getString('water_mac') ?? '';
+    activeDeviceId = prefs.getString('water_activeDeviceId') ?? '';
     history = (prefs.getStringList('water_history') ?? [])
         .map(WaterUsageHistoryEntry.fromStorage)
         .toList();
@@ -48,6 +50,7 @@ class WaterProvider extends ChangeNotifier {
       runningTime = '00:00';
       timer?.cancel();
       timer = null;
+      activeDeviceId = '';
     }
 
     notifyListeners();
@@ -192,11 +195,13 @@ class WaterProvider extends ChangeNotifier {
         orderNum = res['data']['orderNum']?.toString() ?? '';
         tableName = res['data']['tableName']?.toString() ?? '';
         mac = res['data']['mac']?.toString() ?? '';
+        activeDeviceId = targetDeviceId;
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('water_orderNum', orderNum);
         await prefs.setString('water_tableName', tableName);
         await prefs.setString('water_mac', mac);
+        await prefs.setString('water_activeDeviceId', activeDeviceId);
         await prefs.setInt(
           'water_start_time',
           startTime!.millisecondsSinceEpoch,
@@ -259,10 +264,12 @@ class WaterProvider extends ChangeNotifier {
         await prefs.remove('water_mac');
         await prefs.remove('water_start_time');
         await prefs.remove('water_initial_balance');
+        await prefs.remove('water_activeDeviceId');
 
         orderNum = '';
         tableName = '';
         mac = '';
+        activeDeviceId = '';
         startTime = null;
         runningTime = '00:00';
 
@@ -287,6 +294,9 @@ class WaterProvider extends ChangeNotifier {
           durationMs: 4200,
         );
 
+        history.removeWhere(
+          (entry) => entry.orderNum.trim() == currentOrderNum.trim(),
+        );
         history.insert(
           0,
           WaterUsageHistoryEntry(
@@ -544,7 +554,7 @@ class WaterProvider extends ChangeNotifier {
       return 'order:$orderKey';
     }
 
-    final normalizedName = _normalizeHistoryDeviceName(entry.displayDeviceName);
+    final normalizedName = _historySignature(entry.displayDeviceName);
     final amountKey = entry.amount.toStringAsFixed(2);
     final timeKey = entry.minutePrecisionTime.toIso8601String();
     return 'fallback:$normalizedName|$amountKey|$timeKey';
@@ -587,7 +597,7 @@ class WaterProvider extends ChangeNotifier {
   }) {
     int? bestIndex;
     var bestDiffSeconds = 61;
-    final targetName = _normalizeHistoryDeviceName(target.displayDeviceName);
+    final targetAmount = target.amount;
     final targetMinute = target.minutePrecisionTime;
 
     for (var index = 0; index < localHistory.length; index++) {
@@ -596,7 +606,15 @@ class WaterProvider extends ChangeNotifier {
       }
 
       final candidate = localHistory[index];
-      if (_normalizeHistoryDeviceName(candidate.displayDeviceName) != targetName) {
+      if (!_historyNamesLikelySame(
+        target.displayDeviceName,
+        candidate.displayDeviceName,
+      )) {
+        continue;
+      }
+
+      final amountDiff = (candidate.amount - targetAmount).abs();
+      if (amountDiff > 0.01) {
         continue;
       }
 
@@ -630,11 +648,65 @@ class WaterProvider extends ChangeNotifier {
 
   String _normalizeHistoryDeviceName(String name) {
     var normalized = name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    normalized = normalized.replaceAll('hot', '\u70ed\u6c34');
+    normalized = normalized.replaceAll('cold', '\u76f4\u996e');
+    normalized = normalized.replaceAll('drink', '\u76f4\u996e');
     normalized = normalized.replaceAll('\u76f4\u996e\u6c34', '\u76f4\u996e');
     normalized =
         normalized.replaceAll('\u8bbe\u5907\u7528\u6c34', '\u70ed\u6c34');
     normalized = normalized.replaceAll('\u6d17\u6d74', '\u70ed\u6c34');
     return normalized;
+  }
+
+  bool _historyNamesLikelySame(String left, String right) {
+    final leftNormalized = _normalizeHistoryDeviceName(left);
+    final rightNormalized = _normalizeHistoryDeviceName(right);
+    if (leftNormalized == rightNormalized) {
+      return true;
+    }
+
+    final leftSignature = _historySignature(leftNormalized);
+    final rightSignature = _historySignature(rightNormalized);
+    if (leftSignature == rightSignature) {
+      return true;
+    }
+
+    final leftType = _historyType(leftNormalized);
+    final rightType = _historyType(rightNormalized);
+    final leftRoom = _historyRoomToken(leftNormalized);
+    final rightRoom = _historyRoomToken(rightNormalized);
+    return leftType.isNotEmpty &&
+        leftType == rightType &&
+        leftRoom.isNotEmpty &&
+        leftRoom == rightRoom;
+  }
+
+  String _historySignature(String name) {
+    final normalized = _normalizeHistoryDeviceName(name);
+    final room = _historyRoomToken(normalized);
+    final type = _historyType(normalized);
+    if (room.isNotEmpty || type.isNotEmpty) {
+      return '$room|$type';
+    }
+    return normalized;
+  }
+
+  String _historyRoomToken(String normalized) {
+    final matches = RegExp(r'(\d{2,})').allMatches(normalized).toList();
+    if (matches.isEmpty) {
+      return '';
+    }
+    return matches.last.group(1) ?? '';
+  }
+
+  String _historyType(String normalized) {
+    if (normalized.contains('\u70ed\u6c34')) {
+      return '\u70ed\u6c34';
+    }
+    if (normalized.contains('\u76f4\u996e')) {
+      return '\u76f4\u996e';
+    }
+    return '';
   }
 
   double _resolveSettlementAmount({

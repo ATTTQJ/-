@@ -40,7 +40,7 @@ class WaterUsageHistoryEntry {
   }
 
   String get displayDeviceName {
-    final name = deviceName.trim();
+    final name = _normalizeDisplayDeviceName(deviceName.trim());
     return name.isEmpty ? '\u672a\u547d\u540d\u8bbe\u5907' : name;
   }
 
@@ -323,5 +323,15 @@ class WaterUsageHistoryEntry {
         )
         .trim();
     return withoutDuration;
+  }
+
+  static String _normalizeDisplayDeviceName(String raw) {
+    return raw
+        .replaceFirst(RegExp(r'^[12]-'), '')
+        .replaceAll(RegExp('hot\$', caseSensitive: false), '\u70ed\u6c34')
+        .replaceAll(RegExp('cold\$', caseSensitive: false), '\u76f4\u996e')
+        .replaceAll(RegExp('drink\$', caseSensitive: false), '\u76f4\u996e')
+        .replaceAll('\u76f4\u996e\u6c34', '\u76f4\u996e')
+        .trim();
   }
 }

@@ -48,6 +48,7 @@ class _HomePageState extends State<HomePage> {
 
         final selectedId = deviceProvider.selectedDeviceId;
         final working = waterProvider.orderNum.isNotEmpty;
+        final activeId = waterProvider.activeDeviceId;
         final usageCounts = _buildUsageCounts(
           deviceProvider: deviceProvider,
           history: waterProvider.history,
@@ -163,6 +164,7 @@ class _HomePageState extends State<HomePage> {
                         paddingTop: 90.0, // 补偿上移的 90 像素
                         devices: displayDevices,
                         selectedId: selectedId,
+                        activeId: activeId,
                         expandedId: _expandedId,
                         working: working,
                         loading: waterProvider.isRequesting,
@@ -266,6 +268,11 @@ class _HomePageState extends State<HomePage> {
       return remark.trim();
     }
     return device['deviceInfName'].toString().replaceFirst(RegExp(r'^[12]-'), '');
+  }
+
+  String _historyDeviceName(Map<String, dynamic> device, DeviceProvider provider) {
+    final suffix = device['billType'] == 2 ? '\u70ed\u6c34' : '\u76f4\u996e';
+    return '${_deviceName(provider, device)}$suffix';
   }
 
   Map<String, int> _buildUsageCounts({
@@ -401,21 +408,24 @@ class _HomePageState extends State<HomePage> {
 
     if (waterProvider.orderNum.isNotEmpty) {
       Map<String, dynamic>? activeDevice;
-      if (deviceProvider.selectedDeviceId.isNotEmpty) {
+      if (waterProvider.activeDeviceId.isNotEmpty) {
         for (final item in deviceProvider.deviceList) {
-          if (item['deviceInfId']?.toString() == deviceProvider.selectedDeviceId) {
+          if (item['deviceInfId']?.toString() == waterProvider.activeDeviceId) {
             activeDevice = item;
             break;
           }
         }
       }
       final stopTarget = activeDevice ?? device;
-      final currentName =
-          '${_deviceName(deviceProvider, stopTarget)}${stopTarget['billType'] == 2 ? 'Hot' : 'Cold'}';
+      if (waterProvider.activeDeviceId.isNotEmpty &&
+          stopTarget['deviceInfId']?.toString() != deviceId) {
+        ToastService.show('Please close the running device first');
+        return;
+      }
       await waterProvider.stopWater(
         userProvider.token,
         userProvider.userId,
-        currentName,
+        _historyDeviceName(stopTarget, deviceProvider),
         currentBalance: userProvider.balance,
         onBalanceUpdated: userProvider.setBalance,
       );
@@ -640,37 +650,40 @@ class _DashboardCard extends StatelessWidget {
                   ),
                 ],
               ),
-              Row(
-                children: [
-                  Icon(
-                    working ? Icons.waves_rounded : Icons.important_devices_rounded,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        working ? runningTime : '$activeDevicesCount/$totalDevicesCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          height: 1.1,
+              SizedBox(
+                width: 116,
+                child: Row(
+                  children: [
+                    Icon(
+                      working ? Icons.waves_rounded : Icons.important_devices_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          working ? runningTime : '$activeDevicesCount/$totalDevicesCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            height: 1.1,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        working ? 'Running' : 'Active Device',
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 11,
+                        const SizedBox(height: 2),
+                        Text(
+                          working ? 'Running' : 'Active Device',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -810,6 +823,7 @@ class _DeviceDeck extends StatelessWidget {
   const _DeviceDeck({
     required this.devices,
     required this.selectedId,
+    required this.activeId,
     required this.expandedId,
     required this.working,
     required this.loading,
@@ -825,6 +839,7 @@ class _DeviceDeck extends StatelessWidget {
 
   final List<Map<String, dynamic>> devices;
   final String selectedId;
+  final String activeId;
   final String? expandedId;
   final bool working;
   final bool loading;
@@ -868,6 +883,7 @@ class _DeviceDeck extends StatelessWidget {
       
       final expanded = isAddCard ? false : expandedId == id;
       final selected = selectedId == id;
+      final active = activeId == id;
       
       double top = 0.0;
       if (expandedIndex == null) {
@@ -905,8 +921,8 @@ class _DeviceDeck extends StatelessWidget {
                 title: nameOf(device),
                 count: usageCounts[id] ?? 0,
                 selected: selected,
-                working: working,
-                loading: loading && selected,
+                active: active,
+                loading: loading && (working ? active : selected),
                 expanded: expanded,
                 onTap: () => onTapCard(device),
                 onTogglePower: () => onTogglePower(device),
@@ -984,7 +1000,7 @@ class _DeckCard extends StatelessWidget {
     required this.title,
     required this.count,
     required this.selected,
-    required this.working,
+    required this.active,
     required this.loading,
     required this.expanded,
     required this.onTap,
@@ -998,7 +1014,7 @@ class _DeckCard extends StatelessWidget {
   final String title;
   final int count;
   final bool selected;
-  final bool working;
+  final bool active;
   final bool loading;
   final bool expanded;
   final VoidCallback onTap;
@@ -1078,7 +1094,7 @@ class _DeckCard extends StatelessWidget {
                         ),
                       ),
                       _VerticalSlideSwitch(
-                        active: working && selected,
+                        active: active,
                         loading: loading,
                         foreground: palette.foreground,
                         rail: palette.switchRail,
