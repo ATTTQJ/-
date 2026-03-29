@@ -55,8 +55,9 @@ class _HomePageState extends State<HomePage> {
                 bottom: false, 
                 child: Stack(
                   children: [
+                    // 🌟 优化：顶部按钮上移 5dp (原来 top: 12，现在 top: 7)
                     Positioned(
-                      top: 12, 
+                      top: 7, 
                       left: 0,
                       right: 0,
                       child: _TopButtons(
@@ -120,12 +121,17 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
+                    // 🌟 修复 Hit-Test 穿透 Bug
+                    // 原理：将物理起点上移到 Top 250，覆盖深色面板下半部分
+                    // 通过传入 paddingTop: 90，让卡片视觉依然从 340 开始
+                    // 这样视觉溢出的区域就变成了真实的物理点击区域，不再穿透到底层！
                     Positioned(
-                      top: 340, 
+                      top: 250, 
                       left: 19,
                       right: 19,
                       bottom: 0, 
                       child: _DeviceDeck(
+                        paddingTop: 90.0, // 补偿上移的 90 像素
                         devices: displayDevices,
                         selectedId: selectedId,
                         expandedId: _expandedId,
@@ -456,6 +462,7 @@ class _DeviceDeck extends StatelessWidget {
     required this.expandedId,
     required this.historyCount,
     required this.nameOf,
+    required this.paddingTop,
     required this.onTapCard,
   });
 
@@ -463,6 +470,7 @@ class _DeviceDeck extends StatelessWidget {
   final String selectedId;
   final String? expandedId;
   final int historyCount;
+  final double paddingTop;
   final String Function(Map<String, dynamic>) nameOf;
   final ValueChanged<Map<String, dynamic>> onTapCard;
 
@@ -507,12 +515,12 @@ class _DeviceDeck extends StatelessWidget {
         } else if (index == expandedIndex) {
           top = index * 55.0; 
         } else {
-          // 🌟 高度精算更新：展开后的卡片增高到了 270，所以下方的卡片推开距离加 30 像素（280）
-          top = expandedIndex * 55.0 + 280.0 + (index - expandedIndex - 1) * 60.0; 
+          // 🌟 高度适配：展开卡片 250，推开距离计算为 260
+          top = expandedIndex * 55.0 + 260.0 + (index - expandedIndex - 1) * 60.0; 
         }
       }
 
-      final double cardHeight = expanded ? 270.0 : 180.0;
+      final double cardHeight = expanded ? 250.0 : 180.0;
       if (top + cardHeight > maxStackHeight) {
         maxStackHeight = top + cardHeight;
       }
@@ -545,7 +553,7 @@ class _DeviceDeck extends StatelessWidget {
       physics: devices.length > 4 
           ? const BouncingScrollPhysics() 
           : const BouncingScrollPhysics(), 
-      padding: const EdgeInsets.only(bottom: 60), 
+      padding: EdgeInsets.only(top: paddingTop, bottom: 60), 
       clipBehavior: Clip.none,
       child: SizedBox(
         height: maxStackHeight,
@@ -625,8 +633,8 @@ class _DeckCard extends StatelessWidget {
       child: AnimatedContainer( 
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
-        // 🌟 容纳新按钮：高度增加到了 270
-        height: expanded ? 270 : 180, 
+        // 🌟 优化：高度从刚才的 270 精准降到了 250
+        height: expanded ? 250 : 180, 
         decoration: BoxDecoration(
           gradient: palette.gradient,
           borderRadius: BorderRadius.circular(40), 
@@ -696,17 +704,17 @@ class _DeckCard extends StatelessWidget {
                     ],
                   ),
                   if (expanded) ...[
-                    // 🌟 优化：把这部分的间距缩紧，重心上移
-                    const SizedBox(height: 12),
+                    // 🌟 优化：重心微调，给底部三个按钮腾出绝佳空间
+                    const SizedBox(height: 8),
                     Text(
-                      '已使用', // 中文化
+                      '已使用', 
                       style: TextStyle(
                         color: palette.secondaryText,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     RichText(
                       text: TextSpan(
                         children: [
@@ -714,13 +722,13 @@ class _DeckCard extends StatelessWidget {
                             text: '$count',
                             style: TextStyle(
                               color: palette.foreground,
-                              fontSize: 48,
+                              fontSize: 44,
                               fontWeight: FontWeight.w900,
                               height: 1,
                             ),
                           ),
                           TextSpan(
-                            text: ' 次', // 中文化
+                            text: ' 次', 
                             style: TextStyle(
                               color: palette.secondaryText,
                               fontSize: 18,
@@ -730,18 +738,20 @@ class _DeckCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    // 🌟 新增：底部三大快捷操作按钮
+                    const Spacer(), // 将多余的空间推到三个按钮上方
+                    // 🌟 优化：居中且紧凑排列的底部操作按钮
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _CardActionButton(
-                          icon: Icons.location_on_rounded,
+                          // 🌟 修改：换成了排序层级图标，契合修改位置语义
+                          icon: Icons.swap_vert_rounded, 
                           label: '位置',
                           color: palette.foreground,
                           bgColor: Colors.black.withOpacity(0.06),
                           onTap: () {},
                         ),
+                        const SizedBox(width: 8), // 缩紧间距
                         _CardActionButton(
                           icon: Icons.edit_rounded,
                           label: '重命名',
@@ -749,11 +759,12 @@ class _DeckCard extends StatelessWidget {
                           bgColor: Colors.black.withOpacity(0.06),
                           onTap: () {},
                         ),
+                        const SizedBox(width: 8),
                         _CardActionButton(
-                          icon: Icons.delete_rounded,
+                          icon: Icons.delete_outline_rounded, // 换成空心垃圾桶，更加清爽
                           label: '删除',
-                          color: const Color(0xFFE53935), // 警示红
-                          bgColor: const Color(0xFFE53935).withOpacity(0.12), // 红色微透底色
+                          color: const Color(0xFFE53935), 
+                          bgColor: const Color(0xFFE53935).withOpacity(0.12), 
                           onTap: () {},
                         ),
                       ],
@@ -769,7 +780,6 @@ class _DeckCard extends StatelessWidget {
   }
 }
 
-// 🌟 新增：底部卡片快捷操作按钮 UI
 class _CardActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -790,10 +800,11 @@ class _CardActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        // 🌟 微调内边距，适应居中紧凑布局
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: bgColor,
-          borderRadius: BorderRadius.circular(20), // 优美的圆角
+          borderRadius: BorderRadius.circular(18), 
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
