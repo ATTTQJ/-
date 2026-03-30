@@ -1,0 +1,138 @@
+﻿import 'dart:async';
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../../core/toast_service.dart';
+import '../../providers/device_provider.dart';
+import '../../providers/user_provider.dart';
+import '../../providers/water_provider.dart';
+import '../widgets/dialog_utils.dart';
+import '../widgets/history_bottom_sheet.dart';
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  String? _expandedId;
+  String? _historySyncKey;
+
+  static const Duration _switchMotionDuration = Duration(milliseconds: 320);
+
+  @override
+  Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ));
+
+    return Consumer3<UserProvider, WaterProvider, DeviceProvider>(
+      builder: (context, userProvider, waterProvider, deviceProvider, child) {
+        final List<Map<String, dynamic>> displayDevices = 
+            List<Map<String, dynamic>>.from(deviceProvider.deviceList);
+        while (displayDevices.length < 4) {
+          displayDevices.add({
+            'isAddCard': true,
+            'deviceInfId': 'add_${displayDevices.length}',
+            'deviceInfName': '\u6dfb\u52a0\u8bbe\u5907',
+            'billType': -1,
+          });
+        }
+
+        final selectedId = deviceProvider.selectedDeviceId;
+        final working = waterProvider.orderNum.isNotEmpty;
+        final activeId = waterProvider.activeDeviceId;
+        Map<String, dynamic>? activeDevice;
+        final usageCounts = _buildUsageCounts(
+          deviceProvider: deviceProvider,
+          history: waterProvider.history,
+        );
+        final predictedDevice = _resolvePredictedDevice(
+          deviceProvider: deviceProvider,
+          usageCounts: usageCounts,
+        );
+
+        String currentActiveName = '\u8bbe\u5907';
+        if (working && activeId.isNotEmpty) {
+          for (final d in deviceProvider.deviceList) {
+            if (d['deviceInfId']?.toString() == activeId) {
+              activeDevice = d;
+              currentActiveName = _deviceName(deviceProvider, d);
+              break;
+            }
+          }
+        }
+        final dashboardDevice = working ? activeDevice : predictedDevice;
+
+        _scheduleHistorySync(
+          userProvider: userProvider,
+          waterProvider: waterProvider,
+          deviceProvider: deviceProvider,
+        );
+
+        return Scaffold(
+          backgroundColor: const Color(0xFF0E0E11),
+          body: Stack(
+            children: [
+              const Positioned.fill(child: _BackdropLayer()),
+              
+              SafeArea(
+                bottom: false, 
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: 7,
+                      left: 0,
+                      right: 0,
+                      child: _TopButtons(
+                        onProfile: () => _showLogoutConfirm(context),
+                        onHistory: () {
+                          DialogUtils.showGlassBottomSheet(
+                            context,
+                            const HistoryBottomSheet(),
+                          );
+                          unawaited(
+                            context.read<WaterProvider>().syncHistoryFromServer(
+                                  token: userProvider.token,
+                                  userId: userProvider.userId,
+                                  muteToast: true,
+                                ),
+                          );
+                        },
+                      ),
+                    ),
+                    
+                    const Positioned(
+                      top: 78,
+                      left: 30,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "John's Home",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Monitor and control your devices',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+

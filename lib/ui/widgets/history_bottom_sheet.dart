@@ -4,6 +4,13 @@ import 'package:provider/provider.dart';
 import '../../models/water_usage_history_entry.dart';
 import '../../providers/water_provider.dart';
 
+const int _historyVisibleCount = 5;
+const double _historyItemExtent = 76.0;
+const double _historyDividerHeight = 1.0;
+const double _historyViewportHeight =
+    (_historyVisibleCount * _historyItemExtent) +
+    ((_historyVisibleCount - 1) * _historyDividerHeight);
+
 class HistoryBottomSheet extends StatelessWidget {
   const HistoryBottomSheet({super.key});
 
@@ -41,28 +48,28 @@ class HistoryBottomSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 320),
-              reverseDuration: const Duration(milliseconds: 560),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeOutCubic,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
+            SizedBox(
+              height: _historyViewportHeight,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 320),
+                reverseDuration: const Duration(milliseconds: 560),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeOutCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                  child: child,
                 ),
-                child: child,
-              ),
-              child: isLoading
-                  ? const KeyedSubtree(
-                      key: ValueKey<String>('history_loading'),
-                      child: _HistorySkeletonList(),
-                    )
-                  : history.isEmpty
-                      ? const KeyedSubtree(
-                          key: ValueKey<String>('history_empty'),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 40),
+                child: isLoading
+                    ? const KeyedSubtree(
+                        key: ValueKey<String>('history_loading'),
+                        child: _HistorySkeletonList(),
+                      )
+                    : history.isEmpty
+                        ? const KeyedSubtree(
+                            key: ValueKey<String>('history_empty'),
                             child: Center(
                               child: Text(
                                 '\u6682\u65e0\u5386\u53f2\u8bb0\u5f55',
@@ -72,28 +79,28 @@ class HistoryBottomSheet extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          ),
-                        )
-                      : KeyedSubtree(
-                          key: ValueKey<String>('history_list_${history.length}'),
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxHeight:
-                                  MediaQuery.of(context).size.height * 0.5,
+                          )
+                        : KeyedSubtree(
+                            key: ValueKey<String>(
+                              'history_list_${history.length}',
                             ),
                             child: ListView.separated(
                               padding: EdgeInsets.zero,
-                              shrinkWrap: true,
-                              physics: const BouncingScrollPhysics(),
+                              physics: history.length > _historyVisibleCount
+                                  ? const BouncingScrollPhysics()
+                                  : const NeverScrollableScrollPhysics(),
                               itemCount: history.length,
                               separatorBuilder: (context, index) =>
-                                  Divider(height: 1, color: Colors.grey[100]),
+                                  Divider(
+                                    height: _historyDividerHeight,
+                                    color: Colors.grey[100],
+                                  ),
                               itemBuilder: (context, index) {
                                 return _HistoryItem(entry: history[index]);
                               },
                             ),
                           ),
-                        ),
+              ),
             ),
           ],
         );
@@ -107,19 +114,29 @@ class _HistorySkeletonList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.5,
+    return ListView.separated(
+      padding: EdgeInsets.zero,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _historyVisibleCount,
+      separatorBuilder: (context, index) => Divider(
+        height: _historyDividerHeight,
+        color: Colors.grey[100],
       ),
-      child: ListView.separated(
-        padding: EdgeInsets.zero,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: 5,
-        separatorBuilder: (context, index) =>
-            Divider(height: 1, color: Colors.grey[100]),
-        itemBuilder: (context, index) => const _HistorySkeletonItem(),
-      ),
+      itemBuilder: (context, index) => const _HistorySkeletonItem(),
+    );
+  }
+}
+
+class _HistoryRowFrame extends StatelessWidget {
+  const _HistoryRowFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _historyItemExtent,
+      child: child,
     );
   }
 }
@@ -129,28 +146,30 @@ class _HistorySkeletonItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SkeletonCircle(),
-          SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SkeletonBar(width: 116, height: 14),
-                SizedBox(height: 8),
-                _SkeletonBar(width: 84, height: 11),
-                SizedBox(height: 8),
-                _SkeletonBar(width: 140, height: 11),
-              ],
+    return const _HistoryRowFrame(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SkeletonCircle(),
+            SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SkeletonBar(width: 116, height: 14),
+                  SizedBox(height: 8),
+                  _SkeletonBar(width: 84, height: 11),
+                  SizedBox(height: 8),
+                  _SkeletonBar(width: 140, height: 11),
+                ],
+              ),
             ),
-          ),
-          SizedBox(width: 12),
-          _SkeletonPill(width: 68, height: 32),
-        ],
+            SizedBox(width: 12),
+            _SkeletonPill(width: 68, height: 32),
+          ],
+        ),
       ),
     );
   }
@@ -223,63 +242,65 @@ class _HistoryItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            margin: const EdgeInsets.only(top: 2),
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              shape: BoxShape.circle,
+    return _HistoryRowFrame(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.history, color: Colors.blue, size: 16),
             ),
-            child: const Icon(Icons.history, color: Colors.blue, size: 16),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.displayDeviceName,
-                  style: const TextStyle(
-                    color: Color(0xFF2C2C2E),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.displayDeviceName,
+                    style: const TextStyle(
+                      color: Color(0xFF2C2C2E),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  entry.formattedDate,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '\u7528\u6c34\u65f6\u957f\uff1a${entry.formattedDuration}',
-                  style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF4EA),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              '\u00A5${entry.formattedAmount}',
-              style: const TextStyle(
-                color: Color(0xFFD85B00),
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
+                  const SizedBox(height: 4),
+                  Text(
+                    entry.formattedDate,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '\u7528\u6c34\u65f6\u957f\uff1a${entry.formattedDuration}',
+                    style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4EA),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                '\u00A5${entry.formattedAmount}',
+                style: const TextStyle(
+                  color: Color(0xFFD85B00),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

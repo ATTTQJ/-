@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -40,7 +40,7 @@ class _HomePageState extends State<HomePage> {
           displayDevices.add({
             'isAddCard': true,
             'deviceInfId': 'add_${displayDevices.length}',
-            'deviceInfName': 'Add Device',
+            'deviceInfName': '\u6dfb\u52a0\u8bbe\u5907',
             'billType': -1,
           });
         }
@@ -137,12 +137,12 @@ class _HomePageState extends State<HomePage> {
                     ),
 
                     Positioned(
-                      top: 250, 
+                      top: 314,
                       left: 19,
                       right: 19,
                       bottom: 0, 
                       child: _DeviceDeck(
-                        paddingTop: 90.0, 
+                        paddingTop: 26.0,
                         devices: displayDevices,
                         selectedId: selectedId,
                         activeId: activeId,
@@ -184,7 +184,9 @@ class _HomePageState extends State<HomePage> {
                           final commonlyId =
                               (device['commonlyId'] ?? '').toString();
                           if (commonlyId.isEmpty) {
-                            ToastService.show('Unable to delete this device');
+                            ToastService.show(
+                              '\u65e0\u6cd5\u5220\u9664\u8be5\u8bbe\u5907',
+                            );
                             return;
                           }
                           DialogUtils.showDeleteConfirmDialog(
@@ -213,7 +215,7 @@ class _HomePageState extends State<HomePage> {
                                   context,
                                 ),
                         lastUsedDeviceName: predictedDevice == null
-                            ? 'No available device'
+                            ? '\u6682\u65e0\u53ef\u7528\u8bbe\u5907'
                             : _deviceName(deviceProvider, predictedDevice),
                         onActionTap: dashboardDevice == null ||
                                 waterProvider.isRequesting
@@ -273,7 +275,7 @@ class _HomePageState extends State<HomePage> {
     DeviceProvider provider,
     Map<String, dynamic> device,
   ) {
-    if (device['isAddCard'] == true) return 'Add Device';
+    if (device['isAddCard'] == true) return '\u6dfb\u52a0\u8bbe\u5907';
     
     final id = device['deviceInfId'].toString();
     final remark = provider.customRemarks[id];
@@ -477,7 +479,9 @@ class _HomePageState extends State<HomePage> {
       final stopTarget = activeDevice ?? device;
       if (waterProvider.activeDeviceId.isNotEmpty &&
           stopTarget['deviceInfId']?.toString() != deviceId) {
-        ToastService.show('Please close the running device first');
+        ToastService.show(
+          '\u8bf7\u5148\u5173\u95ed\u5f53\u524d\u6b63\u5728\u7528\u6c34\u7684\u8bbe\u5907',
+        );
         return;
       }
       await waterProvider.stopWater(
@@ -514,7 +518,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Move Device',
+            '\u79fb\u52a8\u8bbe\u5907',
             style: TextStyle(
               color: Color(0xFF2C2C2E),
               fontSize: 18,
@@ -523,7 +527,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Enter a position between 1 and $maxPosition.',
+            '\u8bf7\u8f93\u5165 1 \u5230 $maxPosition \u4e4b\u95f4\u7684\u4f4d\u7f6e\u3002',
             style: const TextStyle(
               color: Color(0xFF666666),
               fontSize: 14,
@@ -534,7 +538,7 @@ class _HomePageState extends State<HomePage> {
             controller: controller,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              hintText: 'Position',
+              hintText: '\u4f4d\u7f6e',
               filled: true,
               fillColor: Colors.grey[100],
               border: OutlineInputBorder(
@@ -549,7 +553,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: const Text('\u53d6\u6d88'),
                 ),
               ),
               Expanded(
@@ -563,7 +567,7 @@ class _HomePageState extends State<HomePage> {
                   onPressed: () async {
                     final parsed = int.tryParse(controller.text.trim());
                     if (parsed == null || parsed < 1 || parsed > maxPosition) {
-                      ToastService.show('Invalid position');
+                      ToastService.show('\u4f4d\u7f6e\u65e0\u6548');
                       return;
                     }
                     await deviceProvider.moveDeviceToPosition(
@@ -575,7 +579,7 @@ class _HomePageState extends State<HomePage> {
                     }
                   },
                   child: const Text(
-                    'Save',
+                    '\u4fdd\u5b58',
                     style: TextStyle(color: Colors.white),
                   ),
                 ),
@@ -595,7 +599,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Log out',
+            '\u9000\u51fa\u767b\u5f55',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -604,7 +608,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Do you want to log out of this account?',
+            '\u786e\u5b9a\u8981\u9000\u51fa\u5f53\u524d\u8d26\u53f7\u5417\uff1f',
             style: TextStyle(color: Color(0xFF666666), fontSize: 15),
           ),
           const SizedBox(height: 24),
@@ -613,7 +617,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: const Text('\u53d6\u6d88'),
                 ),
               ),
               Expanded(
@@ -623,7 +627,7 @@ class _HomePageState extends State<HomePage> {
                     Navigator.pop(context);
                   },
                   child: const Text(
-                    'Log out',
+                    '\u9000\u51fa\u767b\u5f55',
                     style: TextStyle(color: Colors.redAccent),
                   ),
                 ),
@@ -1095,7 +1099,9 @@ class _DashboardCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        working ? '$activeDeviceName On' : lastUsedDeviceName,
+                        working
+                            ? '$activeDeviceName \u4f7f\u7528\u4e2d'
+                            : lastUsedDeviceName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1395,9 +1401,7 @@ class _DeviceDeck extends StatelessWidget {
     }).toList();
 
     return SingleChildScrollView(
-      physics: devices.length > 4 
-          ? const BouncingScrollPhysics() 
-          : const BouncingScrollPhysics(), 
+      physics: const ClampingScrollPhysics(),
       padding: EdgeInsets.only(top: paddingTop, bottom: 60), 
       clipBehavior: Clip.none,
       child: SizedBox(
@@ -1437,7 +1441,7 @@ class _AddDeviceCard extends StatelessWidget {
                   Icon(Icons.add_circle_outline_rounded, color: Colors.white38, size: 42),
                   SizedBox(height: 12),
                   Text(
-                    'Tap to add new device', 
+                    '\u70b9\u51fb\u6dfb\u52a0\u65b0\u8bbe\u5907',
                     style: TextStyle(
                       color: Colors.white38, 
                       fontSize: 15,
@@ -1928,7 +1932,7 @@ class _DeckCard extends StatelessWidget {
                   if (expanded) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Used',
+                      '\u5df2\u4f7f\u7528',
                       style: TextStyle(
                         color: palette.secondaryText,
                         fontSize: 14,
@@ -1949,7 +1953,7 @@ class _DeckCard extends StatelessWidget {
                             ),
                           ),
                           TextSpan(
-                            text: ' times',
+                            text: ' \u6b21',
                             style: TextStyle(
                               color: palette.secondaryText,
                               fontSize: 18,
@@ -1965,7 +1969,7 @@ class _DeckCard extends StatelessWidget {
                       children: [
                         _CardActionButton(
                           icon: Icons.swap_vert_rounded,
-                          label: 'Position',
+                          label: '\u4f4d\u7f6e',
                           color: palette.foreground,
                           bgColor: Colors.black.withOpacity(0.06),
                           onTap: onMove,
@@ -1973,7 +1977,7 @@ class _DeckCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         _CardActionButton(
                           icon: Icons.edit_rounded,
-                          label: 'Rename',
+                          label: '\u91cd\u547d\u540d',
                           color: palette.foreground,
                           bgColor: Colors.black.withOpacity(0.06),
                           onTap: onRename,
@@ -1981,7 +1985,7 @@ class _DeckCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         _CardActionButton(
                           icon: Icons.delete_outline_rounded,
-                          label: 'Delete',
+                          label: '\u5220\u9664',
                           color: const Color(0xFFE53935),
                           bgColor: const Color(0xFFE53935).withOpacity(0.12),
                           onTap: onDelete,
