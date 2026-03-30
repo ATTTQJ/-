@@ -72,6 +72,17 @@ class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
       return;
     }
 
+    if (userProvider.token.isNotEmpty && userProvider.userId.isNotEmpty) {
+      await waterProvider.syncHistoryFromServer(
+        token: userProvider.token,
+        userId: userProvider.userId,
+        muteToast: true,
+      );
+      if (!mounted) {
+        return;
+      }
+    }
+
     await _consumePendingAction();
   }
 

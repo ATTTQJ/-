@@ -57,6 +57,17 @@ class _HomePageState extends State<HomePage> {
           usageCounts: usageCounts,
         );
 
+        // 🌟 核心新增：提取当前正在用水的设备名称
+        String currentActiveName = '设备';
+        if (working && activeId.isNotEmpty) {
+          for (final d in deviceProvider.deviceList) {
+            if (d['deviceInfId']?.toString() == activeId) {
+              currentActiveName = _deviceName(deviceProvider, d);
+              break;
+            }
+          }
+        }
+
         _scheduleHistorySync(
           userProvider: userProvider,
           waterProvider: waterProvider,
@@ -79,13 +90,12 @@ class _HomePageState extends State<HomePage> {
                       right: 0,
                       child: _TopButtons(
                         onProfile: () => _showLogoutConfirm(context),
-                        onHistory: () {
-                          unawaited(
-                            context.read<WaterProvider>().syncHistoryFromServer(
-                                  token: userProvider.token,
-                                  userId: userProvider.userId,
-                                ),
-                          );
+                        onHistory: () async {
+                          await context.read<WaterProvider>().syncHistoryFromServer(
+                                token: userProvider.token,
+                                userId: userProvider.userId,
+                                muteToast: true,
+                              );
                           DialogUtils.showGlassBottomSheet(
                             context,
                             const HistoryBottomSheet(),
@@ -132,6 +142,7 @@ class _HomePageState extends State<HomePage> {
                         runningTime: waterProvider.runningTime,
                         activeDevicesCount: working ? 1 : 0,
                         totalDevicesCount: deviceProvider.deviceList.length,
+                        activeDeviceName: currentActiveName, // 传入当前激活设备的名称
                         onStatusTap: working
                             ? null
                             : () => DialogUtils.showCascadingAddDeviceDialog(
@@ -625,6 +636,7 @@ class _DashboardCard extends StatelessWidget {
     required this.totalDevicesCount,
     required this.onStatusTap,
     required this.lastUsedDeviceName,
+    required this.activeDeviceName, // 新增：正在使用的设备名
     required this.onActionTap,
   });
 
@@ -635,10 +647,14 @@ class _DashboardCard extends StatelessWidget {
   final int totalDevicesCount;
   final VoidCallback? onStatusTap;
   final String lastUsedDeviceName;
+  final String activeDeviceName;
   final VoidCallback? onActionTap;
 
   @override
   Widget build(BuildContext context) {
+    // 🌟 核心状态判断：是否处于因为未用水且无操作而变暗的状态
+    final bool isDimmed = onActionTap == null && !working;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
@@ -659,6 +675,7 @@ class _DashboardCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   const Icon(
                     Icons.account_balance_wallet_rounded, 
@@ -666,27 +683,14 @@ class _DashboardCard extends StatelessWidget {
                     size: 28,
                   ),
                   const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '¥$balance',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22, 
-                          fontWeight: FontWeight.bold,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Wallet Balance',
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    '¥$balance',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22, 
+                      fontWeight: FontWeight.bold,
+                      height: 1.1,
+                    ),
                   ),
                 ],
               ),
@@ -697,12 +701,13 @@ class _DashboardCard extends StatelessWidget {
                   width: 116,
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 800),
-                    switchInCurve: Curves.easeInOutCubic,
-                    switchOutCurve: Curves.easeInOutCubic,
+                    switchInCurve: const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
+                    switchOutCurve: const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
                     transitionBuilder: (child, animation) =>
                         FadeTransition(opacity: animation, child: child),
                     child: Row(
                       key: ValueKey<bool>(working),
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Icon(
                           working ? Icons.waves_rounded : Icons.important_devices_rounded,
@@ -710,31 +715,17 @@ class _DashboardCard extends StatelessWidget {
                           size: 24,
                         ),
                         const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 🌟 核心新增：专门为跳动的倒计时设计的翻滚动画组件！
-                            working
-                                ? _RollingTimeText(timeStr: runningTime)
-                                : Text(
-                                    '$activeDevicesCount/$totalDevicesCount',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      height: 1.1,
-                                    ),
-                                  ),
-                            const SizedBox(height: 2),
-                            Text(
-                              working ? 'Running' : 'Active Device',
-                              style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 11,
+                        working
+                            ? _RollingTimeText(timeStr: runningTime)
+                            : Text(
+                                '$activeDevicesCount/$totalDevicesCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.1,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),
@@ -745,10 +736,12 @@ class _DashboardCard extends StatelessWidget {
           const SizedBox(height: 16),
           GestureDetector(
             onTap: onActionTap,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
               height: 48, 
               decoration: BoxDecoration(
-                color: onActionTap == null
+                // 🌟 核心修改 1：用水时 (working 为 true) 不变暗，强制全亮！
+                color: isDimmed
                     ? const Color(0xFF7A58FF).withOpacity(0.45)
                     : const Color(0xFF7A58FF), 
                 borderRadius: BorderRadius.circular(24),
@@ -756,19 +749,20 @@ class _DashboardCard extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // 🌟 核心更新：象征“智能推荐/魔法”的精美图标
                   Icon(
-                    Icons.auto_awesome_rounded, 
-                    color: onActionTap == null ? Colors.white54 : Colors.white,
+                    // 🌟 核心修改 2：用水时显示水波纹，平时显示魔法预测
+                    working ? Icons.waves_rounded : Icons.auto_awesome_rounded, 
+                    color: isDimmed ? Colors.white54 : Colors.white,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    lastUsedDeviceName,
+                    // 🌟 核心修改 3：用水时显示当前激活设备名 + "使用中"
+                    working ? '$activeDeviceName 使用中' : lastUsedDeviceName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: onActionTap == null ? Colors.white54 : Colors.white,
+                      color: isDimmed ? Colors.white54 : Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -783,43 +777,72 @@ class _DashboardCard extends StatelessWidget {
   }
 }
 
-// 🌟 全新动画黑科技组件：滚轮倒计时！
-// 它会让每一秒的跳动像闹钟数字一样从下往上翻滚
 class _RollingTimeText extends StatelessWidget {
   final String timeStr;
   const _RollingTimeText({required this.timeStr});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 350),
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        // 利用 Tween 精确控制进出场的位置
-        // 新数字进场：从下偏 0.5 的位置向上滑动到原位
-        final inAnimation = Tween<Offset>(begin: const Offset(0.0, 0.5), end: Offset.zero).animate(animation);
-        // 老数字退场：从原位向上方偏移 -0.5 的位置退出
-        final outAnimation = Tween<Offset>(begin: const Offset(0.0, -0.5), end: Offset.zero).animate(animation);
-
-        if (child.key == ValueKey(timeStr)) {
-          return SlideTransition(
-            position: inAnimation,
-            child: FadeTransition(opacity: animation, child: child),
-          );
-        } else {
-          return SlideTransition(
-            position: outAnimation,
-            child: FadeTransition(opacity: animation, child: child),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: timeStr.split('').asMap().entries.map((entry) {
+        final int index = entry.key;
+        final String char = entry.value;
+        if (char == ':') {
+          return const Text(
+            ':',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              height: 1.1,
+            ),
           );
         }
+        return _RollingDigit(char: char, index: index);
+      }).toList(),
+    );
+  }
+}
+
+class _RollingDigit extends StatelessWidget {
+  final String char;
+  final int index;
+  const _RollingDigit({required this.char, required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        final isEntering = (child.key as ValueKey<String>).value == '${index}_$char';
+        final offsetTween = isEntering
+            ? Tween<Offset>(begin: const Offset(0.0, 0.5), end: Offset.zero)
+            : Tween<Offset>(begin: const Offset(0.0, -0.5), end: Offset.zero);
+
+        return SlideTransition(
+          position: offsetTween.animate(animation),
+          child: FadeTransition(opacity: animation, child: child),
+        );
+      },
+      layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+        return Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
       },
       child: Text(
-        timeStr,
-        key: ValueKey<String>(timeStr),
+        char,
+        key: ValueKey<String>('${index}_$char'),
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 16,
+          fontSize: 22,
           fontWeight: FontWeight.bold,
           height: 1.1,
+          fontFeatures: [FontFeature.tabularFigures()],
         ),
       ),
     );

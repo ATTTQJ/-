@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -32,12 +30,11 @@ class UserInfoPanel extends StatelessWidget {
                     ),
                   ),
                   GestureDetector(
-                    onTap: () {
-                      unawaited(
-                        context.read<WaterProvider>().syncHistoryFromServer(
-                          token: userProvider.token,
-                          userId: userProvider.userId,
-                        ),
+                    onTap: () async {
+                      await context.read<WaterProvider>().syncHistoryFromServer(
+                        token: userProvider.token,
+                        userId: userProvider.userId,
+                        muteToast: true,
                       );
                       DialogUtils.showGlassBottomSheet(
                         context,

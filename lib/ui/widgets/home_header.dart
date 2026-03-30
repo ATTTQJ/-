@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -71,12 +69,11 @@ class HomeHeader extends StatelessWidget {
               children: [
                 _HeaderIconButton(
                   icon: Icons.receipt_long_rounded,
-                  onTap: () {
-                    unawaited(
-                      context.read<WaterProvider>().syncHistoryFromServer(
-                        token: userProvider.token,
-                        userId: userProvider.userId,
-                      ),
+                  onTap: () async {
+                    await context.read<WaterProvider>().syncHistoryFromServer(
+                      token: userProvider.token,
+                      userId: userProvider.userId,
+                      muteToast: true,
                     );
                     DialogUtils.showGlassBottomSheet(
                       context,
