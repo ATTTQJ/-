@@ -41,35 +41,60 @@ class HistoryBottomSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            if (isLoading)
-              const _HistorySkeletonList()
-            else if (history.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text(
-                    '\u6682\u65e0\u5386\u53f2\u8bb0\u5f55',
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
-                  ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 320),
+              reverseDuration: const Duration(milliseconds: 560),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeOutCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
                 ),
-              )
-            else
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.5,
-                ),
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: history.length,
-                  separatorBuilder: (context, index) =>
-                      Divider(height: 1, color: Colors.grey[100]),
-                  itemBuilder: (context, index) {
-                    return _HistoryItem(entry: history[index]);
-                  },
-                ),
+                child: child,
               ),
+              child: isLoading
+                  ? const KeyedSubtree(
+                      key: ValueKey<String>('history_loading'),
+                      child: _HistorySkeletonList(),
+                    )
+                  : history.isEmpty
+                      ? const KeyedSubtree(
+                          key: ValueKey<String>('history_empty'),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 40),
+                            child: Center(
+                              child: Text(
+                                '\u6682\u65e0\u5386\u53f2\u8bb0\u5f55',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : KeyedSubtree(
+                          key: ValueKey<String>('history_list_${history.length}'),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.of(context).size.height * 0.5,
+                            ),
+                            child: ListView.separated(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: history.length,
+                              separatorBuilder: (context, index) =>
+                                  Divider(height: 1, color: Colors.grey[100]),
+                              itemBuilder: (context, index) {
+                                return _HistoryItem(entry: history[index]);
+                              },
+                            ),
+                          ),
+                        ),
+            ),
           ],
         );
       },

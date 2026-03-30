@@ -130,41 +130,13 @@ class _HomePageState extends State<HomePage> {
                               color: Colors.white60,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    Positioned(
-                      top: 172, 
-                      left: 20,
-                      right: 20,
-                      child: _DashboardCard(
-                        balance: userProvider.balance,
-                        working: working,
-                        runningTime: waterProvider.runningTime,
-                        activeDevicesCount: working ? 1 : 0,
-                        totalDevicesCount: deviceProvider.deviceList.length,
-                        activeDeviceName: currentActiveName, 
-                        onStatusTap: working
-                            ? null
-                            : () => DialogUtils.showCascadingAddDeviceDialog(
-                                  context,
-                                ),
-                        lastUsedDeviceName: predictedDevice == null
-                            ? 'No available device'
-                            : _deviceName(deviceProvider, predictedDevice),
-                        onActionTap: dashboardDevice == null ||
-                                waterProvider.isRequesting
-                            ? null
-                            : () => _handleDevicePowerTap(
-                                  context,
-                                  dashboardDevice!,
-                                  userProvider,
-                                  waterProvider,
-                                  deviceProvider,
-                                ),
+              ),
+            ),
+          ),
+          ),
+          ),
+          ),
+        ],
                       ),
                     ),
 
@@ -225,6 +197,38 @@ class _HomePageState extends State<HomePage> {
                             _deviceName(deviceProvider, device),
                           );
                         },
+                      ),
+                    ),
+
+                    Positioned(
+                      top: 172, 
+                      left: 20,
+                      right: 20,
+                      child: _DashboardCard(
+                        balance: userProvider.balance,
+                        working: working,
+                        runningTime: waterProvider.runningTime,
+                        activeDevicesCount: working ? 1 : 0,
+                        totalDevicesCount: deviceProvider.deviceList.length,
+                        activeDeviceName: currentActiveName, 
+                        onStatusTap: working
+                            ? null
+                            : () => DialogUtils.showCascadingAddDeviceDialog(
+                                  context,
+                                ),
+                        lastUsedDeviceName: predictedDevice == null
+                            ? 'No available device'
+                            : _deviceName(deviceProvider, predictedDevice),
+                        onActionTap: dashboardDevice == null ||
+                                waterProvider.isRequesting
+                            ? null
+                            : () => _handleDevicePowerTap(
+                                  context,
+                                  dashboardDevice!,
+                                  userProvider,
+                                  waterProvider,
+                                  deviceProvider,
+                                ),
                       ),
                     ),
                   ],
@@ -514,6 +518,8 @@ class _HomePageState extends State<HomePage> {
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -659,7 +665,7 @@ class _DashboardCard extends StatelessWidget {
 
     return Container(
       // 🌟 修复：把 Padding 撑大，找回删掉英文后丢失的高度，恢复饱满的版面！
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
+      padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1F2A), 
         borderRadius: BorderRadius.circular(32),
@@ -739,7 +745,10 @@ class _DashboardCard extends StatelessWidget {
           const SizedBox(height: 20), // 微调间距适应增加的 padding
           GestureDetector(
             onTap: onActionTap,
-            child: AnimatedContainer(
+            behavior: HitTestBehavior.opaque,
+            child: Transform.translate(
+              offset: const Offset(0, 6),
+              child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               height: 48, 
               decoration: BoxDecoration(
@@ -773,6 +782,7 @@ class _DashboardCard extends StatelessWidget {
                 ],
               ),
             ),
+          ),
           ),
         ],
       ),
