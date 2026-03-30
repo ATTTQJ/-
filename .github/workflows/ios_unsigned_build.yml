@@ -1,61 +1,70 @@
-name: iOS Unsigned Build (Componentized)
+name: iOS Unsigned Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-14
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Select Xcode 15.4
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-          # 这里会自动匹配你 pubspec.yaml 要求的 Dart 版本
+          channel: stable
 
       - name: Install dependencies
         run: |
-          flutter pub get
           flutter clean
           flutter pub get
           flutter precache --ios
 
-      - name: Force Strip Capabilities for Unsigned Build
+      - name: Prepare project for unsigned iOS build
         run: |
-          # 1. 彻底物理删除 .entitlements 文件
-          # 只要这个文件存在，Xcode 15 就一定会找你要真实的 Team ID
           find ios -name "*.entitlements" -delete
-          
-          # 2. 从工程文件中移除对权限清单文件的所有引用
-          # 这样 Xcode 编译时会认为这是一个没有 Siri、没有特权的普通 App
-          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
-          
-          # 3. 移除 SystemCapabilities 节点 (这是组件化后最容易触发校验的地方)
-          # 使用 perl 跨行匹配删除整个 SystemCapabilities 段落
-          perl -i -0777 -pe 's/SystemCapabilities = \{.*?\};/SystemCapabilities = {};/gs' ios/Runner.xcodeproj/project.pbxproj
 
-          # 4. 强制指定构建配置（这一步是最后防线）
-          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
-          echo "PROVISIONING_PROFILE_SPECIFIER=" >> ios/Flutter/Release.xcconfig
-      - name: Build iOS App
+          perl -0pi -e 's/\s*CODE_SIGN_ENTITLEMENTS = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          perl -0pi -e 's/\s*DEVELOPMENT_TEAM = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          perl -0pi -e 's/\s*PROVISIONING_PROFILE_SPECIFIER = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          perl -0pi -e 's/\s*PROVISIONING_PROFILE = [^;]*;//g' ios/Runner.xcodeproj/project.pbxproj
+          perl -0pi -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Runner.xcodeproj/project.pbxproj
+          perl -0pi -e 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "[^"]*";/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";/g' ios/Runner.xcodeproj/project.pbxproj
+          perl -0pi -e 's/SystemCapabilities = \{.*?\};/SystemCapabilities = {};/gs' ios/Runner.xcodeproj/project.pbxproj
+
+          cat >> ios/Flutter/Release.xcconfig <<'EOF'
+          CODE_SIGN_STYLE=Manual
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGN_IDENTITY=
+          EXPANDED_CODE_SIGN_IDENTITY=
+          DEVELOPMENT_TEAM=
+          PROVISIONING_PROFILE_SPECIFIER=
+          PROVISIONING_PROFILE=
+          EOF
+
+      - name: Build unsigned iOS app
+        env:
+          COCOAPODS_PARALLEL_CODE_SIGN: false
         run: |
-          # 执行不签名编译，显式跳过签名阶段
           flutter build ios --release --no-codesign --build-name=1.0.0 --build-number=1
 
-      - name: Create Unsigned IPA
+      - name: Package unsigned IPA
         run: |
-          # 封装为可供巨魔/自签工具安装的 IPA
           mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r WaterApp_Unsigned.ipa Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload WaterApp_Unsigned.ipa
 
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Unsigned-IPA
