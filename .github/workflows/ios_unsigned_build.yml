@@ -13,10 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Select Xcode 15.4
+      - name: Select latest stable Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '15.4'
+          xcode-version: latest-stable
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -28,6 +28,8 @@ jobs:
           flutter clean
           flutter pub get
           flutter precache --ios
+          cd ios
+          pod install
 
       - name: Prepare project for unsigned iOS build
         run: |
@@ -50,18 +52,40 @@ jobs:
           DEVELOPMENT_TEAM=
           PROVISIONING_PROFILE_SPECIFIER=
           PROVISIONING_PROFILE=
+          CODE_SIGN_ENTITLEMENTS=
           EOF
 
-      - name: Build unsigned iOS app
+      - name: Show selected Xcode
+        run: |
+          xcodebuild -version
+
+      - name: Build unsigned iOS app with xcodebuild
         env:
           COCOAPODS_PARALLEL_CODE_SIGN: false
         run: |
-          flutter build ios --release --no-codesign --build-name=1.0.0 --build-number=1
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination generic/platform=iOS \
+            -derivedDataPath build/ios/DerivedData \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            EXPANDED_CODE_SIGN_IDENTITY= \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            PROVISIONING_PROFILE= \
+            CODE_SIGN_ENTITLEMENTS= \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
 
       - name: Package unsigned IPA
         run: |
           mkdir -p Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
+          cp -R build/ios/DerivedData/Build/Products/Release-iphoneos/Runner.app Payload/
           ditto -c -k --sequesterRsrc --keepParent Payload WaterApp_Unsigned.ipa
 
       - name: Upload artifact

@@ -1,3 +1,4 @@
+import AppIntents
 import Flutter
 import UIKit
 
@@ -86,5 +87,63 @@ import UIKit
             "action": action,
             "device": device ?? ""
         ]
+    }
+}
+
+@available(iOS 16.0, *)
+struct StartWaterIntent: AppIntent {
+    static var title: LocalizedStringResource = "Start Water"
+    static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "Device Name")
+    var deviceName: String?
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        AppDelegate.saveAction(action: "start", device: deviceName ?? "")
+        return .result(
+            value: "start",
+            dialog: "Opening the water controller."
+        )
+    }
+}
+
+@available(iOS 16.0, *)
+struct StopWaterIntent: AppIntent {
+    static var title: LocalizedStringResource = "Stop Water"
+    static var openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        AppDelegate.saveAction(action: "stop", device: "")
+        return .result(
+            value: "stop",
+            dialog: "Opening the water controller."
+        )
+    }
+}
+
+@available(iOS 16.0, *)
+struct WaterShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: StartWaterIntent(),
+            phrases: [
+                "Start water with \(.applicationName)",
+                "Turn on water with \(.applicationName)"
+            ],
+            shortTitle: "Start Water",
+            systemImageName: "drop.fill"
+        )
+
+        AppShortcut(
+            intent: StopWaterIntent(),
+            phrases: [
+                "Stop water with \(.applicationName)",
+                "Turn off water with \(.applicationName)"
+            ],
+            shortTitle: "Stop Water",
+            systemImageName: "xmark.circle.fill"
+        )
     }
 }
