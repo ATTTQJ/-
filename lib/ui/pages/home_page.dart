@@ -109,13 +109,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                     
                     const Positioned(
-                      top: 78, 
+                      top: 78,
                       left: 30,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "John's Home", 
+                            "John's Home",
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 28,
@@ -125,18 +125,14 @@ class _HomePageState extends State<HomePage> {
                           ),
                           SizedBox(height: 6),
                           Text(
-                            "Monitor and control your devices",
+                            'Monitor and control your devices',
                             style: TextStyle(
                               color: Colors.white60,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
-              ),
-            ),
-          ),
-          ),
-          ),
-          ),
-        ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
@@ -436,6 +432,7 @@ class _HomePageState extends State<HomePage> {
         .replaceAll('adddevice', '');
   }
 
+  /*
   String _normalizeHistoryDeviceName(String name) {
     return name
         .trim()
@@ -447,6 +444,11 @@ class _HomePageState extends State<HomePage> {
         .replaceAll('设备用水', 'hot')
         .replaceAll('洗浴', 'hot')
         .replaceAll('adddevice', '');
+  }
+
+  */
+  String _normalizeHistoryDeviceName(String name) {
+    return _normalizeUsageHistoryDeviceName(name);
   }
 
   Future<void> _handleDevicePowerTap(
@@ -517,8 +519,6 @@ class _HomePageState extends State<HomePage> {
               color: Color(0xFF2C2C2E),
               fontSize: 18,
               fontWeight: FontWeight.bold,
-            ),
-              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -636,6 +636,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+/*
 class _DashboardCard extends StatelessWidget {
   const _DashboardCard({
     required this.balance,
@@ -783,6 +784,331 @@ class _DashboardCard extends StatelessWidget {
               ),
             ),
           ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+*/
+/*
+class _DashboardCard extends StatelessWidget {
+  const _DashboardCard({
+    required this.balance,
+    required this.working,
+    required this.runningTime,
+    required this.activeDevicesCount,
+    required this.totalDevicesCount,
+    required this.onStatusTap,
+    required this.lastUsedDeviceName,
+    required this.activeDeviceName,
+    required this.onActionTap,
+  });
+
+  final String balance;
+  final bool working;
+  final String runningTime;
+  final int activeDevicesCount;
+  final int totalDevicesCount;
+  final VoidCallback? onStatusTap;
+  final String lastUsedDeviceName;
+  final String activeDeviceName;
+  final VoidCallback? onActionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDimmed = onActionTap == null && !working;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1F2A),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    color: Color(0xFF32D7D2),
+                    size: 28,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '楼$balance',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: onStatusTap,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 116,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 800),
+                    switchInCurve:
+                        const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
+                    switchOutCurve:
+                        const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Row(
+                      key: ValueKey<bool>(working),
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(
+                          working
+                              ? Icons.waves_rounded
+                              : Icons.important_devices_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 10),
+                        working
+                            ? _RollingTimeText(timeStr: runningTime)
+                            : Text(
+                                '$activeDevicesCount/$totalDevicesCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.1,
+                                ),
+                              ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: onActionTap,
+            behavior: HitTestBehavior.opaque,
+            child: Transform.translate(
+              offset: const Offset(0, 6),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: 48,
+                decoration: BoxDecoration(
+                  color: working
+                      ? const Color(0xFFFF453A)
+                      : isDimmed
+                          ? const Color(0xFF7A58FF).withOpacity(0.45)
+                          : const Color(0xFF7A58FF),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      working
+                          ? Icons.waves_rounded
+                          : Icons.auto_awesome_rounded,
+                      color: isDimmed ? Colors.white54 : Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        working
+                            ? '$activeDeviceName 使用中'
+                            : lastUsedDeviceName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isDimmed ? Colors.white54 : Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+*/
+class _DashboardCard extends StatelessWidget {
+  const _DashboardCard({
+    required this.balance,
+    required this.working,
+    required this.runningTime,
+    required this.activeDevicesCount,
+    required this.totalDevicesCount,
+    required this.onStatusTap,
+    required this.lastUsedDeviceName,
+    required this.activeDeviceName,
+    required this.onActionTap,
+  });
+
+  final String balance;
+  final bool working;
+  final String runningTime;
+  final int activeDevicesCount;
+  final int totalDevicesCount;
+  final VoidCallback? onStatusTap;
+  final String lastUsedDeviceName;
+  final String activeDeviceName;
+  final VoidCallback? onActionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDimmed = onActionTap == null && !working;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1F2A),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    color: Color(0xFF32D7D2),
+                    size: 28,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '\$$balance',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: onStatusTap,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: 116,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 800),
+                    switchInCurve:
+                        const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
+                    switchOutCurve:
+                        const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Row(
+                      key: ValueKey<bool>(working),
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(
+                          working
+                              ? Icons.waves_rounded
+                              : Icons.important_devices_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 10),
+                        working
+                            ? _RollingTimeText(timeStr: runningTime)
+                            : Text(
+                                '$activeDevicesCount/$totalDevicesCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.1,
+                                ),
+                              ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: onActionTap,
+            behavior: HitTestBehavior.opaque,
+            child: Transform.translate(
+              offset: const Offset(0, 6),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: 48,
+                decoration: BoxDecoration(
+                  color: working
+                      ? const Color(0xFFFF453A)
+                      : isDimmed
+                          ? const Color(0xFF7A58FF).withOpacity(0.45)
+                          : const Color(0xFF7A58FF),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      working
+                          ? Icons.waves_rounded
+                          : Icons.auto_awesome_rounded,
+                      color: isDimmed ? Colors.white54 : Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        working ? '$activeDeviceName On' : lastUsedDeviceName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isDimmed ? Colors.white54 : Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1128,6 +1454,7 @@ class _AddDeviceCard extends StatelessWidget {
   }
 }
 
+/*
 class _DeckCard extends StatelessWidget {
   const _DeckCard({
     required this.palette,
@@ -1294,6 +1621,369 @@ class _DeckCard extends StatelessWidget {
                           label: '删除',
                           color: const Color(0xFFE53935), 
                           bgColor: const Color(0xFFE53935).withOpacity(0.12), 
+                          onTap: onDelete,
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+*/
+/*
+class _DeckCard extends StatelessWidget {
+  const _DeckCard({
+    required this.palette,
+    required this.title,
+    required this.count,
+    required this.selected,
+    required this.active,
+    required this.loading,
+    required this.expanded,
+    required this.onTap,
+    required this.onTogglePower,
+    required this.onMove,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  final _CardPalette palette;
+  final String title;
+  final int count;
+  final bool selected;
+  final bool active;
+  final bool loading;
+  final bool expanded;
+  final VoidCallback onTap;
+  final VoidCallback onTogglePower;
+  final VoidCallback onMove;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+        height: expanded ? 240 : 180,
+        decoration: BoxDecoration(
+          gradient: palette.gradient,
+          borderRadius: BorderRadius.circular(40),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, -5),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 20,
+              offset: const Offset(0, 15),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 12,
+              left: 12,
+              child: CustomPaint(
+                size: const Size(45, 45),
+                painter: _CornerLinePainter(),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 20, 22, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Icon(
+                          palette.icon,
+                          color: palette.foreground,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 15),
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: palette.foreground,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                      ),
+                      _VerticalSlideSwitch(
+                        active: active,
+                        loading: loading,
+                        foreground: palette.foreground,
+                        rail: palette.switchRail,
+                        onTap: onTogglePower,
+                      ),
+                    ],
+                  ),
+                  if (expanded) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '已使用',
+                      style: TextStyle(
+                        color: palette.secondaryText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '$count',
+                            style: TextStyle(
+                              color: palette.foreground,
+                              fontSize: 44,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' 次',
+                            style: TextStyle(
+                              color: palette.secondaryText,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _CardActionButton(
+                          icon: Icons.swap_vert_rounded,
+                          label: '位置',
+                          color: palette.foreground,
+                          bgColor: Colors.black.withOpacity(0.06),
+                          onTap: onMove,
+                        ),
+                        const SizedBox(width: 8),
+                        _CardActionButton(
+                          icon: Icons.edit_rounded,
+                          label: '重命名',
+                          color: palette.foreground,
+                          bgColor: Colors.black.withOpacity(0.06),
+                          onTap: onRename,
+                        ),
+                        const SizedBox(width: 8),
+                        _CardActionButton(
+                          icon: Icons.delete_outline_rounded,
+                          label: '删除',
+                          color: const Color(0xFFE53935),
+                          bgColor: const Color(0xFFE53935).withOpacity(0.12),
+                          onTap: onDelete,
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+*/
+class _DeckCard extends StatelessWidget {
+  const _DeckCard({
+    required this.palette,
+    required this.title,
+    required this.count,
+    required this.selected,
+    required this.active,
+    required this.loading,
+    required this.expanded,
+    required this.onTap,
+    required this.onTogglePower,
+    required this.onMove,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  final _CardPalette palette;
+  final String title;
+  final int count;
+  final bool selected;
+  final bool active;
+  final bool loading;
+  final bool expanded;
+  final VoidCallback onTap;
+  final VoidCallback onTogglePower;
+  final VoidCallback onMove;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+        height: expanded ? 240 : 180,
+        decoration: BoxDecoration(
+          gradient: palette.gradient,
+          borderRadius: BorderRadius.circular(40),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, -5),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 20,
+              offset: const Offset(0, 15),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 12,
+              left: 12,
+              child: CustomPaint(
+                size: const Size(45, 45),
+                painter: _CornerLinePainter(),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 20, 22, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Icon(
+                          palette.icon,
+                          color: palette.foreground,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 15),
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: palette.foreground,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                      ),
+                      _VerticalSlideSwitch(
+                        active: active,
+                        loading: loading,
+                        foreground: palette.foreground,
+                        rail: palette.switchRail,
+                        onTap: onTogglePower,
+                      ),
+                    ],
+                  ),
+                  if (expanded) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Used',
+                      style: TextStyle(
+                        color: palette.secondaryText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '$count',
+                            style: TextStyle(
+                              color: palette.foreground,
+                              fontSize: 44,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' times',
+                            style: TextStyle(
+                              color: palette.secondaryText,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _CardActionButton(
+                          icon: Icons.swap_vert_rounded,
+                          label: 'Position',
+                          color: palette.foreground,
+                          bgColor: Colors.black.withOpacity(0.06),
+                          onTap: onMove,
+                        ),
+                        const SizedBox(width: 8),
+                        _CardActionButton(
+                          icon: Icons.edit_rounded,
+                          label: 'Rename',
+                          color: palette.foreground,
+                          bgColor: Colors.black.withOpacity(0.06),
+                          onTap: onRename,
+                        ),
+                        const SizedBox(width: 8),
+                        _CardActionButton(
+                          icon: Icons.delete_outline_rounded,
+                          label: 'Delete',
+                          color: const Color(0xFFE53935),
+                          bgColor: const Color(0xFFE53935).withOpacity(0.12),
                           onTap: onDelete,
                         ),
                       ],
