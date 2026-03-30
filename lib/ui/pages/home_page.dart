@@ -48,6 +48,7 @@ class _HomePageState extends State<HomePage> {
         final selectedId = deviceProvider.selectedDeviceId;
         final working = waterProvider.orderNum.isNotEmpty;
         final activeId = waterProvider.activeDeviceId;
+        Map<String, dynamic>? activeDevice;
         final usageCounts = _buildUsageCounts(
           deviceProvider: deviceProvider,
           history: waterProvider.history,
@@ -57,16 +58,17 @@ class _HomePageState extends State<HomePage> {
           usageCounts: usageCounts,
         );
 
-        // 🌟 核心新增：提取当前正在用水的设备名称
         String currentActiveName = '设备';
         if (working && activeId.isNotEmpty) {
           for (final d in deviceProvider.deviceList) {
             if (d['deviceInfId']?.toString() == activeId) {
+              activeDevice = d;
               currentActiveName = _deviceName(deviceProvider, d);
               break;
             }
           }
         }
+        final dashboardDevice = working ? activeDevice : predictedDevice;
 
         _scheduleHistorySync(
           userProvider: userProvider,
@@ -90,15 +92,17 @@ class _HomePageState extends State<HomePage> {
                       right: 0,
                       child: _TopButtons(
                         onProfile: () => _showLogoutConfirm(context),
-                        onHistory: () async {
-                          await context.read<WaterProvider>().syncHistoryFromServer(
-                                token: userProvider.token,
-                                userId: userProvider.userId,
-                                muteToast: true,
-                              );
+                        onHistory: () {
                           DialogUtils.showGlassBottomSheet(
                             context,
                             const HistoryBottomSheet(),
+                          );
+                          unawaited(
+                            context.read<WaterProvider>().syncHistoryFromServer(
+                                  token: userProvider.token,
+                                  userId: userProvider.userId,
+                                  muteToast: true,
+                                ),
                           );
                         },
                       ),
@@ -142,7 +146,7 @@ class _HomePageState extends State<HomePage> {
                         runningTime: waterProvider.runningTime,
                         activeDevicesCount: working ? 1 : 0,
                         totalDevicesCount: deviceProvider.deviceList.length,
-                        activeDeviceName: currentActiveName, // 传入当前激活设备的名称
+                        activeDeviceName: currentActiveName, 
                         onStatusTap: working
                             ? null
                             : () => DialogUtils.showCascadingAddDeviceDialog(
@@ -151,13 +155,12 @@ class _HomePageState extends State<HomePage> {
                         lastUsedDeviceName: predictedDevice == null
                             ? 'No available device'
                             : _deviceName(deviceProvider, predictedDevice),
-                        onActionTap: predictedDevice == null ||
-                                working ||
+                        onActionTap: dashboardDevice == null ||
                                 waterProvider.isRequesting
                             ? null
                             : () => _handleDevicePowerTap(
                                   context,
-                                  predictedDevice,
+                                  dashboardDevice!,
                                   userProvider,
                                   waterProvider,
                                   deviceProvider,
@@ -636,7 +639,7 @@ class _DashboardCard extends StatelessWidget {
     required this.totalDevicesCount,
     required this.onStatusTap,
     required this.lastUsedDeviceName,
-    required this.activeDeviceName, // 新增：正在使用的设备名
+    required this.activeDeviceName,
     required this.onActionTap,
   });
 
@@ -652,11 +655,11 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 🌟 核心状态判断：是否处于因为未用水且无操作而变暗的状态
     final bool isDimmed = onActionTap == null && !working;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      // 🌟 修复：把 Padding 撑大，找回删掉英文后丢失的高度，恢复饱满的版面！
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1F2A), 
         borderRadius: BorderRadius.circular(32),
@@ -733,31 +736,31 @@ class _DashboardCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20), // 微调间距适应增加的 padding
           GestureDetector(
             onTap: onActionTap,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               height: 48, 
               decoration: BoxDecoration(
-                // 🌟 核心修改 1：用水时 (working 为 true) 不变暗，强制全亮！
-                color: isDimmed
-                    ? const Color(0xFF7A58FF).withOpacity(0.45)
-                    : const Color(0xFF7A58FF), 
+                // 🌟 修复：用水状态变成经典高级红
+                color: working 
+                    ? const Color(0xFFFF453A) 
+                    : isDimmed
+                        ? const Color(0xFF7A58FF).withOpacity(0.45)
+                        : const Color(0xFF7A58FF), 
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    // 🌟 核心修改 2：用水时显示水波纹，平时显示魔法预测
                     working ? Icons.waves_rounded : Icons.auto_awesome_rounded, 
                     color: isDimmed ? Colors.white54 : Colors.white,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    // 🌟 核心修改 3：用水时显示当前激活设备名 + "使用中"
                     working ? '$activeDeviceName 使用中' : lastUsedDeviceName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

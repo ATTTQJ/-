@@ -11,9 +11,8 @@ class HistoryBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<WaterProvider>(
       builder: (context, waterProvider, child) {
-        final history = waterProvider.history
-            .where((entry) => !entry.isLocalOnly)
-            .toList(growable: false);
+        final history = waterProvider.displayHistory;
+        final isLoading = waterProvider.isHistoryLoading;
 
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -31,13 +30,20 @@ class HistoryBottomSheet extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '\u5171 ${history.length} \u6761',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  isLoading
+                      ? '\u540c\u6b65\u4e2d...'
+                      : '\u5171 ${history.length} \u6761',
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            if (history.isEmpty)
+            if (isLoading)
+              const _HistorySkeletonList()
+            else if (history.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(
@@ -67,6 +73,120 @@ class HistoryBottomSheet extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _HistorySkeletonList extends StatelessWidget {
+  const _HistorySkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.5,
+      ),
+      child: ListView.separated(
+        padding: EdgeInsets.zero,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 5,
+        separatorBuilder: (context, index) =>
+            Divider(height: 1, color: Colors.grey[100]),
+        itemBuilder: (context, index) => const _HistorySkeletonItem(),
+      ),
+    );
+  }
+}
+
+class _HistorySkeletonItem extends StatelessWidget {
+  const _HistorySkeletonItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SkeletonCircle(),
+          SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SkeletonBar(width: 116, height: 14),
+                SizedBox(height: 8),
+                _SkeletonBar(width: 84, height: 11),
+                SizedBox(height: 8),
+                _SkeletonBar(width: 140, height: 11),
+              ],
+            ),
+          ),
+          SizedBox(width: 12),
+          _SkeletonPill(width: 68, height: 32),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonCircle extends StatelessWidget {
+  const _SkeletonCircle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F3F7),
+        borderRadius: BorderRadius.circular(14),
+      ),
+    );
+  }
+}
+
+class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({
+    required this.width,
+    required this.height,
+  });
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F3F7),
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+    );
+  }
+}
+
+class _SkeletonPill extends StatelessWidget {
+  const _SkeletonPill({
+    required this.width,
+    required this.height,
+  });
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1E5),
+        borderRadius: BorderRadius.circular(14),
+      ),
     );
   }
 }

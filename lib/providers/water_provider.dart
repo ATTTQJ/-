@@ -17,13 +17,26 @@ class WaterProvider extends ChangeNotifier {
   static const MethodChannel _siriChannel = MethodChannel(
     'com.fakeuy.water/siri',
   );
+  static const String _legacyHistoryStorageKey = 'water_history';
+  static const String _displayHistoryStorageKey = 'water_display_history';
+  static const String _localDurationStorageKey = 'water_local_duration_records';
 
   String orderNum = '';
   String tableName = '';
   String mac = '';
   String activeDeviceId = '';
   bool isRequesting = false;
-  List<WaterUsageHistoryEntry> history = [];
+  bool isHistoryLoading = false;
+  List<WaterUsageHistoryEntry> _displayHistory = [];
+  List<WaterUsageHistoryEntry> _localDurationRecords = [];
+
+  List<WaterUsageHistoryEntry> get history => List.unmodifiable(
+    _buildUsageHistory(),
+  );
+
+  List<WaterUsageHistoryEntry> get displayHistory => List.unmodifiable(
+    _displayHistory,
+  );
 
   DateTime? startTime;
   Timer? timer;
@@ -37,9 +50,33 @@ class WaterProvider extends ChangeNotifier {
     tableName = prefs.getString('water_tableName') ?? '';
     mac = prefs.getString('water_mac') ?? '';
     activeDeviceId = prefs.getString('water_activeDeviceId') ?? '';
-    history = (prefs.getStringList('water_history') ?? [])
-        .map(WaterUsageHistoryEntry.fromStorage)
-        .toList();
+    _displayHistory = _decodeHistoryEntries(
+      prefs.getStringList(_displayHistoryStorageKey),
+    );
+    _localDurationRecords = _decodeHistoryEntries(
+      prefs.getStringList(_localDurationStorageKey),
+    );
+
+    if (_displayHistory.isEmpty && _localDurationRecords.isEmpty) {
+      final legacyHistory = _decodeHistoryEntries(
+        prefs.getStringList(_legacyHistoryStorageKey),
+      );
+      if (legacyHistory.isNotEmpty) {
+        _displayHistory = legacyHistory
+            .where((entry) => !entry.isLocalOnly)
+            .toList(growable: false);
+        _localDurationRecords = _extractLocalDurationRecordsFromLegacy(
+          legacyHistory,
+        );
+        await _persistHistoryCaches(prefs: prefs);
+      }
+    } else {
+      _localDurationRecords = _mergeLocalDurationRecords([
+        ..._localDurationRecords,
+        ..._displayHistory.map(_asLocalDurationRecord),
+      ]);
+      await _persistHistoryCaches(prefs: prefs);
+    }
 
     final savedStartTime = prefs.getInt('water_start_time') ?? 0;
     if (orderNum.isNotEmpty && savedStartTime > 0) {
@@ -210,11 +247,7 @@ class WaterProvider extends ChangeNotifier {
           await prefs.setString('water_initial_balance', currentBalance.trim());
         }
 
-        history.removeWhere(
-          (entry) => entry.orderNum.trim() == orderNum.trim(),
-        );
-        history.insert(
-          0,
+        _upsertLocalDurationRecord(
           WaterUsageHistoryEntry(
             createdAt: startTime!,
             deviceName: _localHistoryDeviceName(device),
@@ -224,7 +257,7 @@ class WaterProvider extends ChangeNotifier {
             isLocalOnly: true,
           ),
         );
-        await _persistHistory();
+        await _persistHistoryCaches(prefs: prefs);
 
         _startRunningTimer();
         ToastService.show('设备已开启，出水中...');
@@ -311,11 +344,7 @@ class WaterProvider extends ChangeNotifier {
           durationMs: 4200,
         );
 
-        history.removeWhere(
-          (entry) => entry.orderNum.trim() == currentOrderNum.trim(),
-        );
-        history.insert(
-          0,
+        _upsertLocalDurationRecord(
           WaterUsageHistoryEntry(
             createdAt: currentStartTime ?? DateTime.now(),
             deviceName: safeDeviceName,
@@ -326,7 +355,7 @@ class WaterProvider extends ChangeNotifier {
             orderNum: currentOrderNum,
           ),
         );
-        await _persistHistory();
+        await _persistHistoryCaches(prefs: prefs);
       }
     } finally {
       isRequesting = false;
@@ -343,32 +372,51 @@ class WaterProvider extends ChangeNotifier {
       return false;
     }
 
-    final localSnapshot = List<WaterUsageHistoryEntry>.from(history);
-    final serverItems = await ApiService.fetchAllBillHistory(
-      token: token,
-      userId: userId,
-      muteToast: muteToast,
-    );
-
-    if (serverItems == null) {
+    if (isHistoryLoading) {
       return false;
     }
 
-    final mergedHistory = _mergeServerHistoryWithLocalDurations(
-      serverItems: serverItems,
-      localHistory: localSnapshot,
-    );
-
-    history = mergedHistory;
-    await _persistHistory();
+    isHistoryLoading = true;
     notifyListeners();
-    return true;
+
+    try {
+      final localSnapshot = List<WaterUsageHistoryEntry>.from(
+        _localDurationRecords,
+      );
+      final serverItems = await ApiService.fetchAllBillHistory(
+        token: token,
+        userId: userId,
+        muteToast: muteToast,
+      );
+
+      if (serverItems == null) {
+        return false;
+      }
+
+      _displayHistory = _mergeServerHistoryWithLocalDurations(
+        serverItems: serverItems,
+        localHistory: localSnapshot,
+      );
+      _localDurationRecords = _mergeLocalDurationRecords([
+        ..._localDurationRecords,
+        ..._displayHistory.map(_asLocalDurationRecord),
+      ]);
+
+      await _persistHistoryCaches();
+      return true;
+    } finally {
+      isHistoryLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> clearHistory() async {
-    history.clear();
+    _displayHistory.clear();
+    _localDurationRecords.clear();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('water_history');
+    await prefs.remove(_displayHistoryStorageKey);
+    await prefs.remove(_localDurationStorageKey);
+    await prefs.remove(_legacyHistoryStorageKey);
     notifyListeners();
   }
 
@@ -378,12 +426,101 @@ class WaterProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> _persistHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      'water_history',
-      history.map((entry) => jsonEncode(entry.toJson())).toList(),
+  Future<void> _persistHistoryCaches({
+    SharedPreferences? prefs,
+  }) async {
+    final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
+    await resolvedPrefs.setStringList(
+      _displayHistoryStorageKey,
+      _displayHistory.map((entry) => jsonEncode(entry.toJson())).toList(),
     );
+    await resolvedPrefs.setStringList(
+      _localDurationStorageKey,
+      _localDurationRecords.map((entry) => jsonEncode(entry.toJson())).toList(),
+    );
+  }
+
+  List<WaterUsageHistoryEntry> _decodeHistoryEntries(List<String>? rawEntries) {
+    if (rawEntries == null || rawEntries.isEmpty) {
+      return <WaterUsageHistoryEntry>[];
+    }
+    return rawEntries.map(WaterUsageHistoryEntry.fromStorage).toList();
+  }
+
+  List<WaterUsageHistoryEntry> _extractLocalDurationRecordsFromLegacy(
+    List<WaterUsageHistoryEntry> legacyHistory,
+  ) {
+    return _mergeLocalDurationRecords(
+      legacyHistory
+          .where(
+            (entry) =>
+                entry.isLocalOnly ||
+                _hasDuration(entry) ||
+                entry.orderNum.trim().isNotEmpty,
+          )
+          .map(_asLocalDurationRecord),
+    );
+  }
+
+  WaterUsageHistoryEntry _asLocalDurationRecord(WaterUsageHistoryEntry entry) {
+    return entry.copyWith(
+      isLocalOnly: true,
+      durationLabel: _durationLabelForMerge(entry),
+    );
+  }
+
+  void _upsertLocalDurationRecord(WaterUsageHistoryEntry entry) {
+    _localDurationRecords = _mergeLocalDurationRecords([
+      ..._localDurationRecords,
+      _asLocalDurationRecord(entry),
+    ]);
+  }
+
+  List<WaterUsageHistoryEntry> _mergeLocalDurationRecords(
+    Iterable<WaterUsageHistoryEntry> entries,
+  ) {
+    final deduped = <String, WaterUsageHistoryEntry>{};
+    for (final entry in entries) {
+      final localEntry = _asLocalDurationRecord(entry);
+      final key = _historyMergeKey(localEntry);
+      final existing = deduped[key];
+      if (existing == null) {
+        deduped[key] = localEntry;
+        continue;
+      }
+
+      final mergedEntry = _preferHistoryEntry(existing, localEntry);
+      deduped[key] = mergedEntry.copyWith(
+        isLocalOnly: true,
+        durationLabel: _durationLabelForMerge(mergedEntry),
+      );
+    }
+
+    final merged = deduped.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return merged;
+  }
+
+  List<WaterUsageHistoryEntry> _buildUsageHistory() {
+    final merged = <String, WaterUsageHistoryEntry>{};
+
+    for (final entry in _localDurationRecords) {
+      merged[_historyMergeKey(entry)] = entry;
+    }
+
+    for (final entry in _displayHistory) {
+      final key = _historyMergeKey(entry);
+      final existing = merged[key];
+      if (existing == null) {
+        merged[key] = entry;
+        continue;
+      }
+      merged[key] = _preferHistoryEntry(existing, entry);
+    }
+
+    final usageHistory = merged.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return usageHistory;
   }
 
   Future<List<Map<String, dynamic>>> _waitForDeviceList(
@@ -540,15 +677,9 @@ class WaterProvider extends ChangeNotifier {
         serverEntry.copyWith(
           durationSeconds: localEntry.durationSeconds,
           durationLabel: _durationLabelForMerge(localEntry),
+          deviceId: localEntry.deviceId ?? serverEntry.deviceId,
         ),
       );
-    }
-
-    for (var index = 0; index < localHistory.length; index++) {
-      if (usedLocalIndexes.contains(index)) {
-        continue;
-      }
-      merged.add(localHistory[index]);
     }
 
     final deduped = <String, WaterUsageHistoryEntry>{};
