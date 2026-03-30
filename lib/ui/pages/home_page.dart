@@ -52,9 +52,9 @@ class _HomePageState extends State<HomePage> {
           deviceProvider: deviceProvider,
           history: waterProvider.history,
         );
-        final lastUsedDevice = _resolveLastUsedDevice(
+        final predictedDevice = _resolvePredictedDevice(
           deviceProvider: deviceProvider,
-          history: waterProvider.history,
+          usageCounts: usageCounts,
         );
 
         _scheduleHistorySync(
@@ -73,7 +73,6 @@ class _HomePageState extends State<HomePage> {
                 bottom: false, 
                 child: Stack(
                   children: [
-                    // 🌟 优化：顶部按钮上移 5dp (原来 top: 12，现在 top: 7)
                     Positioned(
                       top: 7, 
                       left: 0,
@@ -138,16 +137,16 @@ class _HomePageState extends State<HomePage> {
                             : () => DialogUtils.showCascadingAddDeviceDialog(
                                   context,
                                 ),
-                        lastUsedDeviceName: lastUsedDevice == null
-                            ? 'No recent device'
-                            : _deviceName(deviceProvider, lastUsedDevice),
-                        onActionTap: lastUsedDevice == null ||
+                        lastUsedDeviceName: predictedDevice == null
+                            ? 'No available device'
+                            : _deviceName(deviceProvider, predictedDevice),
+                        onActionTap: predictedDevice == null ||
                                 working ||
                                 waterProvider.isRequesting
                             ? null
                             : () => _handleDevicePowerTap(
                                   context,
-                                  lastUsedDevice,
+                                  predictedDevice,
                                   userProvider,
                                   waterProvider,
                                   deviceProvider,
@@ -155,17 +154,13 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                    // 🌟 修复 Hit-Test 穿透 Bug
-                    // 原理：将物理起点上移到 Top 250，覆盖深色面板下半部分
-                    // 通过传入 paddingTop: 90，让卡片视觉依然从 340 开始
-                    // 这样视觉溢出的区域就变成了真实的物理点击区域，不再穿透到底层！
                     Positioned(
                       top: 250, 
                       left: 19,
                       right: 19,
                       bottom: 0, 
                       child: _DeviceDeck(
-                        paddingTop: 90.0, // 补偿上移的 90 像素
+                        paddingTop: 90.0, 
                         devices: displayDevices,
                         selectedId: selectedId,
                         activeId: activeId,
@@ -341,6 +336,53 @@ class _HomePageState extends State<HomePage> {
     }
 
     return deviceProvider.deviceList.first;
+  }
+
+  Map<String, dynamic>? _resolvePredictedDevice({
+    required DeviceProvider deviceProvider,
+    required Map<String, int> usageCounts,
+  }) {
+    final realDevices = deviceProvider.deviceList
+        .where((device) => device['isAddCard'] != true)
+        .toList(growable: false);
+    if (realDevices.isEmpty) {
+      return null;
+    }
+
+    final preferHotWater = _isDormHotWaterAvailable(DateTime.now());
+
+    final preferredDevices = realDevices
+        .where(
+          (device) => preferHotWater
+              ? (int.tryParse((device['billType'] ?? '').toString()) ?? 1) == 2
+              : (int.tryParse((device['billType'] ?? '').toString()) ?? 1) != 2,
+        )
+        .toList(growable: false);
+
+    final pool = preferredDevices.isNotEmpty ? preferredDevices : realDevices;
+    pool.sort((a, b) {
+      final aId = a['deviceInfId'].toString();
+      final bId = b['deviceInfId'].toString();
+      final countCompare =
+          (usageCounts[bId] ?? 0).compareTo(usageCounts[aId] ?? 0);
+      if (countCompare != 0) {
+        return countCompare;
+      }
+      return realDevices.indexOf(a).compareTo(realDevices.indexOf(b));
+    });
+
+    return pool.first;
+  }
+
+  bool _isDormHotWaterAvailable(DateTime now) {
+    final minuteOfDay = now.hour * 60 + now.minute;
+    return _isWithinRange(minuteOfDay, 6 * 60, 9 * 60 + 30) ||
+        _isWithinRange(minuteOfDay, 11 * 60 + 30, 14 * 60 + 30) ||
+        _isWithinRange(minuteOfDay, 18 * 60, 23 * 60 + 50);
+  }
+
+  bool _isWithinRange(int minuteOfDay, int startMinute, int endMinute) {
+    return minuteOfDay >= startMinute && minuteOfDay <= endMinute;
   }
 
   String? _resolveUsageHistoryDeviceId({
@@ -619,7 +661,7 @@ class _DashboardCard extends StatelessWidget {
               Row(
                 children: [
                   const Icon(
-                    Icons.thermostat_rounded, 
+                    Icons.account_balance_wallet_rounded, 
                     color: Color(0xFF32D7D2), 
                     size: 28,
                   ),
@@ -654,9 +696,9 @@ class _DashboardCard extends StatelessWidget {
                 child: SizedBox(
                   width: 116,
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
+                    duration: const Duration(milliseconds: 800),
+                    switchInCurve: Curves.easeInOutCubic,
+                    switchOutCurve: Curves.easeInOutCubic,
                     transitionBuilder: (child, animation) =>
                         FadeTransition(opacity: animation, child: child),
                     child: Row(
@@ -671,15 +713,18 @@ class _DashboardCard extends StatelessWidget {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              working ? runningTime : '$activeDevicesCount/$totalDevicesCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                height: 1.1,
-                              ),
-                            ),
+                            // 🌟 核心新增：专门为跳动的倒计时设计的翻滚动画组件！
+                            working
+                                ? _RollingTimeText(timeStr: runningTime)
+                                : Text(
+                                    '$activeDevicesCount/$totalDevicesCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.1,
+                                    ),
+                                  ),
                             const SizedBox(height: 2),
                             Text(
                               working ? 'Running' : 'Active Device',
@@ -711,8 +756,9 @@ class _DashboardCard extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // 🌟 核心更新：象征“智能推荐/魔法”的精美图标
                   Icon(
-                    Icons.history_toggle_off_rounded, 
+                    Icons.auto_awesome_rounded, 
                     color: onActionTap == null ? Colors.white54 : Colors.white,
                     size: 20,
                   ),
@@ -732,6 +778,49 @@ class _DashboardCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// 🌟 全新动画黑科技组件：滚轮倒计时！
+// 它会让每一秒的跳动像闹钟数字一样从下往上翻滚
+class _RollingTimeText extends StatelessWidget {
+  final String timeStr;
+  const _RollingTimeText({required this.timeStr});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 350),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        // 利用 Tween 精确控制进出场的位置
+        // 新数字进场：从下偏 0.5 的位置向上滑动到原位
+        final inAnimation = Tween<Offset>(begin: const Offset(0.0, 0.5), end: Offset.zero).animate(animation);
+        // 老数字退场：从原位向上方偏移 -0.5 的位置退出
+        final outAnimation = Tween<Offset>(begin: const Offset(0.0, -0.5), end: Offset.zero).animate(animation);
+
+        if (child.key == ValueKey(timeStr)) {
+          return SlideTransition(
+            position: inAnimation,
+            child: FadeTransition(opacity: animation, child: child),
+          );
+        } else {
+          return SlideTransition(
+            position: outAnimation,
+            child: FadeTransition(opacity: animation, child: child),
+          );
+        }
+      },
+      child: Text(
+        timeStr,
+        key: ValueKey<String>(timeStr),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          height: 1.1,
+        ),
       ),
     );
   }
@@ -791,7 +880,7 @@ class _TopButtons extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _GlassCircleButton(icon: Icons.person_outline_rounded, onTap: onProfile),
-          _GlassCircleButton(icon: Icons.notifications_none_rounded, onTap: onHistory), 
+          _GlassCircleButton(icon: Icons.history_rounded, onTap: onHistory), 
         ],
       ),
     );
@@ -904,7 +993,6 @@ class _DeviceDeck extends StatelessWidget {
         } else if (index == expandedIndex) {
           top = index * 55.0; 
         } else {
-          // 🌟 高度适配：展开卡片 250，推开距离计算为 260
           top = expandedIndex * 55.0 + 250.0 + (index - expandedIndex - 1) * 60.0; 
         }
       }
@@ -1040,7 +1128,6 @@ class _DeckCard extends StatelessWidget {
       child: AnimatedContainer( 
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
-        // 🌟 优化：高度从刚才的 270 精准降到了 250
         height: expanded ? 240 : 180, 
         decoration: BoxDecoration(
           gradient: palette.gradient,
@@ -1113,7 +1200,6 @@ class _DeckCard extends StatelessWidget {
                     ],
                   ),
                   if (expanded) ...[
-                    // 🌟 优化：重心微调，给底部三个按钮腾出绝佳空间
                     const SizedBox(height: 8),
                     Text(
                       '已使用', 
@@ -1147,20 +1233,18 @@ class _DeckCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const Spacer(), // 将多余的空间推到三个按钮上方
-                    // 🌟 优化：居中且紧凑排列的底部操作按钮
+                    const Spacer(), 
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _CardActionButton(
-                          // 🌟 修改：换成了排序层级图标，契合修改位置语义
                           icon: Icons.swap_vert_rounded, 
                           label: '位置',
                           color: palette.foreground,
                           bgColor: Colors.black.withOpacity(0.06),
                           onTap: onMove,
                         ),
-                        const SizedBox(width: 8), // 缩紧间距
+                        const SizedBox(width: 8), 
                         _CardActionButton(
                           icon: Icons.edit_rounded,
                           label: '重命名',
@@ -1170,7 +1254,7 @@ class _DeckCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         _CardActionButton(
-                          icon: Icons.delete_outline_rounded, // 换成空心垃圾桶，更加清爽
+                          icon: Icons.delete_outline_rounded, 
                           label: '删除',
                           color: const Color(0xFFE53935), 
                           bgColor: const Color(0xFFE53935).withOpacity(0.12), 
@@ -1209,7 +1293,6 @@ class _CardActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        // 🌟 微调内边距，适应居中紧凑布局
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: bgColor,
