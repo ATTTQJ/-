@@ -48,16 +48,13 @@ class _HomePageState extends State<HomePage> {
         final selectedId = deviceProvider.selectedDeviceId;
         final working = waterProvider.orderNum.isNotEmpty;
         final activeId = waterProvider.activeDeviceId;
-        final serverHistory = waterProvider.history
-            .where((entry) => !entry.isLocalOnly)
-            .toList(growable: false);
         final usageCounts = _buildUsageCounts(
           deviceProvider: deviceProvider,
-          history: serverHistory,
+          history: waterProvider.history,
         );
         final lastUsedDevice = _resolveLastUsedDevice(
           deviceProvider: deviceProvider,
-          history: serverHistory,
+          history: waterProvider.history,
         );
 
         _scheduleHistorySync(
@@ -307,6 +304,12 @@ class _HomePageState extends State<HomePage> {
     }
 
     for (final entry in history) {
+      final directDeviceId = entry.deviceId?.trim() ?? '';
+      if (directDeviceId.isNotEmpty && counts.containsKey(directDeviceId)) {
+        counts[directDeviceId] = (counts[directDeviceId] ?? 0) + 1;
+        continue;
+      }
+
       final matchedId = _resolveUsageHistoryDeviceId(
         deviceProvider: deviceProvider,
         entryName: entry.deviceName.toString(),

@@ -210,6 +210,22 @@ class WaterProvider extends ChangeNotifier {
           await prefs.setString('water_initial_balance', currentBalance.trim());
         }
 
+        history.removeWhere(
+          (entry) => entry.orderNum.trim() == orderNum.trim(),
+        );
+        history.insert(
+          0,
+          WaterUsageHistoryEntry(
+            createdAt: startTime!,
+            deviceName: _localHistoryDeviceName(device),
+            amount: 0,
+            orderNum: orderNum,
+            deviceId: targetDeviceId,
+            isLocalOnly: true,
+          ),
+        );
+        await _persistHistory();
+
         _startRunningTimer();
         ToastService.show('设备已开启，出水中...');
         return true;
@@ -239,6 +255,7 @@ class WaterProvider extends ChangeNotifier {
     final finalTime = runningTime;
     final currentOrderNum = orderNum;
     final currentStartTime = startTime;
+    final currentActiveDeviceId = activeDeviceId;
     final prefs = await SharedPreferences.getInstance();
     final savedInitialBalance = prefs.getString('water_initial_balance') ?? '';
 
@@ -303,6 +320,7 @@ class WaterProvider extends ChangeNotifier {
             createdAt: currentStartTime ?? DateTime.now(),
             deviceName: safeDeviceName,
             amount: amount,
+            deviceId: currentActiveDeviceId.isEmpty ? null : currentActiveDeviceId,
             isLocalOnly: true,
             durationSeconds: durationSeconds,
             orderNum: currentOrderNum,
@@ -569,6 +587,7 @@ class WaterProvider extends ChangeNotifier {
       return candidate.copyWith(
         durationSeconds: candidate.durationSeconds ?? current.durationSeconds,
         durationLabel: _durationLabelForMerge(current) ?? candidate.durationLabel,
+        deviceId: candidate.deviceId ?? current.deviceId,
         isLocalOnly: false,
       );
     }
@@ -576,6 +595,7 @@ class WaterProvider extends ChangeNotifier {
       return current.copyWith(
         durationSeconds: current.durationSeconds ?? candidate.durationSeconds,
         durationLabel: current.durationLabel ?? _durationLabelForMerge(candidate),
+        deviceId: current.deviceId ?? candidate.deviceId,
         isLocalOnly: false,
       );
     }
@@ -672,6 +692,17 @@ class WaterProvider extends ChangeNotifier {
         normalized.replaceAll('\u8bbe\u5907\u7528\u6c34', '\u70ed\u6c34');
     normalized = normalized.replaceAll('\u6d17\u6d74', '\u70ed\u6c34');
     return normalized;
+  }
+
+  String _localHistoryDeviceName(Map<String, dynamic> device) {
+    final rawName = (device['deviceInfName'] ?? device['deviceName'] ?? '')
+        .toString()
+        .replaceFirst(RegExp(r'^[12]-'), '');
+    final suffix = device['billType'] == 2 ? '\u70ed\u6c34' : '\u76f4\u996e';
+    if (rawName.isEmpty) {
+      return suffix;
+    }
+    return '$rawName$suffix';
   }
 
   bool _historyNamesLikelySame(String left, String right) {

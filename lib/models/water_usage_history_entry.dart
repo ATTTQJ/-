@@ -8,6 +8,7 @@ class WaterUsageHistoryEntry {
     required this.deviceName,
     required this.amount,
     required this.orderNum,
+    this.deviceId,
     this.isLocalOnly = false,
     this.durationSeconds,
     this.durationLabel,
@@ -18,6 +19,7 @@ class WaterUsageHistoryEntry {
   final String deviceName;
   final double amount;
   final String orderNum;
+  final String? deviceId;
   final bool isLocalOnly;
   final int? durationSeconds;
   final String? durationLabel;
@@ -60,6 +62,7 @@ class WaterUsageHistoryEntry {
       'deviceName': deviceName,
       'amount': amount,
       'orderNum': orderNum,
+      'deviceId': deviceId,
       'isLocalOnly': isLocalOnly,
       'durationSeconds': durationSeconds,
       'durationLabel': durationLabel,
@@ -72,6 +75,7 @@ class WaterUsageHistoryEntry {
     String? deviceName,
     double? amount,
     String? orderNum,
+    String? deviceId,
     bool? isLocalOnly,
     int? durationSeconds,
     String? durationLabel,
@@ -83,6 +87,7 @@ class WaterUsageHistoryEntry {
       deviceName: deviceName ?? this.deviceName,
       amount: amount ?? this.amount,
       orderNum: orderNum ?? this.orderNum,
+      deviceId: deviceId ?? this.deviceId,
       isLocalOnly: isLocalOnly ?? this.isLocalOnly,
       durationSeconds: clearDuration
           ? null
@@ -123,6 +128,7 @@ class WaterUsageHistoryEntry {
           _parseAmount(json['expAmountStr']) ??
           0,
       orderNum: json['orderNum']?.toString() ?? json['id']?.toString() ?? '',
+      deviceId: json['deviceId']?.toString(),
       isLocalOnly: json['isLocalOnly'] == true,
       durationSeconds: _parseDurationSeconds(
         json['durationSeconds'] ?? json['formattedDuration'],
@@ -141,6 +147,7 @@ class WaterUsageHistoryEntry {
       deviceName: _parseLegacyDeviceName(trimmed),
       amount: _parseAmount(trimmed) ?? 0,
       orderNum: '',
+      deviceId: null,
       isLocalOnly: true,
       durationSeconds: _parseDurationSeconds(trimmed),
       legacyText: trimmed,
@@ -167,6 +174,10 @@ class WaterUsageHistoryEntry {
           _parseAmount(json['expAmount']) ??
           0,
       orderNum: json['orderNum']?.toString() ?? json['id']?.toString() ?? '',
+      deviceId:
+          json['deviceInfId']?.toString() ??
+          json['commonlyDeviceId']?.toString() ??
+          json['deviceId']?.toString(),
       isLocalOnly: false,
     );
   }
