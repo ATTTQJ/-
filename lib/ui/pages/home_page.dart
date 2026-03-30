@@ -48,13 +48,16 @@ class _HomePageState extends State<HomePage> {
         final selectedId = deviceProvider.selectedDeviceId;
         final working = waterProvider.orderNum.isNotEmpty;
         final activeId = waterProvider.activeDeviceId;
+        final serverHistory = waterProvider.history
+            .where((entry) => !entry.isLocalOnly)
+            .toList(growable: false);
         final usageCounts = _buildUsageCounts(
           deviceProvider: deviceProvider,
-          history: waterProvider.history,
+          history: serverHistory,
         );
         final lastUsedDevice = _resolveLastUsedDevice(
           deviceProvider: deviceProvider,
-          history: waterProvider.history,
+          history: serverHistory,
         );
 
         _scheduleHistorySync(
@@ -306,7 +309,7 @@ class _HomePageState extends State<HomePage> {
     for (final entry in history) {
       final matchedId = _resolveUsageHistoryDeviceId(
         deviceProvider: deviceProvider,
-        entryName: entry.displayDeviceName.toString(),
+        entryName: entry.deviceName.toString(),
       );
       if (matchedId == null) {
         continue;
@@ -326,7 +329,7 @@ class _HomePageState extends State<HomePage> {
 
     final matchedId = _resolveUsageHistoryDeviceId(
       deviceProvider: deviceProvider,
-      entryName: history.first.displayDeviceName.toString(),
+      entryName: history.first.deviceName.toString(),
     );
     for (final device in deviceProvider.deviceList) {
       if (device['deviceInfId']?.toString() == matchedId) {
@@ -647,37 +650,45 @@ class _DashboardCard extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 child: SizedBox(
                   width: 116,
-                  child: Row(
-                    children: [
-                      Icon(
-                        working ? Icons.waves_rounded : Icons.important_devices_rounded,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            working ? runningTime : '$activeDevicesCount/$totalDevicesCount',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              height: 1.1,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Row(
+                      key: ValueKey<bool>(working),
+                      children: [
+                        Icon(
+                          working ? Icons.waves_rounded : Icons.important_devices_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              working ? runningTime : '$activeDevicesCount/$totalDevicesCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                height: 1.1,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            working ? 'Running' : 'Active Device',
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 11,
+                            const SizedBox(height: 2),
+                            Text(
+                              working ? 'Running' : 'Active Device',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 11,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -891,11 +902,11 @@ class _DeviceDeck extends StatelessWidget {
           top = index * 55.0; 
         } else {
           // 🌟 高度适配：展开卡片 250，推开距离计算为 260
-          top = expandedIndex * 55.0 + 260.0 + (index - expandedIndex - 1) * 60.0; 
+          top = expandedIndex * 55.0 + 250.0 + (index - expandedIndex - 1) * 60.0; 
         }
       }
 
-      final double cardHeight = expanded ? 250.0 : 180.0;
+      final double cardHeight = expanded ? 240.0 : 180.0;
       if (top + cardHeight > maxStackHeight) {
         maxStackHeight = top + cardHeight;
       }
@@ -1027,7 +1038,7 @@ class _DeckCard extends StatelessWidget {
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
         // 🌟 优化：高度从刚才的 270 精准降到了 250
-        height: expanded ? 250 : 180, 
+        height: expanded ? 240 : 180, 
         decoration: BoxDecoration(
           gradient: palette.gradient,
           borderRadius: BorderRadius.circular(40), 
@@ -1352,12 +1363,13 @@ class _VerticalSlideSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: _HomePageState._switchMotionDuration,
         width: 36, 
         height: 64, 
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: rail,
+          color: active ? const Color(0x664CAF50) : rail,
           borderRadius: BorderRadius.circular(24),
         ),
         child: AnimatedAlign(

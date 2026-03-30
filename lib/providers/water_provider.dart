@@ -300,9 +300,10 @@ class WaterProvider extends ChangeNotifier {
         history.insert(
           0,
           WaterUsageHistoryEntry(
-            createdAt: DateTime.now(),
+            createdAt: currentStartTime ?? DateTime.now(),
             deviceName: safeDeviceName,
             amount: amount,
+            isLocalOnly: true,
             durationSeconds: durationSeconds,
             orderNum: currentOrderNum,
           ),
@@ -564,6 +565,21 @@ class WaterProvider extends ChangeNotifier {
     WaterUsageHistoryEntry current,
     WaterUsageHistoryEntry candidate,
   ) {
+    if (current.isLocalOnly && !candidate.isLocalOnly) {
+      return candidate.copyWith(
+        durationSeconds: candidate.durationSeconds ?? current.durationSeconds,
+        durationLabel: _durationLabelForMerge(current) ?? candidate.durationLabel,
+        isLocalOnly: false,
+      );
+    }
+    if (!current.isLocalOnly && candidate.isLocalOnly) {
+      return current.copyWith(
+        durationSeconds: current.durationSeconds ?? candidate.durationSeconds,
+        durationLabel: current.durationLabel ?? _durationLabelForMerge(candidate),
+        isLocalOnly: false,
+      );
+    }
+
     final currentHasDuration = _hasDuration(current);
     final candidateHasDuration = _hasDuration(candidate);
     if (candidateHasDuration && !currentHasDuration) {

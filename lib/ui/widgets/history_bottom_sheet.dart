@@ -11,7 +11,9 @@ class HistoryBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<WaterProvider>(
       builder: (context, waterProvider, child) {
-        final history = waterProvider.history;
+        final history = waterProvider.history
+            .where((entry) => !entry.isLocalOnly)
+            .toList(growable: false);
 
         return Column(
           mainAxisSize: MainAxisSize.min,

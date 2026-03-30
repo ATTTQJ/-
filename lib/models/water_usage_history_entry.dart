@@ -8,6 +8,7 @@ class WaterUsageHistoryEntry {
     required this.deviceName,
     required this.amount,
     required this.orderNum,
+    this.isLocalOnly = false,
     this.durationSeconds,
     this.durationLabel,
     this.legacyText,
@@ -17,6 +18,7 @@ class WaterUsageHistoryEntry {
   final String deviceName;
   final double amount;
   final String orderNum;
+  final bool isLocalOnly;
   final int? durationSeconds;
   final String? durationLabel;
   final String? legacyText;
@@ -58,6 +60,7 @@ class WaterUsageHistoryEntry {
       'deviceName': deviceName,
       'amount': amount,
       'orderNum': orderNum,
+      'isLocalOnly': isLocalOnly,
       'durationSeconds': durationSeconds,
       'durationLabel': durationLabel,
       'legacyText': legacyText,
@@ -69,6 +72,7 @@ class WaterUsageHistoryEntry {
     String? deviceName,
     double? amount,
     String? orderNum,
+    bool? isLocalOnly,
     int? durationSeconds,
     String? durationLabel,
     String? legacyText,
@@ -79,6 +83,7 @@ class WaterUsageHistoryEntry {
       deviceName: deviceName ?? this.deviceName,
       amount: amount ?? this.amount,
       orderNum: orderNum ?? this.orderNum,
+      isLocalOnly: isLocalOnly ?? this.isLocalOnly,
       durationSeconds: clearDuration
           ? null
           : (durationSeconds ?? this.durationSeconds),
@@ -118,6 +123,7 @@ class WaterUsageHistoryEntry {
           _parseAmount(json['expAmountStr']) ??
           0,
       orderNum: json['orderNum']?.toString() ?? json['id']?.toString() ?? '',
+      isLocalOnly: json['isLocalOnly'] == true,
       durationSeconds: _parseDurationSeconds(
         json['durationSeconds'] ?? json['formattedDuration'],
       ),
@@ -135,6 +141,7 @@ class WaterUsageHistoryEntry {
       deviceName: _parseLegacyDeviceName(trimmed),
       amount: _parseAmount(trimmed) ?? 0,
       orderNum: '',
+      isLocalOnly: true,
       durationSeconds: _parseDurationSeconds(trimmed),
       legacyText: trimmed,
     );
@@ -145,7 +152,7 @@ class WaterUsageHistoryEntry {
       createdAt:
           _parseServerDateTime(json['payTypeStr'] ?? json['createTime']) ??
           DateTime.now(),
-      deviceName: _buildCompactDeviceName(
+      deviceName: _buildServerDeviceName(
         time: (json['time'] ?? json['deviceName'] ?? json['deviceInfName'] ?? '')
             .toString(),
         title: (json['title'] ?? '').toString(),
@@ -160,6 +167,7 @@ class WaterUsageHistoryEntry {
           _parseAmount(json['expAmount']) ??
           0,
       orderNum: json['orderNum']?.toString() ?? json['id']?.toString() ?? '',
+      isLocalOnly: false,
     );
   }
 
@@ -271,27 +279,20 @@ class WaterUsageHistoryEntry {
     return null;
   }
 
-  static String _buildCompactDeviceName({
+  static String _buildServerDeviceName({
     required String time,
     required String title,
   }) {
     final source = time.trim();
-    final roomMatch = RegExp(r'(\d+)\s*$').firstMatch(source);
-    final roomNumber = roomMatch?.group(1) ?? _compactRoomFallback(source);
     final normalizedTitle = _normalizeBillTitle(title);
 
-    if (roomNumber.isEmpty) {
+    if (source.isEmpty) {
       return normalizedTitle;
     }
-    return '$roomNumber$normalizedTitle';
-  }
-
-  static String _compactRoomFallback(String value) {
-    final segments = value.split('-').map((item) => item.trim()).toList();
-    if (segments.isEmpty) {
-      return '';
+    if (normalizedTitle.isEmpty || source.contains(normalizedTitle)) {
+      return source;
     }
-    return segments.last.replaceAll(RegExp(r'\s+'), '');
+    return '$source$normalizedTitle';
   }
 
   static String _normalizeBillTitle(String rawTitle) {
