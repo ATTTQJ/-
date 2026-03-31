@@ -40,7 +40,7 @@ class _HomePageState extends State<HomePage> {
           displayDevices.add({
             'isAddCard': true,
             'deviceInfId': 'add_${displayDevices.length}',
-            'deviceInfName': '\u6dfb\u52a0\u8bbe\u5907',
+            'deviceInfName': '添加设备',
             'billType': -1,
           });
         }
@@ -109,13 +109,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                     
                     const Positioned(
-                      top: 78,
+                      top: 78, 
                       left: 30,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "John's Home",
+                            "John's Home", 
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 28,
@@ -136,13 +136,14 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
+                    // 🌟 核心修复 1：把列表容器横向铺满(left/right 为0)，防止卡片左右边缘阴影被异常截断
+                    // 同时物理边界死死卡在 top: 314（深色面板底边缘）
                     Positioned(
-                      top: 314,
-                      left: 19,
-                      right: 19,
+                      top: 314, 
+                      left: 0,
+                      right: 0,
                       bottom: 0, 
                       child: _DeviceDeck(
-                        paddingTop: 26.0,
                         devices: displayDevices,
                         selectedId: selectedId,
                         activeId: activeId,
@@ -185,7 +186,7 @@ class _HomePageState extends State<HomePage> {
                               (device['commonlyId'] ?? '').toString();
                           if (commonlyId.isEmpty) {
                             ToastService.show(
-                              '\u65e0\u6cd5\u5220\u9664\u8be5\u8bbe\u5907',
+                              '无法删除该设备',
                             );
                             return;
                           }
@@ -215,14 +216,14 @@ class _HomePageState extends State<HomePage> {
                                   context,
                                 ),
                         lastUsedDeviceName: predictedDevice == null
-                            ? '\u6682\u65e0\u53ef\u7528\u8bbe\u5907'
+                            ? '暂无可用设备'
                             : _deviceName(deviceProvider, predictedDevice),
                         onActionTap: dashboardDevice == null ||
                                 waterProvider.isRequesting
                             ? null
                             : () => _handleDevicePowerTap(
                                   context,
-                                  dashboardDevice!,
+                                  dashboardDevice,
                                   userProvider,
                                   waterProvider,
                                   deviceProvider,
@@ -275,7 +276,7 @@ class _HomePageState extends State<HomePage> {
     DeviceProvider provider,
     Map<String, dynamic> device,
   ) {
-    if (device['isAddCard'] == true) return '\u6dfb\u52a0\u8bbe\u5907';
+    if (device['isAddCard'] == true) return '添加设备';
     
     final id = device['deviceInfId'].toString();
     final remark = provider.customRemarks[id];
@@ -434,21 +435,6 @@ class _HomePageState extends State<HomePage> {
         .replaceAll('adddevice', '');
   }
 
-  /*
-  String _normalizeHistoryDeviceName(String name) {
-    return name
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'\s+'), '')
-        .replaceAll('热水', 'hot')
-        .replaceAll('直饮水', 'cold')
-        .replaceAll('直饮', 'cold')
-        .replaceAll('设备用水', 'hot')
-        .replaceAll('洗浴', 'hot')
-        .replaceAll('adddevice', '');
-  }
-
-  */
   String _normalizeHistoryDeviceName(String name) {
     return _normalizeUsageHistoryDeviceName(name);
   }
@@ -480,7 +466,7 @@ class _HomePageState extends State<HomePage> {
       if (waterProvider.activeDeviceId.isNotEmpty &&
           stopTarget['deviceInfId']?.toString() != deviceId) {
         ToastService.show(
-          '\u8bf7\u5148\u5173\u95ed\u5f53\u524d\u6b63\u5728\u7528\u6c34\u7684\u8bbe\u5907',
+          '请先关闭当前正在用水的设备',
         );
         return;
       }
@@ -518,7 +504,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '\u79fb\u52a8\u8bbe\u5907',
+            '移动设备',
             style: TextStyle(
               color: Color(0xFF2C2C2E),
               fontSize: 18,
@@ -527,7 +513,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 16),
           Text(
-            '\u8bf7\u8f93\u5165 1 \u5230 $maxPosition \u4e4b\u95f4\u7684\u4f4d\u7f6e\u3002',
+            '请输入 1 到 $maxPosition 之间的位置。',
             style: const TextStyle(
               color: Color(0xFF666666),
               fontSize: 14,
@@ -538,7 +524,7 @@ class _HomePageState extends State<HomePage> {
             controller: controller,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              hintText: '\u4f4d\u7f6e',
+              hintText: '位置',
               filled: true,
               fillColor: Colors.grey[100],
               border: OutlineInputBorder(
@@ -553,7 +539,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('\u53d6\u6d88'),
+                  child: const Text('取消'),
                 ),
               ),
               Expanded(
@@ -567,7 +553,7 @@ class _HomePageState extends State<HomePage> {
                   onPressed: () async {
                     final parsed = int.tryParse(controller.text.trim());
                     if (parsed == null || parsed < 1 || parsed > maxPosition) {
-                      ToastService.show('\u4f4d\u7f6e\u65e0\u6548');
+                      ToastService.show('位置无效');
                       return;
                     }
                     await deviceProvider.moveDeviceToPosition(
@@ -579,7 +565,7 @@ class _HomePageState extends State<HomePage> {
                     }
                   },
                   child: const Text(
-                    '\u4fdd\u5b58',
+                    '保存',
                     style: TextStyle(color: Colors.white),
                   ),
                 ),
@@ -599,7 +585,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '\u9000\u51fa\u767b\u5f55',
+            '退出登录',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -608,7 +594,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 16),
           const Text(
-            '\u786e\u5b9a\u8981\u9000\u51fa\u5f53\u524d\u8d26\u53f7\u5417\uff1f',
+            '确定要退出当前账号吗？',
             style: TextStyle(color: Color(0xFF666666), fontSize: 15),
           ),
           const SizedBox(height: 24),
@@ -617,7 +603,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('\u53d6\u6d88'),
+                  child: const Text('取消'),
                 ),
               ),
               Expanded(
@@ -627,7 +613,7 @@ class _HomePageState extends State<HomePage> {
                     Navigator.pop(context);
                   },
                   child: const Text(
-                    '\u9000\u51fa\u767b\u5f55',
+                    '退出登录',
                     style: TextStyle(color: Colors.redAccent),
                   ),
                 ),
@@ -640,7 +626,6 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/*
 class _DashboardCard extends StatelessWidget {
   const _DashboardCard({
     required this.balance,
@@ -666,163 +651,7 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDimmed = onActionTap == null && !working;
-
-    return Container(
-      // 🌟 修复：把 Padding 撑大，找回删掉英文后丢失的高度，恢复饱满的版面！
-      padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1F2A), 
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.account_balance_wallet_rounded, 
-                    color: Color(0xFF32D7D2), 
-                    size: 28,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '¥$balance',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22, 
-                      fontWeight: FontWeight.bold,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: onStatusTap,
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: 116,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 800),
-                    switchInCurve: const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
-                    switchOutCurve: const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
-                    transitionBuilder: (child, animation) =>
-                        FadeTransition(opacity: animation, child: child),
-                    child: Row(
-                      key: ValueKey<bool>(working),
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Icon(
-                          working ? Icons.waves_rounded : Icons.important_devices_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 10),
-                        working
-                            ? _RollingTimeText(timeStr: runningTime)
-                            : Text(
-                                '$activeDevicesCount/$totalDevicesCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.1,
-                                ),
-                              ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20), // 微调间距适应增加的 padding
-          GestureDetector(
-            onTap: onActionTap,
-            behavior: HitTestBehavior.opaque,
-            child: Transform.translate(
-              offset: const Offset(0, 6),
-              child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              height: 48, 
-              decoration: BoxDecoration(
-                // 🌟 修复：用水状态变成经典高级红
-                color: working 
-                    ? const Color(0xFFFF453A) 
-                    : isDimmed
-                        ? const Color(0xFF7A58FF).withOpacity(0.45)
-                        : const Color(0xFF7A58FF), 
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    working ? Icons.waves_rounded : Icons.auto_awesome_rounded, 
-                    color: isDimmed ? Colors.white54 : Colors.white,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    working ? '$activeDeviceName 使用中' : lastUsedDeviceName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isDimmed ? Colors.white54 : Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-*/
-/*
-class _DashboardCard extends StatelessWidget {
-  const _DashboardCard({
-    required this.balance,
-    required this.working,
-    required this.runningTime,
-    required this.activeDevicesCount,
-    required this.totalDevicesCount,
-    required this.onStatusTap,
-    required this.lastUsedDeviceName,
-    required this.activeDeviceName,
-    required this.onActionTap,
-  });
-
-  final String balance;
-  final bool working;
-  final String runningTime;
-  final int activeDevicesCount;
-  final int totalDevicesCount;
-  final VoidCallback? onStatusTap;
-  final String lastUsedDeviceName;
-  final String activeDeviceName;
-  final VoidCallback? onActionTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isDimmed = onActionTap == null && !working;
+    final isDimmed = onActionTap == null && !working;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
@@ -853,7 +682,7 @@ class _DashboardCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '楼$balance',
+                    '¥$balance',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -938,169 +767,6 @@ class _DashboardCard extends StatelessWidget {
                       child: Text(
                         working
                             ? '$activeDeviceName 使用中'
-                            : lastUsedDeviceName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isDimmed ? Colors.white54 : Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-*/
-class _DashboardCard extends StatelessWidget {
-  const _DashboardCard({
-    required this.balance,
-    required this.working,
-    required this.runningTime,
-    required this.activeDevicesCount,
-    required this.totalDevicesCount,
-    required this.onStatusTap,
-    required this.lastUsedDeviceName,
-    required this.activeDeviceName,
-    required this.onActionTap,
-  });
-
-  final String balance;
-  final bool working;
-  final String runningTime;
-  final int activeDevicesCount;
-  final int totalDevicesCount;
-  final VoidCallback? onStatusTap;
-  final String lastUsedDeviceName;
-  final String activeDeviceName;
-  final VoidCallback? onActionTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDimmed = onActionTap == null && !working;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1F2A),
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.account_balance_wallet_rounded,
-                    color: Color(0xFF32D7D2),
-                    size: 28,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '\$$balance',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: onStatusTap,
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: 116,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 800),
-                    switchInCurve:
-                        const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
-                    switchOutCurve:
-                        const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
-                    transitionBuilder: (child, animation) =>
-                        FadeTransition(opacity: animation, child: child),
-                    child: Row(
-                      key: ValueKey<bool>(working),
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Icon(
-                          working
-                              ? Icons.waves_rounded
-                              : Icons.important_devices_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 10),
-                        working
-                            ? _RollingTimeText(timeStr: runningTime)
-                            : Text(
-                                '$activeDevicesCount/$totalDevicesCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.1,
-                                ),
-                              ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          GestureDetector(
-            onTap: onActionTap,
-            behavior: HitTestBehavior.opaque,
-            child: Transform.translate(
-              offset: const Offset(0, 6),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                height: 48,
-                decoration: BoxDecoration(
-                  color: working
-                      ? const Color(0xFFFF453A)
-                      : isDimmed
-                          ? const Color(0xFF7A58FF).withOpacity(0.45)
-                          : const Color(0xFF7A58FF),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      working
-                          ? Icons.waves_rounded
-                          : Icons.auto_awesome_rounded,
-                      color: isDimmed ? Colors.white54 : Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        working
-                            ? '$activeDeviceName \u4f7f\u7528\u4e2d'
                             : lastUsedDeviceName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1296,7 +962,6 @@ class _DeviceDeck extends StatelessWidget {
     required this.loading,
     required this.usageCounts,
     required this.nameOf,
-    required this.paddingTop,
     required this.onTapCard,
     required this.onTogglePower,
     required this.onMove,
@@ -1311,7 +976,6 @@ class _DeviceDeck extends StatelessWidget {
   final bool working;
   final bool loading;
   final Map<String, int> usageCounts;
-  final double paddingTop;
   final String Function(Map<String, dynamic>) nameOf;
   final ValueChanged<Map<String, dynamic>> onTapCard;
   final ValueChanged<Map<String, dynamic>> onTogglePower;
@@ -1370,13 +1034,16 @@ class _DeviceDeck extends StatelessWidget {
         maxStackHeight = top + cardHeight;
       }
 
+      // 🌟 核心修复：还原正确的卡片左右边距。
+      // 因为 _DeviceDeck 在外层已经铺满屏幕 (left: 0, right: 0)，
+      // 为了让卡片尺寸跟原来一样，同时让阴影有向外延展的空间，这里的 left 和 right 要设为 23！
       return AnimatedPositioned(
         key: ValueKey(id),
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic, 
         top: top,
-        left: 4,
-        right: 4,
+        left: 23, // 🌟 修改为 23
+        right: 23, // 🌟 修改为 23
         child: AnimatedScale(
           duration: const Duration(milliseconds: 380),
           scale: expanded ? 1.02 : 1, 
@@ -1401,12 +1068,16 @@ class _DeviceDeck extends StatelessWidget {
     }).toList();
 
     return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(),
-      padding: EdgeInsets.only(top: paddingTop, bottom: 60), 
-      clipBehavior: Clip.none,
+      // 🌟 修复 2：全面拥回苹果原生的 BouncingScrollPhysics 弹性！
+      physics: const BouncingScrollPhysics(), 
+      // 🌟 修复 3：移除巨大 paddingTop hack，给个 26 让它顶部预留刚好钻出的缝隙
+      padding: const EdgeInsets.only(top: 26.0, bottom: 60.0), 
+      // 🌟 修复 4：启用硬裁剪 (Clip.hardEdge)！死死拦截住卡片，绝对不准溢出遮挡深色面板！
+      clipBehavior: Clip.hardEdge,
       child: SizedBox(
         height: maxStackHeight,
         child: Stack(
+          // 内部 Stack 不裁切左右的阴影
           clipBehavior: Clip.none,
           children: stackChildren,
         ),
@@ -1441,7 +1112,7 @@ class _AddDeviceCard extends StatelessWidget {
                   Icon(Icons.add_circle_outline_rounded, color: Colors.white38, size: 42),
                   SizedBox(height: 12),
                   Text(
-                    '\u70b9\u51fb\u6dfb\u52a0\u65b0\u8bbe\u5907',
+                    '点击添加新设备',
                     style: TextStyle(
                       color: Colors.white38, 
                       fontSize: 15,
@@ -1458,7 +1129,6 @@ class _AddDeviceCard extends StatelessWidget {
   }
 }
 
-/*
 class _DeckCard extends StatelessWidget {
   const _DeckCard({
     required this.palette,
@@ -1640,369 +1310,6 @@ class _DeckCard extends StatelessWidget {
   }
 }
 
-*/
-/*
-class _DeckCard extends StatelessWidget {
-  const _DeckCard({
-    required this.palette,
-    required this.title,
-    required this.count,
-    required this.selected,
-    required this.active,
-    required this.loading,
-    required this.expanded,
-    required this.onTap,
-    required this.onTogglePower,
-    required this.onMove,
-    required this.onRename,
-    required this.onDelete,
-  });
-
-  final _CardPalette palette;
-  final String title;
-  final int count;
-  final bool selected;
-  final bool active;
-  final bool loading;
-  final bool expanded;
-  final VoidCallback onTap;
-  final VoidCallback onTogglePower;
-  final VoidCallback onMove;
-  final VoidCallback onRename;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 380),
-        curve: Curves.easeOutCubic,
-        height: expanded ? 240 : 180,
-        decoration: BoxDecoration(
-          gradient: palette.gradient,
-          borderRadius: BorderRadius.circular(40),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 30,
-              offset: const Offset(0, -5),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 20,
-              offset: const Offset(0, 15),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 12,
-              left: 12,
-              child: CustomPaint(
-                size: const Size(45, 45),
-                painter: _CornerLinePainter(),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(28, 20, 22, 22),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Icon(
-                          palette.icon,
-                          color: palette.foreground,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 15),
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: palette.foreground,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.2,
-                              height: 1.1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      _VerticalSlideSwitch(
-                        active: active,
-                        loading: loading,
-                        foreground: palette.foreground,
-                        rail: palette.switchRail,
-                        onTap: onTogglePower,
-                      ),
-                    ],
-                  ),
-                  if (expanded) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '已使用',
-                      style: TextStyle(
-                        color: palette.secondaryText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '$count',
-                            style: TextStyle(
-                              color: palette.foreground,
-                              fontSize: 44,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                            ),
-                          ),
-                          TextSpan(
-                            text: ' 次',
-                            style: TextStyle(
-                              color: palette.secondaryText,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _CardActionButton(
-                          icon: Icons.swap_vert_rounded,
-                          label: '位置',
-                          color: palette.foreground,
-                          bgColor: Colors.black.withOpacity(0.06),
-                          onTap: onMove,
-                        ),
-                        const SizedBox(width: 8),
-                        _CardActionButton(
-                          icon: Icons.edit_rounded,
-                          label: '重命名',
-                          color: palette.foreground,
-                          bgColor: Colors.black.withOpacity(0.06),
-                          onTap: onRename,
-                        ),
-                        const SizedBox(width: 8),
-                        _CardActionButton(
-                          icon: Icons.delete_outline_rounded,
-                          label: '删除',
-                          color: const Color(0xFFE53935),
-                          bgColor: const Color(0xFFE53935).withOpacity(0.12),
-                          onTap: onDelete,
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-*/
-class _DeckCard extends StatelessWidget {
-  const _DeckCard({
-    required this.palette,
-    required this.title,
-    required this.count,
-    required this.selected,
-    required this.active,
-    required this.loading,
-    required this.expanded,
-    required this.onTap,
-    required this.onTogglePower,
-    required this.onMove,
-    required this.onRename,
-    required this.onDelete,
-  });
-
-  final _CardPalette palette;
-  final String title;
-  final int count;
-  final bool selected;
-  final bool active;
-  final bool loading;
-  final bool expanded;
-  final VoidCallback onTap;
-  final VoidCallback onTogglePower;
-  final VoidCallback onMove;
-  final VoidCallback onRename;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 380),
-        curve: Curves.easeOutCubic,
-        height: expanded ? 240 : 180,
-        decoration: BoxDecoration(
-          gradient: palette.gradient,
-          borderRadius: BorderRadius.circular(40),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 30,
-              offset: const Offset(0, -5),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 20,
-              offset: const Offset(0, 15),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 12,
-              left: 12,
-              child: CustomPaint(
-                size: const Size(45, 45),
-                painter: _CornerLinePainter(),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(28, 20, 22, 22),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Icon(
-                          palette.icon,
-                          color: palette.foreground,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 15),
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: palette.foreground,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.2,
-                              height: 1.1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      _VerticalSlideSwitch(
-                        active: active,
-                        loading: loading,
-                        foreground: palette.foreground,
-                        rail: palette.switchRail,
-                        onTap: onTogglePower,
-                      ),
-                    ],
-                  ),
-                  if (expanded) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '\u5df2\u4f7f\u7528',
-                      style: TextStyle(
-                        color: palette.secondaryText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '$count',
-                            style: TextStyle(
-                              color: palette.foreground,
-                              fontSize: 44,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                            ),
-                          ),
-                          TextSpan(
-                            text: ' \u6b21',
-                            style: TextStyle(
-                              color: palette.secondaryText,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _CardActionButton(
-                          icon: Icons.swap_vert_rounded,
-                          label: '\u4f4d\u7f6e',
-                          color: palette.foreground,
-                          bgColor: Colors.black.withOpacity(0.06),
-                          onTap: onMove,
-                        ),
-                        const SizedBox(width: 8),
-                        _CardActionButton(
-                          icon: Icons.edit_rounded,
-                          label: '\u91cd\u547d\u540d',
-                          color: palette.foreground,
-                          bgColor: Colors.black.withOpacity(0.06),
-                          onTap: onRename,
-                        ),
-                        const SizedBox(width: 8),
-                        _CardActionButton(
-                          icon: Icons.delete_outline_rounded,
-                          label: '\u5220\u9664',
-                          color: const Color(0xFFE53935),
-                          bgColor: const Color(0xFFE53935).withOpacity(0.12),
-                          onTap: onDelete,
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _CardActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -2048,6 +1355,7 @@ class _CardActionButton extends StatelessWidget {
   }
 }
 
+// 🌟 修复编译错误：绝对不能用 const double radius = radius!
 class _CornerLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -2058,7 +1366,7 @@ class _CornerLinePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round; 
 
     final path = Path();
-    const double radius = 28.0; 
+    const double radius = 28.0; // 🌟 精确设为 28.0
     
     path.moveTo(0, 42);
     path.lineTo(0, radius);
