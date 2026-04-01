@@ -18,7 +18,7 @@ class WaterProvider extends ChangeNotifier {
     'com.fakeuy.water/siri',
   );
 
-  static const int _historySchemaVersion = 2;
+  static const int _historySchemaVersion = 3;
   static const int _historyBackfillMaxMonths = 48;
   static const int _historyBackfillEmptyStopCount = 6;
 
@@ -142,7 +142,12 @@ class WaterProvider extends ChangeNotifier {
     }
 
     final schemaVersion = prefs.getInt(_historySchemaVersionKey) ?? 0;
-    _needsHistoryBackfill = schemaVersion < _historySchemaVersion;
+    final hasOnlyCurrentMonthCache =
+        _syncedHistoryMonths.isEmpty ||
+        (_syncedHistoryMonths.length == 1 &&
+            _syncedHistoryMonths.contains(_currentMonthKey()));
+    _needsHistoryBackfill =
+        schemaVersion < _historySchemaVersion || hasOnlyCurrentMonthCache;
 
     final savedStartTime = prefs.getInt('water_start_time') ?? 0;
     if (orderNum.isNotEmpty && savedStartTime > 0) {
@@ -1143,6 +1148,18 @@ class WaterProvider extends ChangeNotifier {
       return _durationPatches[linkedPatchKey];
     }
 
+    final devicePatchKey = _findBestPatchByDeviceId(
+      target: serverEntry,
+      usedPatchKeys: usedPatchKeys,
+    );
+    if (devicePatchKey != null) {
+      usedPatchKeys.add(devicePatchKey);
+      if (rememberLink) {
+        _historyPatchLinks[_serverPatchLinkKey(serverEntry)] = devicePatchKey;
+      }
+      return _durationPatches[devicePatchKey];
+    }
+
     final bestPatchKey = _findBestLocalHistoryMatch(
       target: serverEntry,
       usedPatchKeys: usedPatchKeys,
@@ -1190,6 +1207,16 @@ class WaterProvider extends ChangeNotifier {
   }
 
   String _serverPatchLinkKey(WaterUsageHistoryEntry entry) {
+    final orderKey = entry.orderNum.trim();
+    if (orderKey.isNotEmpty) {
+      return 'bill-order:$orderKey';
+    }
+
+    final deviceId = entry.deviceId?.trim() ?? '';
+    if (deviceId.isNotEmpty) {
+      return 'bill-device:$deviceId|${entry.minutePrecisionTime.toIso8601String()}';
+    }
+
     final normalizedName = _historySignature(entry.displayDeviceName);
     final amountKey = entry.amount.toStringAsFixed(2);
     final timeKey = entry.minutePrecisionTime.toIso8601String();
@@ -1282,6 +1309,48 @@ class WaterProvider extends ChangeNotifier {
 
       bestPatchKey = patchKey;
       bestScore = score;
+    }
+
+    return bestPatchKey;
+  }
+
+  String? _findBestPatchByDeviceId({
+    required WaterUsageHistoryEntry target,
+    required Set<String> usedPatchKeys,
+  }) {
+    final targetDeviceId = target.deviceId?.trim() ?? '';
+    if (targetDeviceId.isEmpty) {
+      return null;
+    }
+
+    String? bestPatchKey;
+    int? bestDiffSeconds;
+    for (final entry in _durationPatches.entries) {
+      final patchKey = entry.key;
+      if (usedPatchKeys.contains(patchKey)) {
+        continue;
+      }
+
+      final candidate = entry.value;
+      final candidateDeviceId = candidate.deviceId?.trim() ?? '';
+      if (candidateDeviceId.isEmpty || candidateDeviceId != targetDeviceId) {
+        continue;
+      }
+
+      final diffSeconds = candidate.createdAt
+          .difference(target.createdAt)
+          .inSeconds
+          .abs();
+      if (diffSeconds > 3 * 24 * 60 * 60) {
+        continue;
+      }
+
+      if (bestDiffSeconds != null && diffSeconds >= bestDiffSeconds!) {
+        continue;
+      }
+
+      bestPatchKey = patchKey;
+      bestDiffSeconds = diffSeconds;
     }
 
     return bestPatchKey;
