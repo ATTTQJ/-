@@ -446,6 +446,7 @@ class WaterProvider extends ChangeNotifier {
       }
 
       final monthKey = _monthKey(year, month);
+      final previousMonthEntries = _monthlyServerHistoryCache[monthKey] ?? const <WaterUsageHistoryEntry>[];
       final monthEntries = serverItems
           .map(WaterUsageHistoryEntry.fromServerBill)
           .toList(growable: false)
@@ -453,7 +454,10 @@ class WaterProvider extends ChangeNotifier {
 
       _monthlyServerHistoryCache[monthKey] = _mergeServerEntriesWithLocalDurations(
         serverEntries: monthEntries,
-        localHistory: _localDurationRecords,
+        localHistory: _mergeLocalDurationRecords([
+          ..._localDurationRecords,
+          ...previousMonthEntries.map(_asLocalDurationRecord),
+        ]),
       );
       _syncedHistoryMonths.add(monthKey);
       if (selectAfterSync) {
@@ -1072,7 +1076,7 @@ class WaterProvider extends ChangeNotifier {
     required Set<int> usedLocalIndexes,
   }) {
     int? bestIndex;
-    var bestDiffSeconds = 61;
+    double? bestScore;
     final targetAmount = target.amount;
     final targetMinute = target.minutePrecisionTime;
 
@@ -1089,21 +1093,22 @@ class WaterProvider extends ChangeNotifier {
         continue;
       }
 
-      final amountDiff = (candidate.amount - targetAmount).abs();
-      if (amountDiff > 0.01) {
-        continue;
-      }
-
       final diffSeconds = candidate.minutePrecisionTime
           .difference(targetMinute)
           .inSeconds
           .abs();
-      if (diffSeconds > 60 || diffSeconds >= bestDiffSeconds) {
+      if (diffSeconds > 12 * 60 * 60) {
+        continue;
+      }
+
+      final amountDiff = (candidate.amount - targetAmount).abs();
+      final score = diffSeconds + (amountDiff * 600);
+      if (bestScore != null && score >= bestScore!) {
         continue;
       }
 
       bestIndex = index;
-      bestDiffSeconds = diffSeconds;
+      bestScore = score;
     }
 
     return bestIndex;
