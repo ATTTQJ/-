@@ -29,6 +29,8 @@ class WaterProvider extends ChangeNotifier {
   static const String _historySelectedMonthKey = 'water_history_selected_month';
   static const String _historySyncedMonthsKey = 'water_history_synced_months';
   static const String _localDurationStorageKey = 'water_local_duration_records';
+  static const String _durationPatchStorageKey = 'water_history_duration_patches';
+  static const String _historyPatchLinksKey = 'water_history_patch_links';
 
   String orderNum = '';
   String tableName = '';
@@ -39,6 +41,8 @@ class WaterProvider extends ChangeNotifier {
   bool isHistoryBackfilling = false;
 
   final Map<String, List<WaterUsageHistoryEntry>> _monthlyServerHistoryCache = {};
+  final Map<String, WaterUsageHistoryEntry> _durationPatches = {};
+  final Map<String, String> _historyPatchLinks = {};
   List<WaterUsageHistoryEntry> _localDurationRecords = [];
   final Set<String> _syncedHistoryMonths = <String>{};
   String _selectedHistoryMonthKey = '';
@@ -95,7 +99,14 @@ class WaterProvider extends ChangeNotifier {
     _monthlyServerHistoryCache
       ..clear()
       ..addAll(_decodeMonthlyHistoryCache(prefs.getString(_historyMonthCacheKey)));
-    _localDurationRecords = _decodeHistoryEntries(
+    _durationPatches
+      ..clear()
+      ..addAll(_decodeDurationPatches(prefs.getString(_durationPatchStorageKey)));
+    _historyPatchLinks
+      ..clear()
+      ..addAll(_decodeStringMap(prefs.getString(_historyPatchLinksKey)));
+    _rebuildLocalDurationRecordsFromPatches();
+    final legacyLocalDurationRecords = _decodeHistoryEntries(
       prefs.getStringList(_localDurationStorageKey),
     );
     _syncedHistoryMonths
@@ -107,9 +118,24 @@ class WaterProvider extends ChangeNotifier {
     _selectedHistoryMonthKey =
         prefs.getString(_historySelectedMonthKey)?.trim() ?? '';
 
-    await _migrateLegacyHistoryIfNeeded(prefs);
+    _ingestDurationRecords(
+      _monthlyServerHistoryCache.values
+          .expand((entries) => entries)
+          .where(_hasDuration),
+    );
 
-    _localDurationRecords = _mergeLocalDurationRecords(_localDurationRecords);
+    await _migrateLegacyHistoryIfNeeded(
+      prefs,
+      legacyLocalDurationRecords: legacyLocalDurationRecords,
+    );
+
+    if (_durationPatches.isEmpty && legacyLocalDurationRecords.isNotEmpty) {
+      _ingestDurationRecords(legacyLocalDurationRecords);
+    }
+    _rebuildLocalDurationRecordsFromPatches();
+    _historyPatchLinks.removeWhere(
+      (_, patchKey) => !_durationPatches.containsKey(patchKey),
+    );
     if (_selectedHistoryMonthKey.isEmpty ||
         _isMonthKeyInFuture(_selectedHistoryMonthKey)) {
       _selectedHistoryMonthKey = _currentMonthKey();
@@ -446,18 +472,15 @@ class WaterProvider extends ChangeNotifier {
       }
 
       final monthKey = _monthKey(year, month);
-      final previousMonthEntries = _monthlyServerHistoryCache[monthKey] ?? const <WaterUsageHistoryEntry>[];
       final monthEntries = serverItems
           .map(WaterUsageHistoryEntry.fromServerBill)
           .toList(growable: false)
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      _monthlyServerHistoryCache[monthKey] = _mergeServerEntriesWithLocalDurations(
+      _monthlyServerHistoryCache[monthKey] = monthEntries;
+      _mergeServerEntriesWithLocalDurations(
         serverEntries: monthEntries,
-        localHistory: _mergeLocalDurationRecords([
-          ..._localDurationRecords,
-          ...previousMonthEntries.map(_asLocalDurationRecord),
-        ]),
+        rememberLinks: true,
       );
       _syncedHistoryMonths.add(monthKey);
       if (selectAfterSync) {
@@ -566,12 +589,16 @@ class WaterProvider extends ChangeNotifier {
 
   Future<void> clearHistory() async {
     _monthlyServerHistoryCache.clear();
+    _durationPatches.clear();
+    _historyPatchLinks.clear();
     _localDurationRecords.clear();
     _syncedHistoryMonths.clear();
     _selectedHistoryMonthKey = _currentMonthKey();
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_historyMonthCacheKey);
+    await prefs.remove(_durationPatchStorageKey);
+    await prefs.remove(_historyPatchLinksKey);
     await prefs.remove(_localDurationStorageKey);
     await prefs.remove(_displayHistoryStorageKey);
     await prefs.remove(_legacyHistoryStorageKey);
@@ -594,11 +621,14 @@ class WaterProvider extends ChangeNotifier {
         const <WaterUsageHistoryEntry>[];
     return _mergeServerEntriesWithLocalDurations(
       serverEntries: serverEntries,
-      localHistory: _localDurationRecords,
     );
   }
 
-  Future<void> _migrateLegacyHistoryIfNeeded(SharedPreferences prefs) async {
+  Future<void> _migrateLegacyHistoryIfNeeded(
+    SharedPreferences prefs, {
+    List<WaterUsageHistoryEntry> legacyLocalDurationRecords =
+        const <WaterUsageHistoryEntry>[],
+  }) async {
     var changed = false;
     final currentMonthKey = _currentMonthKey();
 
@@ -616,7 +646,11 @@ class WaterProvider extends ChangeNotifier {
     final legacyHistory = _decodeHistoryEntries(
       prefs.getStringList(_legacyHistoryStorageKey),
     );
-    if (legacyHistory.isNotEmpty) {
+    final migratedDurationRecords = _mergeLocalDurationRecords([
+      ...legacyLocalDurationRecords,
+      ..._extractLocalDurationRecordsFromLegacy(legacyHistory),
+    ]);
+    if (legacyHistory.isNotEmpty || migratedDurationRecords.isNotEmpty) {
       if (_monthlyServerHistoryCache.isEmpty) {
         final legacyServerEntries = legacyHistory
             .where((entry) => !entry.isLocalOnly)
@@ -628,13 +662,9 @@ class WaterProvider extends ChangeNotifier {
         }
       }
 
-      final mergedLocal = _mergeLocalDurationRecords([
-        ..._localDurationRecords,
-        ..._extractLocalDurationRecordsFromLegacy(legacyHistory),
-      ]);
-      if (mergedLocal.length != _localDurationRecords.length ||
-          !_historyListsEqual(mergedLocal, _localDurationRecords)) {
-        _localDurationRecords = mergedLocal;
+      final beforeLocal = List<WaterUsageHistoryEntry>.from(_localDurationRecords);
+      _ingestDurationRecords(migratedDurationRecords);
+      if (!_historyListsEqual(beforeLocal, _localDurationRecords)) {
         changed = true;
       }
     }
@@ -660,6 +690,21 @@ class WaterProvider extends ChangeNotifier {
     await resolvedPrefs.setString(
       _historyMonthCacheKey,
       jsonEncode(monthCachePayload),
+    );
+    final patchPayload = <String, Map<String, dynamic>>{};
+    for (final entry in _durationPatches.entries) {
+      patchPayload[entry.key] = entry.value.toJson();
+    }
+    _historyPatchLinks.removeWhere(
+      (_, patchKey) => !_durationPatches.containsKey(patchKey),
+    );
+    await resolvedPrefs.setString(
+      _durationPatchStorageKey,
+      jsonEncode(patchPayload),
+    );
+    await resolvedPrefs.setString(
+      _historyPatchLinksKey,
+      jsonEncode(_historyPatchLinks),
     );
     await resolvedPrefs.setStringList(
       _localDurationStorageKey,
@@ -744,6 +789,60 @@ class WaterProvider extends ChangeNotifier {
     return rawEntries.map(WaterUsageHistoryEntry.fromStorage).toList();
   }
 
+  Map<String, WaterUsageHistoryEntry> _decodeDurationPatches(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return <String, WaterUsageHistoryEntry>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, WaterUsageHistoryEntry>{};
+      }
+
+      final result = <String, WaterUsageHistoryEntry>{};
+      for (final entry in decoded.entries) {
+        final patchKey = entry.key.toString();
+        final value = entry.value;
+        WaterUsageHistoryEntry? patch;
+        if (value is Map<String, dynamic>) {
+          patch = WaterUsageHistoryEntry.fromJson(value);
+        } else if (value is Map) {
+          patch = WaterUsageHistoryEntry.fromJson(
+            Map<String, dynamic>.from(value),
+          );
+        } else if (value is String) {
+          patch = WaterUsageHistoryEntry.fromStorage(value);
+        }
+
+        if (patch != null) {
+          result[patchKey] = _asLocalDurationRecord(patch);
+        }
+      }
+      return result;
+    } catch (_) {
+      return <String, WaterUsageHistoryEntry>{};
+    }
+  }
+
+  Map<String, String> _decodeStringMap(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return <String, String>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, String>{};
+      }
+      return decoded.map<String, String>(
+        (key, value) => MapEntry(key.toString(), value.toString()),
+      );
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
+
   List<WaterUsageHistoryEntry> _extractLocalDurationRecordsFromLegacy(
     List<WaterUsageHistoryEntry> legacyHistory,
   ) {
@@ -767,10 +866,39 @@ class WaterProvider extends ChangeNotifier {
   }
 
   void _upsertLocalDurationRecord(WaterUsageHistoryEntry entry) {
-    _localDurationRecords = _mergeLocalDurationRecords([
-      ..._localDurationRecords,
-      _asLocalDurationRecord(entry),
-    ]);
+    _upsertDurationPatch(entry);
+  }
+
+  void _upsertDurationPatch(
+    WaterUsageHistoryEntry entry, {
+    bool rebuildList = true,
+  }) {
+    final localEntry = _asLocalDurationRecord(entry);
+    final patchKey = _durationPatchKey(localEntry);
+    final existing = _durationPatches[patchKey];
+    final mergedEntry = existing == null
+        ? localEntry
+        : _preferHistoryEntry(existing, localEntry).copyWith(
+            isLocalOnly: true,
+            durationLabel: _durationLabelForMerge(
+              _preferHistoryEntry(existing, localEntry),
+            ),
+          );
+    _durationPatches[patchKey] = mergedEntry;
+    if (rebuildList) {
+      _rebuildLocalDurationRecordsFromPatches();
+    }
+  }
+
+  void _ingestDurationRecords(Iterable<WaterUsageHistoryEntry> entries) {
+    for (final entry in entries) {
+      _upsertDurationPatch(entry, rebuildList: false);
+    }
+    _rebuildLocalDurationRecordsFromPatches();
+  }
+
+  void _rebuildLocalDurationRecordsFromPatches() {
+    _localDurationRecords = _mergeLocalDurationRecords(_durationPatches.values);
   }
 
   List<WaterUsageHistoryEntry> _mergeLocalDurationRecords(
@@ -813,7 +941,6 @@ class WaterProvider extends ChangeNotifier {
         serverEntries:
             _monthlyServerHistoryCache[monthKey] ??
             const <WaterUsageHistoryEntry>[],
-        localHistory: _localDurationRecords,
       );
       for (final entry in monthEntries) {
         final key = _historyMergeKey(entry);
@@ -945,51 +1072,32 @@ class WaterProvider extends ChangeNotifier {
 
   List<WaterUsageHistoryEntry> _mergeServerEntriesWithLocalDurations({
     required List<WaterUsageHistoryEntry> serverEntries,
-    required List<WaterUsageHistoryEntry> localHistory,
+    bool rememberLinks = false,
   }) {
     if (serverEntries.isEmpty) {
       return <WaterUsageHistoryEntry>[];
     }
 
     final merged = <WaterUsageHistoryEntry>[];
-    final usedLocalIndexes = <int>{};
-    final localByOrderNum = <String, int>{};
-
-    for (var index = 0; index < localHistory.length; index++) {
-      final orderNum = localHistory[index].orderNum.trim();
-      if (orderNum.isNotEmpty) {
-        localByOrderNum[orderNum] = index;
-      }
-    }
+    final usedPatchKeys = <String>{};
 
     for (final serverEntry in serverEntries) {
-      final orderNum = serverEntry.orderNum.trim();
-      int? matchIndex;
-
-      if (orderNum.isNotEmpty) {
-        final exactMatch = localByOrderNum[orderNum];
-        if (exactMatch != null && !usedLocalIndexes.contains(exactMatch)) {
-          matchIndex = exactMatch;
-        }
-      }
-
-      matchIndex ??= _findBestLocalHistoryMatch(
-        target: serverEntry,
-        localHistory: localHistory,
-        usedLocalIndexes: usedLocalIndexes,
+      final localEntry = _resolveDurationPatchForServerEntry(
+        serverEntry: serverEntry,
+        usedPatchKeys: usedPatchKeys,
+        rememberLink: rememberLinks,
       );
-
-      if (matchIndex == null) {
-        merged.add(serverEntry.copyWith(clearDuration: true));
+      if (localEntry == null) {
+        merged.add(serverEntry);
         continue;
       }
 
-      usedLocalIndexes.add(matchIndex);
-      final localEntry = localHistory[matchIndex];
       merged.add(
         serverEntry.copyWith(
-          durationSeconds: localEntry.durationSeconds,
-          durationLabel: _durationLabelForMerge(localEntry),
+          durationSeconds: localEntry.durationSeconds ?? serverEntry.durationSeconds,
+          durationLabel:
+              _durationLabelForMerge(localEntry) ??
+              _durationLabelForMerge(serverEntry),
           deviceId: localEntry.deviceId ?? serverEntry.deviceId,
         ),
       );
@@ -1011,6 +1119,45 @@ class WaterProvider extends ChangeNotifier {
     return result;
   }
 
+  WaterUsageHistoryEntry? _resolveDurationPatchForServerEntry({
+    required WaterUsageHistoryEntry serverEntry,
+    required Set<String> usedPatchKeys,
+    bool rememberLink = false,
+  }) {
+    final directPatchKey = _directPatchKeyForOrder(serverEntry.orderNum);
+    if (directPatchKey != null &&
+        !usedPatchKeys.contains(directPatchKey) &&
+        _durationPatches.containsKey(directPatchKey)) {
+      usedPatchKeys.add(directPatchKey);
+      if (rememberLink) {
+        _historyPatchLinks[_serverPatchLinkKey(serverEntry)] = directPatchKey;
+      }
+      return _durationPatches[directPatchKey];
+    }
+
+    final linkedPatchKey = _historyPatchLinks[_serverPatchLinkKey(serverEntry)];
+    if (linkedPatchKey != null &&
+        !usedPatchKeys.contains(linkedPatchKey) &&
+        _durationPatches.containsKey(linkedPatchKey)) {
+      usedPatchKeys.add(linkedPatchKey);
+      return _durationPatches[linkedPatchKey];
+    }
+
+    final bestPatchKey = _findBestLocalHistoryMatch(
+      target: serverEntry,
+      usedPatchKeys: usedPatchKeys,
+    );
+    if (bestPatchKey == null) {
+      return null;
+    }
+
+    usedPatchKeys.add(bestPatchKey);
+    if (rememberLink) {
+      _historyPatchLinks[_serverPatchLinkKey(serverEntry)] = bestPatchKey;
+    }
+    return _durationPatches[bestPatchKey];
+  }
+
   String _historyMergeKey(WaterUsageHistoryEntry entry) {
     final orderKey = entry.orderNum.trim();
     if (orderKey.isNotEmpty) {
@@ -1021,6 +1168,32 @@ class WaterProvider extends ChangeNotifier {
     final amountKey = entry.amount.toStringAsFixed(2);
     final timeKey = entry.minutePrecisionTime.toIso8601String();
     return 'fallback:$normalizedName|$amountKey|$timeKey';
+  }
+
+  String _durationPatchKey(WaterUsageHistoryEntry entry) {
+    final directKey = _directPatchKeyForOrder(entry.orderNum);
+    if (directKey != null) {
+      return directKey;
+    }
+
+    final normalizedName = _historySignature(entry.displayDeviceName);
+    final timeKey = entry.createdAt.toIso8601String();
+    return 'patch:$normalizedName|$timeKey';
+  }
+
+  String? _directPatchKeyForOrder(String orderNum) {
+    final trimmed = orderNum.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return 'order:$trimmed';
+  }
+
+  String _serverPatchLinkKey(WaterUsageHistoryEntry entry) {
+    final normalizedName = _historySignature(entry.displayDeviceName);
+    final amountKey = entry.amount.toStringAsFixed(2);
+    final timeKey = entry.minutePrecisionTime.toIso8601String();
+    return 'bill:$normalizedName|$amountKey|$timeKey';
   }
 
   WaterUsageHistoryEntry _preferHistoryEntry(
@@ -1070,22 +1243,22 @@ class WaterProvider extends ChangeNotifier {
     return entry.durationSeconds != null || (label.isNotEmpty && label != '--');
   }
 
-  int? _findBestLocalHistoryMatch({
+  String? _findBestLocalHistoryMatch({
     required WaterUsageHistoryEntry target,
-    required List<WaterUsageHistoryEntry> localHistory,
-    required Set<int> usedLocalIndexes,
+    required Set<String> usedPatchKeys,
   }) {
-    int? bestIndex;
+    String? bestPatchKey;
     double? bestScore;
     final targetAmount = target.amount;
     final targetMinute = target.minutePrecisionTime;
 
-    for (var index = 0; index < localHistory.length; index++) {
-      if (usedLocalIndexes.contains(index)) {
+    for (final entry in _durationPatches.entries) {
+      final patchKey = entry.key;
+      if (usedPatchKeys.contains(patchKey)) {
         continue;
       }
 
-      final candidate = localHistory[index];
+      final candidate = entry.value;
       if (!_historyNamesLikelySame(
         target.displayDeviceName,
         candidate.displayDeviceName,
@@ -1107,11 +1280,11 @@ class WaterProvider extends ChangeNotifier {
         continue;
       }
 
-      bestIndex = index;
+      bestPatchKey = patchKey;
       bestScore = score;
     }
 
-    return bestIndex;
+    return bestPatchKey;
   }
 
   String? _durationLabelForMerge(WaterUsageHistoryEntry entry) {
