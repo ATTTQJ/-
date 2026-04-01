@@ -419,6 +419,7 @@ class WaterProvider extends ChangeNotifier {
     required String userId,
     required int year,
     required int month,
+    bool selectAfterSync = false,
     bool muteToast = false,
   }) async {
     if (token.trim().isEmpty || userId.trim().isEmpty) {
@@ -450,8 +451,15 @@ class WaterProvider extends ChangeNotifier {
           .toList(growable: false)
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      _monthlyServerHistoryCache[monthKey] = monthEntries;
+      _monthlyServerHistoryCache[monthKey] = _mergeServerEntriesWithLocalDurations(
+        serverEntries: monthEntries,
+        localHistory: _localDurationRecords,
+      );
       _syncedHistoryMonths.add(monthKey);
+      if (selectAfterSync) {
+        _selectedHistoryMonthKey = monthKey;
+        await _persistSelectedHistoryMonth();
+      }
 
       await _persistHistoryCaches();
       return true;
@@ -580,10 +588,9 @@ class WaterProvider extends ChangeNotifier {
     final serverEntries =
         _monthlyServerHistoryCache[resolvedMonthKey] ??
         const <WaterUsageHistoryEntry>[];
-    final localHistory = _localHistoryForMonth(resolvedMonthKey);
     return _mergeServerEntriesWithLocalDurations(
       serverEntries: serverEntries,
-      localHistory: localHistory,
+      localHistory: _localDurationRecords,
     );
   }
 
@@ -802,7 +809,7 @@ class WaterProvider extends ChangeNotifier {
         serverEntries:
             _monthlyServerHistoryCache[monthKey] ??
             const <WaterUsageHistoryEntry>[],
-        localHistory: _localHistoryForMonth(monthKey),
+        localHistory: _localDurationRecords,
       );
       for (final entry in monthEntries) {
         final key = _historyMergeKey(entry);
@@ -818,12 +825,6 @@ class WaterProvider extends ChangeNotifier {
     final usageHistory = merged.values.toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return usageHistory;
-  }
-
-  List<WaterUsageHistoryEntry> _localHistoryForMonth(String monthKey) {
-    return _localDurationRecords
-        .where((entry) => _monthKeyForDate(entry.createdAt) == monthKey)
-        .toList(growable: false);
   }
 
   Future<List<Map<String, dynamic>>> _waitForDeviceList(

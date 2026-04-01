@@ -14,31 +14,66 @@ const double _historyViewportHeight =
     (_historyVisibleCount * _historyItemExtent) +
     ((_historyVisibleCount - 1) * _historyDividerHeight);
 
-class HistoryBottomSheet extends StatelessWidget {
+class HistoryBottomSheet extends StatefulWidget {
   const HistoryBottomSheet({super.key});
+
+  @override
+  State<HistoryBottomSheet> createState() => _HistoryBottomSheetState();
+}
+
+class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
+  bool _isMonthSwitching = false;
+  int? _pendingYear;
+  int? _pendingMonth;
+
+  Future<void> _switchHistoryMonth({
+    required UserProvider userProvider,
+    required WaterProvider waterProvider,
+    required int year,
+    required int month,
+  }) async {
+    final currentYear = waterProvider.selectedHistoryYear;
+    final currentMonth = waterProvider.selectedHistoryMonth;
+    if (year == currentYear && month == currentMonth) {
+      return;
+    }
+
+    setState(() {
+      _isMonthSwitching = true;
+      _pendingYear = year;
+      _pendingMonth = month;
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    await waterProvider.syncHistoryMonth(
+      token: userProvider.token,
+      userId: userProvider.userId,
+      year: year,
+      month: month,
+      selectAfterSync: true,
+      muteToast: true,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isMonthSwitching = false;
+      _pendingYear = null;
+      _pendingMonth = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer2<UserProvider, WaterProvider>(
       builder: (context, userProvider, waterProvider, child) {
         final history = waterProvider.displayHistory;
-        final isLoading = waterProvider.isHistoryLoading;
-        final selectedYear = waterProvider.selectedHistoryYear;
-        final selectedMonth = waterProvider.selectedHistoryMonth;
+        final isLoading = waterProvider.isHistoryLoading || _isMonthSwitching;
+        final selectedYear = _pendingYear ?? waterProvider.selectedHistoryYear;
+        final selectedMonth = _pendingMonth ?? waterProvider.selectedHistoryMonth;
         final availableYears = waterProvider.availableHistoryYears;
-        final availableMonths = waterProvider.availableMonthsForYear(
-          selectedYear,
-        );
-
-        Future<void> syncSelectedMonth() async {
-          await waterProvider.syncHistoryMonth(
-            token: userProvider.token,
-            userId: userProvider.userId,
-            year: waterProvider.selectedHistoryYear,
-            month: waterProvider.selectedHistoryMonth,
-            muteToast: true,
-          );
-        }
 
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -56,40 +91,28 @@ class HistoryBottomSheet extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Row(
-                  children: [
-                    _HistoryFilterDropdown(
-                      value: selectedYear,
-                      items: availableYears,
-                      suffix: '\u5e74',
-                      onChanged: (year) {
-                        if (year == null) {
-                          return;
-                        }
-                        final months = waterProvider.availableMonthsForYear(
-                          year,
-                        );
-                        final targetMonth = months.contains(selectedMonth)
-                            ? selectedMonth
-                            : months.last;
-                        waterProvider.selectHistoryMonth(year, targetMonth);
-                        unawaited(syncSelectedMonth());
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _HistoryFilterDropdown(
-                      value: selectedMonth,
-                      items: availableMonths,
-                      suffix: '\u6708',
-                      onChanged: (month) {
-                        if (month == null) {
-                          return;
-                        }
-                        waterProvider.selectHistoryMonth(selectedYear, month);
-                        unawaited(syncSelectedMonth());
-                      },
-                    ),
-                  ],
+                _HistoryMonthTrigger(
+                  month: selectedMonth,
+                  onTap: () async {
+                    final result = await showDialog<_HistoryMonthSelection>(
+                      context: context,
+                      builder: (dialogContext) => _HistoryMonthPickerDialog(
+                        initialYear: selectedYear,
+                        initialMonth: selectedMonth,
+                        availableYears: availableYears,
+                        monthsForYear: waterProvider.availableMonthsForYear,
+                      ),
+                    );
+                    if (result == null) {
+                      return;
+                    }
+                    unawaited(_switchHistoryMonth(
+                      userProvider: userProvider,
+                      waterProvider: waterProvider,
+                      year: result.year,
+                      month: result.month,
+                    ));
+                  },
                 ),
               ],
             ),
@@ -116,6 +139,9 @@ class HistoryBottomSheet extends StatelessWidget {
                   ),
                   child: child,
                 ),
+                layoutBuilder: (currentChild, previousChildren) {
+                  return currentChild ?? const SizedBox.shrink();
+                },
                 child: isLoading
                     ? const KeyedSubtree(
                         key: ValueKey<String>('history_loading'),
@@ -163,46 +189,220 @@ class HistoryBottomSheet extends StatelessWidget {
   }
 }
 
-class _HistoryFilterDropdown extends StatelessWidget {
-  const _HistoryFilterDropdown({
-    required this.value,
-    required this.items,
-    required this.suffix,
-    required this.onChanged,
+class _HistoryMonthTrigger extends StatelessWidget {
+  const _HistoryMonthTrigger({
+    required this.month,
+    required this.onTap,
   });
 
-  final int value;
-  final List<int> items;
-  final String suffix;
-  final ValueChanged<int?> onChanged;
+  final int month;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F5F7),
-        borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$month\u6708',
+              style: const TextStyle(
+                color: Color(0xFF2C2C2E),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(width: 2),
+            const Padding(
+              padding: EdgeInsets.only(top: 1),
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: Color(0xFF2C2C2E),
+              ),
+            ),
+          ],
+        ),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: items.contains(value) ? value : items.last,
-          onChanged: onChanged,
+    );
+  }
+}
+
+class _HistoryMonthSelection {
+  const _HistoryMonthSelection({
+    required this.year,
+    required this.month,
+  });
+
+  final int year;
+  final int month;
+}
+
+class _HistoryMonthPickerDialog extends StatefulWidget {
+  const _HistoryMonthPickerDialog({
+    required this.initialYear,
+    required this.initialMonth,
+    required this.availableYears,
+    required this.monthsForYear,
+  });
+
+  final int initialYear;
+  final int initialMonth;
+  final List<int> availableYears;
+  final List<int> Function(int year) monthsForYear;
+
+  @override
+  State<_HistoryMonthPickerDialog> createState() =>
+      _HistoryMonthPickerDialogState();
+}
+
+class _HistoryMonthPickerDialogState extends State<_HistoryMonthPickerDialog> {
+  late int _selectedYear;
+  late int _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedYear = widget.initialYear;
+    _selectedMonth = widget.initialMonth;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final months = widget.monthsForYear(_selectedYear);
+    if (!months.contains(_selectedMonth)) {
+      _selectedMonth = months.last;
+    }
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '\u9009\u62e9\u67e5\u8be2\u6708\u4efd',
+              style: TextStyle(
+                color: Color(0xFF2C2C2E),
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              '\u5e74\u4efd',
+              style: TextStyle(
+                color: Color(0xFF8E8E93),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: widget.availableYears
+                  .map(
+                    (year) => _PickerChip(
+                      label: '$year\u5e74',
+                      selected: year == _selectedYear,
+                      onTap: () {
+                        setState(() {
+                          _selectedYear = year;
+                          final yearMonths = widget.monthsForYear(year);
+                          if (!yearMonths.contains(_selectedMonth)) {
+                            _selectedMonth = yearMonths.last;
+                          }
+                        });
+                      },
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              '\u6708\u4efd',
+              style: TextStyle(
+                color: Color(0xFF8E8E93),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: months
+                  .map(
+                    (month) => _PickerChip(
+                      label: '$month\u6708',
+                      selected: month == _selectedMonth,
+                      onTap: () {
+                        Navigator.of(context).pop(
+                          _HistoryMonthSelection(
+                            year: _selectedYear,
+                            month: month,
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('\u53d6\u6d88'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PickerChip extends StatelessWidget {
+  const _PickerChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF2C2C2E) : const Color(0xFFF4F5F7),
           borderRadius: BorderRadius.circular(12),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-          style: const TextStyle(
-            color: Color(0xFF2C2C2E),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : const Color(0xFF2C2C2E),
           ),
-          items: items
-              .map(
-                (item) => DropdownMenuItem<int>(
-                  value: item,
-                  child: Text('$item$suffix'),
-                ),
-              )
-              .toList(growable: false),
         ),
       ),
     );
