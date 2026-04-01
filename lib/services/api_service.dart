@@ -149,9 +149,11 @@ class ApiService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>?> fetchBillHistory({
+  static Future<List<Map<String, dynamic>>?> fetchBillHistoryMonth({
     required String token,
     required String userId,
+    required int year,
+    required int month,
     int limit = 100,
     int begin = 0,
     String type = 'bill_0',
@@ -160,9 +162,11 @@ class ApiService {
     final response = await post(
       'bill/myBillList',
       {
+        'month': '$month',
         'limit': '$limit',
         'type': type,
         'begin': '$begin',
+        'years': '$year',
       },
       token: token,
       userId: userId,
@@ -189,9 +193,11 @@ class ApiService {
         .toList();
   }
 
-  static Future<List<Map<String, dynamic>>?> fetchAllBillHistory({
+  static Future<List<Map<String, dynamic>>?> fetchAllBillHistoryMonth({
     required String token,
     required String userId,
+    required int year,
+    required int month,
     int pageSize = 100,
     String type = 'bill_0',
     bool muteToast = true,
@@ -200,9 +206,11 @@ class ApiService {
     var begin = 0;
 
     while (true) {
-      final page = await fetchBillHistory(
+      final page = await fetchBillHistoryMonth(
         token: token,
         userId: userId,
+        year: year,
+        month: month,
         limit: pageSize,
         begin: begin,
         type: type,
@@ -226,6 +234,46 @@ class ApiService {
     }
 
     return allItems;
+  }
+
+  static Future<List<Map<String, dynamic>>?> fetchBillHistory({
+    required String token,
+    required String userId,
+    int limit = 100,
+    int begin = 0,
+    String type = 'bill_0',
+    bool muteToast = true,
+  }) async {
+    final now = DateTime.now();
+    return fetchBillHistoryMonth(
+      token: token,
+      userId: userId,
+      year: now.year,
+      month: now.month,
+      limit: limit,
+      begin: begin,
+      type: type,
+      muteToast: muteToast,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>?> fetchAllBillHistory({
+    required String token,
+    required String userId,
+    int pageSize = 100,
+    String type = 'bill_0',
+    bool muteToast = true,
+  }) async {
+    final now = DateTime.now();
+    return fetchAllBillHistoryMonth(
+      token: token,
+      userId: userId,
+      year: now.year,
+      month: now.month,
+      pageSize: pageSize,
+      type: type,
+      muteToast: muteToast,
+    );
   }
 
   static bool _isSuccessCode(Object? code) {

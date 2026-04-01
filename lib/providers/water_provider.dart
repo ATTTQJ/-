@@ -17,8 +17,17 @@ class WaterProvider extends ChangeNotifier {
   static const MethodChannel _siriChannel = MethodChannel(
     'com.fakeuy.water/siri',
   );
+
+  static const int _historySchemaVersion = 2;
+  static const int _historyBackfillMaxMonths = 48;
+  static const int _historyBackfillEmptyStopCount = 6;
+
+  static const String _historySchemaVersionKey = 'water_history_schema_version';
   static const String _legacyHistoryStorageKey = 'water_history';
   static const String _displayHistoryStorageKey = 'water_display_history';
+  static const String _historyMonthCacheKey = 'water_history_month_cache';
+  static const String _historySelectedMonthKey = 'water_history_selected_month';
+  static const String _historySyncedMonthsKey = 'water_history_synced_months';
   static const String _localDurationStorageKey = 'water_local_duration_records';
 
   String orderNum = '';
@@ -27,16 +36,13 @@ class WaterProvider extends ChangeNotifier {
   String activeDeviceId = '';
   bool isRequesting = false;
   bool isHistoryLoading = false;
-  List<WaterUsageHistoryEntry> _displayHistory = [];
+  bool isHistoryBackfilling = false;
+
+  final Map<String, List<WaterUsageHistoryEntry>> _monthlyServerHistoryCache = {};
   List<WaterUsageHistoryEntry> _localDurationRecords = [];
-
-  List<WaterUsageHistoryEntry> get history => List.unmodifiable(
-    _buildUsageHistory(),
-  );
-
-  List<WaterUsageHistoryEntry> get displayHistory => List.unmodifiable(
-    _displayHistory,
-  );
+  final Set<String> _syncedHistoryMonths = <String>{};
+  String _selectedHistoryMonthKey = '';
+  bool _needsHistoryBackfill = false;
 
   DateTime? startTime;
   Timer? timer;
@@ -44,39 +50,73 @@ class WaterProvider extends ChangeNotifier {
 
   bool _isHandlingPendingAction = false;
 
+  List<WaterUsageHistoryEntry> get history => List.unmodifiable(
+    _buildUsageHistory(),
+  );
+
+  List<WaterUsageHistoryEntry> get displayHistory => List.unmodifiable(
+    buildDisplayHistoryForMonth(selectedHistoryMonthKey),
+  );
+
+  String get selectedHistoryMonthKey =>
+      _selectedHistoryMonthKey.isEmpty ? _currentMonthKey() : _selectedHistoryMonthKey;
+
+  int get selectedHistoryYear => _monthDate(selectedHistoryMonthKey).year;
+
+  int get selectedHistoryMonth => _monthDate(selectedHistoryMonthKey).month;
+
+  List<int> get availableHistoryYears {
+    final years = <int>{DateTime.now().year};
+    for (final monthKey in _monthlyServerHistoryCache.keys) {
+      years.add(_monthDate(monthKey).year);
+    }
+    for (final entry in _localDurationRecords) {
+      years.add(entry.createdAt.year);
+    }
+    final result = years.toList()..sort((a, b) => b.compareTo(a));
+    return result;
+  }
+
+  bool get needsHistoryBackfill => _needsHistoryBackfill;
+
+  List<int> availableMonthsForYear(int year) {
+    final now = DateTime.now();
+    final maxMonth = year == now.year ? now.month : 12;
+    return List<int>.generate(maxMonth, (index) => index + 1);
+  }
+
   Future<void> loadFromLocal() async {
     final prefs = await SharedPreferences.getInstance();
     orderNum = prefs.getString('water_orderNum') ?? '';
     tableName = prefs.getString('water_tableName') ?? '';
     mac = prefs.getString('water_mac') ?? '';
     activeDeviceId = prefs.getString('water_activeDeviceId') ?? '';
-    _displayHistory = _decodeHistoryEntries(
-      prefs.getStringList(_displayHistoryStorageKey),
-    );
+
+    _monthlyServerHistoryCache
+      ..clear()
+      ..addAll(_decodeMonthlyHistoryCache(prefs.getString(_historyMonthCacheKey)));
     _localDurationRecords = _decodeHistoryEntries(
       prefs.getStringList(_localDurationStorageKey),
     );
-
-    if (_displayHistory.isEmpty && _localDurationRecords.isEmpty) {
-      final legacyHistory = _decodeHistoryEntries(
-        prefs.getStringList(_legacyHistoryStorageKey),
+    _syncedHistoryMonths
+      ..clear()
+      ..addAll(
+        (prefs.getStringList(_historySyncedMonthsKey) ?? const <String>[])
+            .where((item) => item.trim().isNotEmpty),
       );
-      if (legacyHistory.isNotEmpty) {
-        _displayHistory = legacyHistory
-            .where((entry) => !entry.isLocalOnly)
-            .toList(growable: false);
-        _localDurationRecords = _extractLocalDurationRecordsFromLegacy(
-          legacyHistory,
-        );
-        await _persistHistoryCaches(prefs: prefs);
-      }
-    } else {
-      _localDurationRecords = _mergeLocalDurationRecords([
-        ..._localDurationRecords,
-        ..._displayHistory.map(_asLocalDurationRecord),
-      ]);
-      await _persistHistoryCaches(prefs: prefs);
+    _selectedHistoryMonthKey =
+        prefs.getString(_historySelectedMonthKey)?.trim() ?? '';
+
+    await _migrateLegacyHistoryIfNeeded(prefs);
+
+    _localDurationRecords = _mergeLocalDurationRecords(_localDurationRecords);
+    if (_selectedHistoryMonthKey.isEmpty ||
+        _isMonthKeyInFuture(_selectedHistoryMonthKey)) {
+      _selectedHistoryMonthKey = _currentMonthKey();
     }
+
+    final schemaVersion = prefs.getInt(_historySchemaVersionKey) ?? 0;
+    _needsHistoryBackfill = schemaVersion < _historySchemaVersion;
 
     final savedStartTime = prefs.getInt('water_start_time') ?? 0;
     if (orderNum.isNotEmpty && savedStartTime > 0) {
@@ -131,7 +171,7 @@ class WaterProvider extends ChangeNotifier {
           selectedDeviceId: selectedDeviceId,
         );
         if (targetDevice == null) {
-          ToastService.show('未找到匹配设备');
+          ToastService.show('\u672a\u627e\u5230\u5339\u914d\u8bbe\u5907');
           return;
         }
 
@@ -260,7 +300,7 @@ class WaterProvider extends ChangeNotifier {
         await _persistHistoryCaches(prefs: prefs);
 
         _startRunningTimer();
-        ToastService.show('设备已开启，出水中...');
+        ToastService.show('\u8bbe\u5907\u5df2\u5f00\u542f\uff0c\u51fa\u6c34\u4e2d...');
         return true;
       }
     } finally {
@@ -336,11 +376,11 @@ class WaterProvider extends ChangeNotifier {
           fallbackRunningTime: finalTime,
         );
         final safeDeviceName = currentDeviceName.trim().isEmpty
-            ? '未命名设备'
+            ? '\u672a\u547d\u540d\u8bbe\u5907'
             : currentDeviceName.trim();
 
         ToastService.show(
-          '已关水\n扣费金额：¥${amount.toStringAsFixed(2)}\n用水时长：${_formatDuration(durationSeconds)}',
+          '\u5df2\u5173\u6c34\n\u6263\u8d39\u91d1\u989d\uff1a\u00a5${amount.toStringAsFixed(2)}\n\u7528\u6c34\u65f6\u957f\uff1a${_formatDuration(durationSeconds)}',
           durationMs: 4200,
         );
 
@@ -363,16 +403,28 @@ class WaterProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> syncHistoryFromServer({
+  void selectHistoryMonth(int year, int month) {
+    if (_isFutureMonth(year, month)) {
+      final now = DateTime.now();
+      year = now.year;
+      month = now.month;
+    }
+    _selectedHistoryMonthKey = _monthKey(year, month);
+    unawaited(_persistSelectedHistoryMonth());
+    notifyListeners();
+  }
+
+  Future<bool> syncHistoryMonth({
     required String token,
     required String userId,
+    required int year,
+    required int month,
     bool muteToast = false,
   }) async {
     if (token.trim().isEmpty || userId.trim().isEmpty) {
       return false;
     }
-
-    if (isHistoryLoading) {
+    if (_isFutureMonth(year, month) || isHistoryLoading) {
       return false;
     }
 
@@ -380,12 +432,11 @@ class WaterProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final localSnapshot = List<WaterUsageHistoryEntry>.from(
-        _localDurationRecords,
-      );
-      final serverItems = await ApiService.fetchAllBillHistory(
+      final serverItems = await ApiService.fetchAllBillHistoryMonth(
         token: token,
         userId: userId,
+        year: year,
+        month: month,
         muteToast: muteToast,
       );
 
@@ -393,14 +444,14 @@ class WaterProvider extends ChangeNotifier {
         return false;
       }
 
-      _displayHistory = _mergeServerHistoryWithLocalDurations(
-        serverItems: serverItems,
-        localHistory: localSnapshot,
-      );
-      _localDurationRecords = _mergeLocalDurationRecords([
-        ..._localDurationRecords,
-        ..._displayHistory.map(_asLocalDurationRecord),
-      ]);
+      final monthKey = _monthKey(year, month);
+      final monthEntries = serverItems
+          .map(WaterUsageHistoryEntry.fromServerBill)
+          .toList(growable: false)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      _monthlyServerHistoryCache[monthKey] = monthEntries;
+      _syncedHistoryMonths.add(monthKey);
 
       await _persistHistoryCaches();
       return true;
@@ -410,13 +461,110 @@ class WaterProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> syncHistoryFromServer({
+    required String token,
+    required String userId,
+    bool muteToast = false,
+  }) async {
+    final now = DateTime.now();
+    return syncHistoryMonth(
+      token: token,
+      userId: userId,
+      year: now.year,
+      month: now.month,
+      muteToast: muteToast,
+    );
+  }
+
+  Future<void> backfillHistoryIfNeeded({
+    required String token,
+    required String userId,
+  }) async {
+    if (!_needsHistoryBackfill ||
+        isHistoryBackfilling ||
+        token.trim().isEmpty ||
+        userId.trim().isEmpty) {
+      return;
+    }
+
+    isHistoryBackfilling = true;
+    notifyListeners();
+
+    var backfillCompleted = false;
+
+    try {
+      final now = DateTime.now();
+      var cursor = DateTime(now.year, now.month - 1);
+      var emptyMonthStreak = 0;
+
+      for (var step = 0;
+          step < _historyBackfillMaxMonths &&
+              emptyMonthStreak < _historyBackfillEmptyStopCount;
+          step++) {
+        final monthKey = _monthKey(cursor.year, cursor.month);
+        final hasCachedMonth =
+            _syncedHistoryMonths.contains(monthKey) &&
+            _monthlyServerHistoryCache.containsKey(monthKey);
+
+        if (hasCachedMonth) {
+          final cachedEntries =
+              _monthlyServerHistoryCache[monthKey] ??
+              const <WaterUsageHistoryEntry>[];
+          emptyMonthStreak = cachedEntries.isEmpty ? emptyMonthStreak + 1 : 0;
+        } else {
+          final serverItems = await ApiService.fetchAllBillHistoryMonth(
+            token: token,
+            userId: userId,
+            year: cursor.year,
+            month: cursor.month,
+            muteToast: true,
+          );
+
+          if (serverItems == null) {
+            return;
+          }
+
+          final monthEntries = serverItems
+              .map(WaterUsageHistoryEntry.fromServerBill)
+              .toList(growable: false)
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          _monthlyServerHistoryCache[monthKey] = monthEntries;
+          _syncedHistoryMonths.add(monthKey);
+          emptyMonthStreak = monthEntries.isEmpty ? emptyMonthStreak + 1 : 0;
+
+          await _persistHistoryCaches();
+          notifyListeners();
+          await Future.delayed(const Duration(milliseconds: 320));
+        }
+
+        cursor = DateTime(cursor.year, cursor.month - 1);
+      }
+
+      backfillCompleted = true;
+      _needsHistoryBackfill = false;
+      await _persistHistoryCaches(markSchemaCurrent: true);
+    } finally {
+      isHistoryBackfilling = false;
+      if (!backfillCompleted) {
+        _needsHistoryBackfill = true;
+      }
+      notifyListeners();
+    }
+  }
+
   Future<void> clearHistory() async {
-    _displayHistory.clear();
+    _monthlyServerHistoryCache.clear();
     _localDurationRecords.clear();
+    _syncedHistoryMonths.clear();
+    _selectedHistoryMonthKey = _currentMonthKey();
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_displayHistoryStorageKey);
+    await prefs.remove(_historyMonthCacheKey);
     await prefs.remove(_localDurationStorageKey);
+    await prefs.remove(_displayHistoryStorageKey);
     await prefs.remove(_legacyHistoryStorageKey);
+    await prefs.remove(_historySelectedMonthKey);
+    await prefs.remove(_historySyncedMonthsKey);
     notifyListeners();
   }
 
@@ -426,18 +574,156 @@ class WaterProvider extends ChangeNotifier {
     super.dispose();
   }
 
+  List<WaterUsageHistoryEntry> buildDisplayHistoryForMonth(String monthKey) {
+    final resolvedMonthKey =
+        monthKey.trim().isEmpty ? selectedHistoryMonthKey : monthKey.trim();
+    final serverEntries =
+        _monthlyServerHistoryCache[resolvedMonthKey] ??
+        const <WaterUsageHistoryEntry>[];
+    final localHistory = _localHistoryForMonth(resolvedMonthKey);
+    return _mergeServerEntriesWithLocalDurations(
+      serverEntries: serverEntries,
+      localHistory: localHistory,
+    );
+  }
+
+  Future<void> _migrateLegacyHistoryIfNeeded(SharedPreferences prefs) async {
+    var changed = false;
+    final currentMonthKey = _currentMonthKey();
+
+    final legacyDisplayHistory = _decodeHistoryEntries(
+      prefs.getStringList(_displayHistoryStorageKey),
+    );
+    if (_monthlyServerHistoryCache.isEmpty && legacyDisplayHistory.isNotEmpty) {
+      _monthlyServerHistoryCache[currentMonthKey] = legacyDisplayHistory
+          .where((entry) => !entry.isLocalOnly)
+          .toList(growable: false);
+      _syncedHistoryMonths.add(currentMonthKey);
+      changed = true;
+    }
+
+    final legacyHistory = _decodeHistoryEntries(
+      prefs.getStringList(_legacyHistoryStorageKey),
+    );
+    if (legacyHistory.isNotEmpty) {
+      if (_monthlyServerHistoryCache.isEmpty) {
+        final legacyServerEntries = legacyHistory
+            .where((entry) => !entry.isLocalOnly)
+            .toList(growable: false);
+        if (legacyServerEntries.isNotEmpty) {
+          _monthlyServerHistoryCache[currentMonthKey] = legacyServerEntries;
+          _syncedHistoryMonths.add(currentMonthKey);
+          changed = true;
+        }
+      }
+
+      final mergedLocal = _mergeLocalDurationRecords([
+        ..._localDurationRecords,
+        ..._extractLocalDurationRecordsFromLegacy(legacyHistory),
+      ]);
+      if (mergedLocal.length != _localDurationRecords.length ||
+          !_historyListsEqual(mergedLocal, _localDurationRecords)) {
+        _localDurationRecords = mergedLocal;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await _persistHistoryCaches(prefs: prefs);
+    }
+  }
+
   Future<void> _persistHistoryCaches({
     SharedPreferences? prefs,
+    bool markSchemaCurrent = false,
   }) async {
     final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
-    await resolvedPrefs.setStringList(
-      _displayHistoryStorageKey,
-      _displayHistory.map((entry) => jsonEncode(entry.toJson())).toList(),
+    final monthCachePayload = <String, List<Map<String, dynamic>>>{};
+
+    for (final entry in _monthlyServerHistoryCache.entries) {
+      monthCachePayload[entry.key] = entry.value
+          .map((item) => item.toJson())
+          .toList(growable: false);
+    }
+
+    await resolvedPrefs.setString(
+      _historyMonthCacheKey,
+      jsonEncode(monthCachePayload),
     );
     await resolvedPrefs.setStringList(
       _localDurationStorageKey,
       _localDurationRecords.map((entry) => jsonEncode(entry.toJson())).toList(),
     );
+    await resolvedPrefs.setString(
+      _historySelectedMonthKey,
+      selectedHistoryMonthKey,
+    );
+    await resolvedPrefs.setStringList(
+      _historySyncedMonthsKey,
+      _syncedHistoryMonths.toList()..sort(),
+    );
+
+    if (markSchemaCurrent) {
+      await resolvedPrefs.setInt(
+        _historySchemaVersionKey,
+        _historySchemaVersion,
+      );
+    }
+  }
+
+  Future<void> _persistSelectedHistoryMonth({
+    SharedPreferences? prefs,
+  }) async {
+    final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
+    await resolvedPrefs.setString(
+      _historySelectedMonthKey,
+      selectedHistoryMonthKey,
+    );
+  }
+
+  Map<String, List<WaterUsageHistoryEntry>> _decodeMonthlyHistoryCache(
+    String? raw,
+  ) {
+    if (raw == null || raw.trim().isEmpty) {
+      return <String, List<WaterUsageHistoryEntry>>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, List<WaterUsageHistoryEntry>>{};
+      }
+
+      final result = <String, List<WaterUsageHistoryEntry>>{};
+      for (final entry in decoded.entries) {
+        final monthKey = entry.key.toString();
+        final value = entry.value;
+        if (value is! List) {
+          continue;
+        }
+        final monthEntries = <WaterUsageHistoryEntry>[];
+        for (final item in value) {
+          if (item is Map<String, dynamic>) {
+            monthEntries.add(WaterUsageHistoryEntry.fromJson(item));
+            continue;
+          }
+          if (item is Map) {
+            monthEntries.add(
+              WaterUsageHistoryEntry.fromJson(Map<String, dynamic>.from(item)),
+            );
+            continue;
+          }
+          if (item is String) {
+            monthEntries.add(WaterUsageHistoryEntry.fromStorage(item));
+          }
+        }
+        monthEntries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        result[monthKey] = monthEntries;
+      }
+      return result;
+    } catch (_) {
+      return <String, List<WaterUsageHistoryEntry>>{};
+    }
   }
 
   List<WaterUsageHistoryEntry> _decodeHistoryEntries(List<String>? rawEntries) {
@@ -508,19 +794,36 @@ class WaterProvider extends ChangeNotifier {
       merged[_historyMergeKey(entry)] = entry;
     }
 
-    for (final entry in _displayHistory) {
-      final key = _historyMergeKey(entry);
-      final existing = merged[key];
-      if (existing == null) {
-        merged[key] = entry;
-        continue;
+    final sortedMonthKeys = _monthlyServerHistoryCache.keys.toList()
+      ..sort((a, b) => _monthDate(b).compareTo(_monthDate(a)));
+
+    for (final monthKey in sortedMonthKeys) {
+      final monthEntries = _mergeServerEntriesWithLocalDurations(
+        serverEntries:
+            _monthlyServerHistoryCache[monthKey] ??
+            const <WaterUsageHistoryEntry>[],
+        localHistory: _localHistoryForMonth(monthKey),
+      );
+      for (final entry in monthEntries) {
+        final key = _historyMergeKey(entry);
+        final existing = merged[key];
+        if (existing == null) {
+          merged[key] = entry;
+          continue;
+        }
+        merged[key] = _preferHistoryEntry(existing, entry);
       }
-      merged[key] = _preferHistoryEntry(existing, entry);
     }
 
     final usageHistory = merged.values.toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return usageHistory;
+  }
+
+  List<WaterUsageHistoryEntry> _localHistoryForMonth(String monthKey) {
+    return _localDurationRecords
+        .where((entry) => _monthKeyForDate(entry.createdAt) == monthKey)
+        .toList(growable: false);
   }
 
   Future<List<Map<String, dynamic>>> _waitForDeviceList(
@@ -604,7 +907,9 @@ class WaterProvider extends ChangeNotifier {
     final baseName = (customName == null || customName.trim().isEmpty)
         ? _stripDevicePrefix(backendName)
         : customName.trim();
-    final suffix = resolvedDevice['billType'] == 2 ? '热水' : '直饮水';
+    final suffix = resolvedDevice['billType'] == 2
+        ? '\u70ed\u6c34'
+        : '\u76f4\u996e\u6c34';
     return '$baseName$suffix';
   }
 
@@ -633,10 +938,14 @@ class WaterProvider extends ChangeNotifier {
     return null;
   }
 
-  List<WaterUsageHistoryEntry> _mergeServerHistoryWithLocalDurations({
-    required List<Map<String, dynamic>> serverItems,
+  List<WaterUsageHistoryEntry> _mergeServerEntriesWithLocalDurations({
+    required List<WaterUsageHistoryEntry> serverEntries,
     required List<WaterUsageHistoryEntry> localHistory,
   }) {
+    if (serverEntries.isEmpty) {
+      return <WaterUsageHistoryEntry>[];
+    }
+
     final merged = <WaterUsageHistoryEntry>[];
     final usedLocalIndexes = <int>{};
     final localByOrderNum = <String, int>{};
@@ -648,8 +957,7 @@ class WaterProvider extends ChangeNotifier {
       }
     }
 
-    for (final item in serverItems) {
-      final serverEntry = WaterUsageHistoryEntry.fromServerBill(item);
+    for (final serverEntry in serverEntries) {
       final orderNum = serverEntry.orderNum.trim();
       int? matchIndex;
 
@@ -819,8 +1127,10 @@ class WaterProvider extends ChangeNotifier {
     normalized = normalized.replaceAll('cold', '\u76f4\u996e');
     normalized = normalized.replaceAll('drink', '\u76f4\u996e');
     normalized = normalized.replaceAll('\u76f4\u996e\u6c34', '\u76f4\u996e');
-    normalized =
-        normalized.replaceAll('\u8bbe\u5907\u7528\u6c34', '\u70ed\u6c34');
+    normalized = normalized.replaceAll(
+      '\u8bbe\u5907\u7528\u6c34',
+      '\u70ed\u6c34',
+    );
     normalized = normalized.replaceAll('\u6d17\u6d74', '\u70ed\u6c34');
     return normalized;
   }
@@ -1090,7 +1400,7 @@ class WaterProvider extends ChangeNotifier {
   String _formatDuration(int durationSeconds) {
     final minutes = durationSeconds ~/ 60;
     final seconds = durationSeconds % 60;
-    return '${minutes}分${seconds}秒';
+    return '${minutes}\u5206${seconds}\u79d2';
   }
 
   void _startRunningTimer() {
@@ -1112,5 +1422,59 @@ class WaterProvider extends ChangeNotifier {
       const Duration(seconds: 1),
       (_) => syncRunningTime(),
     );
+  }
+
+  String _monthKey(int year, int month) {
+    return '$year-${month.toString().padLeft(2, '0')}';
+  }
+
+  String _monthKeyForDate(DateTime date) {
+    return _monthKey(date.year, date.month);
+  }
+
+  String _currentMonthKey() {
+    final now = DateTime.now();
+    return _monthKey(now.year, now.month);
+  }
+
+  DateTime _monthDate(String monthKey) {
+    final parts = monthKey.split('-');
+    if (parts.length != 2) {
+      return DateTime.now();
+    }
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+    return DateTime(year, month);
+  }
+
+  bool _isFutureMonth(int year, int month) {
+    final now = DateTime.now();
+    if (year > now.year) {
+      return true;
+    }
+    if (year == now.year && month > now.month) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _isMonthKeyInFuture(String monthKey) {
+    final date = _monthDate(monthKey);
+    return _isFutureMonth(date.year, date.month);
+  }
+
+  bool _historyListsEqual(
+    List<WaterUsageHistoryEntry> left,
+    List<WaterUsageHistoryEntry> right,
+  ) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var i = 0; i < left.length; i++) {
+      if (jsonEncode(left[i].toJson()) != jsonEncode(right[i].toJson())) {
+        return false;
+      }
+    }
+    return true;
   }
 }

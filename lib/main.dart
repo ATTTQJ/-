@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -81,6 +82,13 @@ class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
       if (!mounted) {
         return;
       }
+
+      unawaited(
+        waterProvider.backfillHistoryIfNeeded(
+          token: userProvider.token,
+          userId: userProvider.userId,
+        ),
+      );
     }
 
     await _consumePendingAction();

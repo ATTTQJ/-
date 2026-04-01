@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/water_usage_history_entry.dart';
+import '../../providers/user_provider.dart';
 import '../../providers/water_provider.dart';
 
 const int _historyVisibleCount = 5;
@@ -16,10 +19,26 @@ class HistoryBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<WaterProvider>(
-      builder: (context, waterProvider, child) {
+    return Consumer2<UserProvider, WaterProvider>(
+      builder: (context, userProvider, waterProvider, child) {
         final history = waterProvider.displayHistory;
         final isLoading = waterProvider.isHistoryLoading;
+        final selectedYear = waterProvider.selectedHistoryYear;
+        final selectedMonth = waterProvider.selectedHistoryMonth;
+        final availableYears = waterProvider.availableHistoryYears;
+        final availableMonths = waterProvider.availableMonthsForYear(
+          selectedYear,
+        );
+
+        Future<void> syncSelectedMonth() async {
+          await waterProvider.syncHistoryMonth(
+            token: userProvider.token,
+            userId: userProvider.userId,
+            year: waterProvider.selectedHistoryYear,
+            month: waterProvider.selectedHistoryMonth,
+            muteToast: true,
+          );
+        }
 
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -27,6 +46,7 @@ class HistoryBottomSheet extends StatelessWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   '\u7528\u6c34\u8bb0\u5f55',
@@ -36,16 +56,50 @@ class HistoryBottomSheet extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Text(
-                  isLoading
-                      ? '\u540c\u6b65\u4e2d...'
-                      : '\u5171 ${history.length} \u6761',
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 13,
-                  ),
+                Row(
+                  children: [
+                    _HistoryFilterDropdown(
+                      value: selectedYear,
+                      items: availableYears,
+                      suffix: '\u5e74',
+                      onChanged: (year) {
+                        if (year == null) {
+                          return;
+                        }
+                        final months = waterProvider.availableMonthsForYear(
+                          year,
+                        );
+                        final targetMonth = months.contains(selectedMonth)
+                            ? selectedMonth
+                            : months.last;
+                        waterProvider.selectHistoryMonth(year, targetMonth);
+                        unawaited(syncSelectedMonth());
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _HistoryFilterDropdown(
+                      value: selectedMonth,
+                      items: availableMonths,
+                      suffix: '\u6708',
+                      onChanged: (month) {
+                        if (month == null) {
+                          return;
+                        }
+                        waterProvider.selectHistoryMonth(selectedYear, month);
+                        unawaited(syncSelectedMonth());
+                      },
+                    ),
+                  ],
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isLoading ? '\u540c\u6b65\u4e2d...' : '\u5171 ${history.length} \u6761',
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -82,7 +136,7 @@ class HistoryBottomSheet extends StatelessWidget {
                           )
                         : KeyedSubtree(
                             key: ValueKey<String>(
-                              'history_list_${history.length}',
+                              'history_list_${waterProvider.selectedHistoryMonthKey}_${history.length}',
                             ),
                             child: ListView.separated(
                               padding: EdgeInsets.zero,
@@ -105,6 +159,52 @@ class HistoryBottomSheet extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _HistoryFilterDropdown extends StatelessWidget {
+  const _HistoryFilterDropdown({
+    required this.value,
+    required this.items,
+    required this.suffix,
+    required this.onChanged,
+  });
+
+  final int value;
+  final List<int> items;
+  final String suffix;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F5F7),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: items.contains(value) ? value : items.last,
+          onChanged: onChanged,
+          borderRadius: BorderRadius.circular(12),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+          style: const TextStyle(
+            color: Color(0xFF2C2C2E),
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          items: items
+              .map(
+                (item) => DropdownMenuItem<int>(
+                  value: item,
+                  child: Text('$item$suffix'),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ),
     );
   }
 }

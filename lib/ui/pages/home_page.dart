@@ -98,9 +98,11 @@ class _HomePageState extends State<HomePage> {
                             const HistoryBottomSheet(),
                           );
                           unawaited(
-                            context.read<WaterProvider>().syncHistoryFromServer(
+                            context.read<WaterProvider>().syncHistoryMonth(
                                   token: userProvider.token,
                                   userId: userProvider.userId,
+                                  year: waterProvider.selectedHistoryYear,
+                                  month: waterProvider.selectedHistoryMonth,
                                   muteToast: true,
                                 ),
                           );
@@ -262,13 +264,17 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) {
         return;
       }
-      unawaited(
-        waterProvider.syncHistoryFromServer(
+      unawaited(() async {
+        await waterProvider.syncHistoryFromServer(
           token: userProvider.token,
           userId: userProvider.userId,
           muteToast: true,
-        ),
-      );
+        );
+        await waterProvider.backfillHistoryIfNeeded(
+          token: userProvider.token,
+          userId: userProvider.userId,
+        );
+      }());
     });
   }
 
