@@ -89,6 +89,9 @@ class WaterProvider extends ChangeNotifier {
 
   Map<String, int> get deviceUsageCounts => Map.unmodifiable(_deviceUsageCounts);
 
+  List<WaterUsageHistoryEntry> get localDurationRecords =>
+      List.unmodifiable(_localDurationRecords);
+
   List<int> availableMonthsForYear(int year) {
     final now = DateTime.now();
     final maxMonth = year == now.year ? now.month : 12;
@@ -499,11 +502,11 @@ class WaterProvider extends ChangeNotifier {
           .toList(growable: false)
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      _monthlyServerHistoryCache[monthKey] = monthEntries;
       final mergedMonthEntries = _mergeServerEntriesWithLocalDurations(
         serverEntries: monthEntries,
         rememberLinks: true,
       );
+      _monthlyServerHistoryCache[monthKey] = mergedMonthEntries;
       _reconcileUsageCountsFromEntries(mergedMonthEntries);
       _syncedHistoryMonths.add(monthKey);
       if (selectAfterSync) {
@@ -586,13 +589,12 @@ class WaterProvider extends ChangeNotifier {
               .map(WaterUsageHistoryEntry.fromServerBill)
               .toList(growable: false)
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          _monthlyServerHistoryCache[monthKey] = monthEntries;
-          _reconcileUsageCountsFromEntries(
-            _mergeServerEntriesWithLocalDurations(
-              serverEntries: monthEntries,
-              rememberLinks: true,
-            ),
+          final mergedMonthEntries = _mergeServerEntriesWithLocalDurations(
+            serverEntries: monthEntries,
+            rememberLinks: true,
           );
+          _monthlyServerHistoryCache[monthKey] = mergedMonthEntries;
+          _reconcileUsageCountsFromEntries(mergedMonthEntries);
           _syncedHistoryMonths.add(monthKey);
           emptyMonthStreak = monthEntries.isEmpty ? emptyMonthStreak + 1 : 0;
 

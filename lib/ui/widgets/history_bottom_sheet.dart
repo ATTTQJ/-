@@ -91,28 +91,45 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                _HistoryMonthTrigger(
-                  month: selectedMonth,
-                  onTap: () async {
-                    final result = await showDialog<_HistoryMonthSelection>(
-                      context: context,
-                      builder: (dialogContext) => _HistoryMonthPickerDialog(
-                        initialYear: selectedYear,
-                        initialMonth: selectedMonth,
-                        availableYears: availableYears,
-                        monthsForYear: waterProvider.availableMonthsForYear,
-                      ),
-                    );
-                    if (result == null) {
-                      return;
-                    }
-                    unawaited(_switchHistoryMonth(
-                      userProvider: userProvider,
-                      waterProvider: waterProvider,
-                      year: result.year,
-                      month: result.month,
-                    ));
-                  },
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _LocalRecordsTrigger(
+                      count: waterProvider.localDurationRecords.length,
+                      onTap: () async {
+                        await showDialog<void>(
+                          context: context,
+                          builder: (dialogContext) => _LocalHistoryRecordsDialog(
+                            records: waterProvider.localDurationRecords,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 10),
+                    _HistoryMonthTrigger(
+                      month: selectedMonth,
+                      onTap: () async {
+                        final result = await showDialog<_HistoryMonthSelection>(
+                          context: context,
+                          builder: (dialogContext) => _HistoryMonthPickerDialog(
+                            initialYear: selectedYear,
+                            initialMonth: selectedMonth,
+                            availableYears: availableYears,
+                            monthsForYear: waterProvider.availableMonthsForYear,
+                          ),
+                        );
+                        if (result == null) {
+                          return;
+                        }
+                        unawaited(_switchHistoryMonth(
+                          userProvider: userProvider,
+                          waterProvider: waterProvider,
+                          year: result.year,
+                          month: result.month,
+                        ));
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -228,6 +245,35 @@ class _HistoryMonthTrigger extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalRecordsTrigger extends StatelessWidget {
+  const _LocalRecordsTrigger({
+    required this.count,
+    required this.onTap,
+  });
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Text(
+          '本地记录($count)',
+          style: const TextStyle(
+            color: Color(0xFF8E8E93),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
@@ -404,6 +450,140 @@ class _PickerChip extends StatelessWidget {
             color: selected ? Colors.white : const Color(0xFF2C2C2E),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LocalHistoryRecordsDialog extends StatelessWidget {
+  const _LocalHistoryRecordsDialog({
+    required this.records,
+  });
+
+  final List<WaterUsageHistoryEntry> records;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '本地记录 (${records.length})',
+              style: const TextStyle(
+                color: Color(0xFF2C2C2E),
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '用于核对本地是否写入了用水时长补丁',
+              style: TextStyle(
+                color: Color(0xFF8E8E93),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 420),
+              child: records.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Text(
+                          '暂无本地记录',
+                          style: TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: records.length,
+                      separatorBuilder: (context, index) => Divider(
+                        height: 1,
+                        color: Colors.grey[200],
+                      ),
+                      itemBuilder: (context, index) => _LocalHistoryRecordItem(
+                        entry: records[index],
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('关闭'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalHistoryRecordItem extends StatelessWidget {
+  const _LocalHistoryRecordItem({
+    required this.entry,
+  });
+
+  final WaterUsageHistoryEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final orderNum = entry.orderNum.trim().isEmpty ? '无' : entry.orderNum.trim();
+    final deviceId = (entry.deviceId?.trim().isEmpty ?? true)
+        ? '无'
+        : entry.deviceId!.trim();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            entry.displayDeviceName,
+            style: const TextStyle(
+              color: Color(0xFF2C2C2E),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${entry.formattedDate}  |  时长 ${entry.formattedDuration}  |  ¥${entry.formattedAmount}',
+            style: const TextStyle(
+              color: Color(0xFF636366),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'orderNum: $orderNum',
+            style: const TextStyle(
+              color: Color(0xFF8E8E93),
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'deviceId: $deviceId',
+            style: const TextStyle(
+              color: Color(0xFF8E8E93),
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }
