@@ -654,24 +654,87 @@ class WaterProvider extends ChangeNotifier {
         const <WaterUsageHistoryEntry>[];
     final mergedEntries = _mergeServerEntriesWithLocalDurations(
       serverEntries: serverEntries,
-    );
-    final mergedKeys = mergedEntries
-        .map(_historyMergeKey)
-        .toSet();
+    ).toList(growable: true);
     final monthLocalEntries = _localDurationRecords
         .where((entry) => _monthKeyForDate(entry.createdAt) == resolvedMonthKey)
-        .where((entry) => !mergedKeys.contains(_historyMergeKey(entry)))
         .toList(growable: false);
 
     if (monthLocalEntries.isEmpty) {
       return mergedEntries;
     }
 
-    final result = <WaterUsageHistoryEntry>[
-      ...mergedEntries,
-      ...monthLocalEntries,
-    ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return result;
+    for (final localEntry in monthLocalEntries) {
+      final existingIndex = _findDisplayMergeIndexForLocal(
+        displayEntries: mergedEntries,
+        localEntry: localEntry,
+      );
+      if (existingIndex == null) {
+        mergedEntries.add(localEntry);
+        continue;
+      }
+
+      mergedEntries[existingIndex] = _preferHistoryEntry(
+        mergedEntries[existingIndex],
+        localEntry,
+      );
+    }
+
+    mergedEntries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return mergedEntries;
+  }
+
+  int? _findDisplayMergeIndexForLocal({
+    required List<WaterUsageHistoryEntry> displayEntries,
+    required WaterUsageHistoryEntry localEntry,
+  }) {
+    final localOrderNum = localEntry.orderNum.trim();
+    if (localOrderNum.isNotEmpty) {
+      for (var index = 0; index < displayEntries.length; index++) {
+        if (displayEntries[index].orderNum.trim() == localOrderNum) {
+          return index;
+        }
+      }
+    }
+
+    final localDeviceId = localEntry.deviceId?.trim() ?? '';
+    if (localDeviceId.isNotEmpty) {
+      for (var index = 0; index < displayEntries.length; index++) {
+        final candidate = displayEntries[index];
+        final candidateDeviceId = candidate.deviceId?.trim() ?? '';
+        if (candidateDeviceId.isEmpty || candidateDeviceId != localDeviceId) {
+          continue;
+        }
+
+        final diffSeconds = candidate.createdAt
+            .difference(localEntry.createdAt)
+            .inSeconds
+            .abs();
+        if (diffSeconds <= 3 * 24 * 60 * 60) {
+          return index;
+        }
+      }
+    }
+
+    for (var index = 0; index < displayEntries.length; index++) {
+      final candidate = displayEntries[index];
+      if (!_historyNamesLikelySame(
+        candidate.displayDeviceName,
+        localEntry.displayDeviceName,
+      )) {
+        continue;
+      }
+
+      final diffSeconds = candidate.minutePrecisionTime
+          .difference(localEntry.minutePrecisionTime)
+          .inSeconds
+          .abs();
+      if (diffSeconds > 12 * 60 * 60) {
+        continue;
+      }
+      return index;
+    }
+
+    return null;
   }
 
   void _incrementUsageCount(
