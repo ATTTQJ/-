@@ -49,10 +49,12 @@ class _HomePageState extends State<HomePage> {
         final working = waterProvider.orderNum.isNotEmpty;
         final activeId = waterProvider.activeDeviceId;
         Map<String, dynamic>? activeDevice;
-        final usageCounts = _buildUsageCounts(
-          deviceProvider: deviceProvider,
-          history: waterProvider.history,
-        );
+        final usageCounts = <String, int>{
+          for (final device in deviceProvider.deviceList)
+            device['deviceInfId'].toString():
+                waterProvider.deviceUsageCounts[device['deviceInfId'].toString()] ??
+                0,
+        };
         final predictedDevice = _resolvePredictedDevice(
           deviceProvider: deviceProvider,
           usageCounts: usageCounts,

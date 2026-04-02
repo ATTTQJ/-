@@ -31,6 +31,8 @@ class WaterProvider extends ChangeNotifier {
   static const String _localDurationStorageKey = 'water_local_duration_records';
   static const String _durationPatchStorageKey = 'water_history_duration_patches';
   static const String _historyPatchLinksKey = 'water_history_patch_links';
+  static const String _deviceUsageStatsKey = 'water_device_usage_stats';
+  static const String _countedUsageOrderNumsKey = 'water_counted_usage_order_nums';
 
   String orderNum = '';
   String tableName = '';
@@ -43,6 +45,8 @@ class WaterProvider extends ChangeNotifier {
   final Map<String, List<WaterUsageHistoryEntry>> _monthlyServerHistoryCache = {};
   final Map<String, WaterUsageHistoryEntry> _durationPatches = {};
   final Map<String, String> _historyPatchLinks = {};
+  final Map<String, int> _deviceUsageCounts = {};
+  final Set<String> _countedUsageOrderNums = <String>{};
   List<WaterUsageHistoryEntry> _localDurationRecords = [];
   final Set<String> _syncedHistoryMonths = <String>{};
   String _selectedHistoryMonthKey = '';
@@ -83,6 +87,8 @@ class WaterProvider extends ChangeNotifier {
 
   bool get needsHistoryBackfill => _needsHistoryBackfill;
 
+  Map<String, int> get deviceUsageCounts => Map.unmodifiable(_deviceUsageCounts);
+
   List<int> availableMonthsForYear(int year) {
     final now = DateTime.now();
     final maxMonth = year == now.year ? now.month : 12;
@@ -105,6 +111,15 @@ class WaterProvider extends ChangeNotifier {
     _historyPatchLinks
       ..clear()
       ..addAll(_decodeStringMap(prefs.getString(_historyPatchLinksKey)));
+    _deviceUsageCounts
+      ..clear()
+      ..addAll(_decodeIntMap(prefs.getString(_deviceUsageStatsKey)));
+    _countedUsageOrderNums
+      ..clear()
+      ..addAll(
+        (prefs.getStringList(_countedUsageOrderNumsKey) ?? const <String>[])
+            .where((item) => item.trim().isNotEmpty),
+      );
     _rebuildLocalDurationRecordsFromPatches();
     final legacyLocalDurationRecords = _decodeHistoryEntries(
       prefs.getStringList(_localDurationStorageKey),
@@ -133,6 +148,7 @@ class WaterProvider extends ChangeNotifier {
       _ingestDurationRecords(legacyLocalDurationRecords);
     }
     _rebuildLocalDurationRecordsFromPatches();
+    _reconcileUsageCountsFromEntries(_buildUsageHistory());
     _historyPatchLinks.removeWhere(
       (_, patchKey) => !_durationPatches.containsKey(patchKey),
     );
@@ -328,6 +344,7 @@ class WaterProvider extends ChangeNotifier {
             isLocalOnly: true,
           ),
         );
+        _incrementUsageCount(targetDeviceId, orderNum);
         await _persistHistoryCaches(prefs: prefs);
 
         _startRunningTimer();
@@ -483,10 +500,11 @@ class WaterProvider extends ChangeNotifier {
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       _monthlyServerHistoryCache[monthKey] = monthEntries;
-      _mergeServerEntriesWithLocalDurations(
+      final mergedMonthEntries = _mergeServerEntriesWithLocalDurations(
         serverEntries: monthEntries,
         rememberLinks: true,
       );
+      _reconcileUsageCountsFromEntries(mergedMonthEntries);
       _syncedHistoryMonths.add(monthKey);
       if (selectAfterSync) {
         _selectedHistoryMonthKey = monthKey;
@@ -569,6 +587,12 @@ class WaterProvider extends ChangeNotifier {
               .toList(growable: false)
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           _monthlyServerHistoryCache[monthKey] = monthEntries;
+          _reconcileUsageCountsFromEntries(
+            _mergeServerEntriesWithLocalDurations(
+              serverEntries: monthEntries,
+              rememberLinks: true,
+            ),
+          );
           _syncedHistoryMonths.add(monthKey);
           emptyMonthStreak = monthEntries.isEmpty ? emptyMonthStreak + 1 : 0;
 
@@ -596,6 +620,8 @@ class WaterProvider extends ChangeNotifier {
     _monthlyServerHistoryCache.clear();
     _durationPatches.clear();
     _historyPatchLinks.clear();
+    _deviceUsageCounts.clear();
+    _countedUsageOrderNums.clear();
     _localDurationRecords.clear();
     _syncedHistoryMonths.clear();
     _selectedHistoryMonthKey = _currentMonthKey();
@@ -604,6 +630,8 @@ class WaterProvider extends ChangeNotifier {
     await prefs.remove(_historyMonthCacheKey);
     await prefs.remove(_durationPatchStorageKey);
     await prefs.remove(_historyPatchLinksKey);
+    await prefs.remove(_deviceUsageStatsKey);
+    await prefs.remove(_countedUsageOrderNumsKey);
     await prefs.remove(_localDurationStorageKey);
     await prefs.remove(_displayHistoryStorageKey);
     await prefs.remove(_legacyHistoryStorageKey);
@@ -624,9 +652,85 @@ class WaterProvider extends ChangeNotifier {
     final serverEntries =
         _monthlyServerHistoryCache[resolvedMonthKey] ??
         const <WaterUsageHistoryEntry>[];
-    return _mergeServerEntriesWithLocalDurations(
+    final mergedEntries = _mergeServerEntriesWithLocalDurations(
       serverEntries: serverEntries,
     );
+    final mergedKeys = mergedEntries
+        .map(_historyMergeKey)
+        .toSet();
+    final monthLocalEntries = _localDurationRecords
+        .where((entry) => _monthKeyForDate(entry.createdAt) == resolvedMonthKey)
+        .where((entry) => !mergedKeys.contains(_historyMergeKey(entry)))
+        .toList(growable: false);
+
+    if (monthLocalEntries.isEmpty) {
+      return mergedEntries;
+    }
+
+    final result = <WaterUsageHistoryEntry>[
+      ...mergedEntries,
+      ...monthLocalEntries,
+    ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
+  }
+
+  void _incrementUsageCount(
+    String deviceId,
+    String orderNum, {
+    DateTime? createdAt,
+    double? amount,
+  }) {
+    final resolvedDeviceId = deviceId.trim();
+    if (resolvedDeviceId.isEmpty) {
+      return;
+    }
+
+    final usageKey = _usageCountKey(
+      orderNum: orderNum,
+      deviceId: resolvedDeviceId,
+      createdAt: createdAt,
+      amount: amount,
+    );
+    if (_countedUsageOrderNums.contains(usageKey)) {
+      return;
+    }
+
+    _countedUsageOrderNums.add(usageKey);
+    _deviceUsageCounts[resolvedDeviceId] =
+        (_deviceUsageCounts[resolvedDeviceId] ?? 0) + 1;
+  }
+
+  void _reconcileUsageCountsFromEntries(
+    Iterable<WaterUsageHistoryEntry> entries,
+  ) {
+    for (final entry in entries) {
+      final deviceId = entry.deviceId?.trim() ?? '';
+      if (deviceId.isEmpty) {
+        continue;
+      }
+      _incrementUsageCount(
+        deviceId,
+        entry.orderNum,
+        createdAt: entry.createdAt,
+        amount: entry.amount,
+      );
+    }
+  }
+
+  String _usageCountKey({
+    required String orderNum,
+    required String deviceId,
+    DateTime? createdAt,
+    double? amount,
+  }) {
+    final trimmedOrderNum = orderNum.trim();
+    if (trimmedOrderNum.isNotEmpty) {
+      return 'order:$trimmedOrderNum';
+    }
+    final timeKey = (createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+        .toIso8601String();
+    final amountKey = (amount ?? 0).toStringAsFixed(2);
+    return 'device:$deviceId|$timeKey|$amountKey';
   }
 
   Future<void> _migrateLegacyHistoryIfNeeded(
@@ -710,6 +814,14 @@ class WaterProvider extends ChangeNotifier {
     await resolvedPrefs.setString(
       _historyPatchLinksKey,
       jsonEncode(_historyPatchLinks),
+    );
+    await resolvedPrefs.setString(
+      _deviceUsageStatsKey,
+      jsonEncode(_deviceUsageCounts),
+    );
+    await resolvedPrefs.setStringList(
+      _countedUsageOrderNumsKey,
+      _countedUsageOrderNums.toList()..sort(),
     );
     await resolvedPrefs.setStringList(
       _localDurationStorageKey,
@@ -845,6 +957,27 @@ class WaterProvider extends ChangeNotifier {
       );
     } catch (_) {
       return <String, String>{};
+    }
+  }
+
+  Map<String, int> _decodeIntMap(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return <String, int>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, int>{};
+      }
+      return decoded.map<String, int>(
+        (key, value) => MapEntry(
+          key.toString(),
+          value is num ? value.toInt() : (int.tryParse(value.toString()) ?? 0),
+        ),
+      );
+    } catch (_) {
+      return <String, int>{};
     }
   }
 
