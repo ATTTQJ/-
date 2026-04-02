@@ -30,6 +30,7 @@ class WaterProvider extends ChangeNotifier {
   static const String _historySyncedMonthsKey = 'water_history_synced_months';
   static const String _localDurationStorageKey = 'water_local_duration_records';
   static const String _durationPatchStorageKey = 'water_history_duration_patches';
+  static const String _durationPatchEntriesKey = 'water_history_duration_patch_entries';
   static const String _historyPatchLinksKey = 'water_history_patch_links';
   static const String _deviceUsageStatsKey = 'water_device_usage_stats';
   static const String _countedUsageOrderNumsKey = 'water_counted_usage_order_nums';
@@ -110,7 +111,16 @@ class WaterProvider extends ChangeNotifier {
       ..addAll(_decodeMonthlyHistoryCache(prefs.getString(_historyMonthCacheKey)));
     _durationPatches
       ..clear()
-      ..addAll(_decodeDurationPatches(prefs.getString(_durationPatchStorageKey)));
+      ..addAll(
+        _decodeDurationPatchEntries(
+          prefs.getStringList(_durationPatchEntriesKey),
+        ),
+      );
+    if (_durationPatches.isEmpty) {
+      _durationPatches.addAll(
+        _decodeDurationPatches(prefs.getString(_durationPatchStorageKey)),
+      );
+    }
     _historyPatchLinks
       ..clear()
       ..addAll(_decodeStringMap(prefs.getString(_historyPatchLinksKey)));
@@ -348,6 +358,7 @@ class WaterProvider extends ChangeNotifier {
           ),
         );
         _incrementUsageCount(targetDeviceId, orderNum);
+        await _persistLocalDurationPatchesOnly(prefs: prefs);
         await _persistHistoryCaches(prefs: prefs);
 
         _startRunningTimer();
@@ -446,6 +457,7 @@ class WaterProvider extends ChangeNotifier {
             orderNum: currentOrderNum,
           ),
         );
+        await _persistLocalDurationPatchesOnly(prefs: prefs);
         await _persistHistoryCaches(prefs: prefs);
       }
     } finally {
@@ -631,6 +643,7 @@ class WaterProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_historyMonthCacheKey);
     await prefs.remove(_durationPatchStorageKey);
+    await prefs.remove(_durationPatchEntriesKey);
     await prefs.remove(_historyPatchLinksKey);
     await prefs.remove(_deviceUsageStatsKey);
     await prefs.remove(_countedUsageOrderNumsKey);
@@ -872,6 +885,7 @@ class WaterProvider extends ChangeNotifier {
     _historyPatchLinks.removeWhere(
       (_, patchKey) => !_durationPatches.containsKey(patchKey),
     );
+    await _persistLocalDurationPatchesOnly(prefs: resolvedPrefs);
     await resolvedPrefs.setString(
       _durationPatchStorageKey,
       jsonEncode(patchPayload),
@@ -907,6 +921,26 @@ class WaterProvider extends ChangeNotifier {
         _historySchemaVersion,
       );
     }
+  }
+
+  Future<void> _persistLocalDurationPatchesOnly({
+    SharedPreferences? prefs,
+  }) async {
+    final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
+    final patchEntries = _durationPatches.entries
+        .map(
+          (entry) => jsonEncode({
+            'key': entry.key,
+            'entry': entry.value.toJson(),
+          }),
+        )
+        .toList(growable: false);
+
+    await resolvedPrefs.setStringList(_durationPatchEntriesKey, patchEntries);
+    await resolvedPrefs.setStringList(
+      _localDurationStorageKey,
+      _localDurationRecords.map((entry) => jsonEncode(entry.toJson())).toList(),
+    );
   }
 
   Future<void> _persistSelectedHistoryMonth({
@@ -1005,6 +1039,48 @@ class WaterProvider extends ChangeNotifier {
     } catch (_) {
       return <String, WaterUsageHistoryEntry>{};
     }
+  }
+
+  Map<String, WaterUsageHistoryEntry> _decodeDurationPatchEntries(
+    List<String>? rawEntries,
+  ) {
+    if (rawEntries == null || rawEntries.isEmpty) {
+      return <String, WaterUsageHistoryEntry>{};
+    }
+
+    final result = <String, WaterUsageHistoryEntry>{};
+    for (final raw in rawEntries) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map) {
+          continue;
+        }
+
+        final patchKey = decoded['key']?.toString().trim() ?? '';
+        final entryRaw = decoded['entry'];
+        if (patchKey.isEmpty || entryRaw == null) {
+          continue;
+        }
+
+        WaterUsageHistoryEntry? patch;
+        if (entryRaw is Map<String, dynamic>) {
+          patch = WaterUsageHistoryEntry.fromJson(entryRaw);
+        } else if (entryRaw is Map) {
+          patch = WaterUsageHistoryEntry.fromJson(
+            Map<String, dynamic>.from(entryRaw),
+          );
+        } else if (entryRaw is String) {
+          patch = WaterUsageHistoryEntry.fromStorage(entryRaw);
+        }
+
+        if (patch != null) {
+          result[patchKey] = _asLocalDurationRecord(patch);
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+    return result;
   }
 
   Map<String, String> _decodeStringMap(String? raw) {
