@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'core/global_keys.dart';
@@ -11,8 +12,10 @@ import 'providers/water_provider.dart';
 import 'ui/pages/home_page.dart';
 import 'ui/pages/login_page.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  await Hive.openBox('water_history_box');
   HttpOverrides.global = MyHttpOverrides();
 
   runApp(

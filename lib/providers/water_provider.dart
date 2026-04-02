@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/toast_service.dart';
@@ -18,9 +19,11 @@ class WaterProvider extends ChangeNotifier {
     'com.fakeuy.water/siri',
   );
 
-  static const int _historySchemaVersion = 3;
+  static const int _historySchemaVersion = 4;
   static const int _historyBackfillMaxMonths = 48;
   static const int _historyBackfillEmptyStopCount = 6;
+  static const String _historyHiveBoxName = 'water_history_box';
+  static const String _localSessionHiveKey = 'local_usage_sessions_v1';
 
   static const String _historySchemaVersionKey = 'water_history_schema_version';
   static const String _legacyHistoryStorageKey = 'water_history';
@@ -101,6 +104,7 @@ class WaterProvider extends ChangeNotifier {
 
   Future<void> loadFromLocal() async {
     final prefs = await SharedPreferences.getInstance();
+    final historyBox = await _historyBox();
     orderNum = prefs.getString('water_orderNum') ?? '';
     tableName = prefs.getString('water_tableName') ?? '';
     mac = prefs.getString('water_mac') ?? '';
@@ -111,11 +115,12 @@ class WaterProvider extends ChangeNotifier {
       ..addAll(_decodeMonthlyHistoryCache(prefs.getString(_historyMonthCacheKey)));
     _durationPatches
       ..clear()
-      ..addAll(
-        _decodeDurationPatchEntries(
-          prefs.getStringList(_durationPatchEntriesKey),
-        ),
+      ..addAll(_decodeHiveDurationPatches(historyBox.get(_localSessionHiveKey)));
+    if (_durationPatches.isEmpty) {
+      _durationPatches.addAll(
+        _decodeDurationPatchEntries(prefs.getStringList(_durationPatchEntriesKey)),
       );
+    }
     if (_durationPatches.isEmpty) {
       _durationPatches.addAll(
         _decodeDurationPatches(prefs.getString(_durationPatchStorageKey)),
@@ -125,14 +130,9 @@ class WaterProvider extends ChangeNotifier {
       ..clear()
       ..addAll(_decodeStringMap(prefs.getString(_historyPatchLinksKey)));
     _deviceUsageCounts
-      ..clear()
-      ..addAll(_decodeIntMap(prefs.getString(_deviceUsageStatsKey)));
+      ..clear();
     _countedUsageOrderNums
-      ..clear()
-      ..addAll(
-        (prefs.getStringList(_countedUsageOrderNumsKey) ?? const <String>[])
-            .where((item) => item.trim().isNotEmpty),
-      );
+      ..clear();
     _rebuildLocalDurationRecordsFromPatches();
     final legacyLocalDurationRecords = _decodeHistoryEntries(
       prefs.getStringList(_localDurationStorageKey),
@@ -146,22 +146,22 @@ class WaterProvider extends ChangeNotifier {
     _selectedHistoryMonthKey =
         prefs.getString(_historySelectedMonthKey)?.trim() ?? '';
 
-    _ingestDurationRecords(
-      _monthlyServerHistoryCache.values
-          .expand((entries) => entries)
-          .where(_hasDuration),
-    );
-
     await _migrateLegacyHistoryIfNeeded(
       prefs,
-      legacyLocalDurationRecords: legacyLocalDurationRecords,
+      legacyLocalDurationRecords: [
+        ...legacyLocalDurationRecords,
+        if (_durationPatches.isEmpty)
+          ..._monthlyServerHistoryCache.values
+              .expand((entries) => entries)
+              .where(_hasDuration),
+      ],
     );
 
     if (_durationPatches.isEmpty && legacyLocalDurationRecords.isNotEmpty) {
       _ingestDurationRecords(legacyLocalDurationRecords);
     }
     _rebuildLocalDurationRecordsFromPatches();
-    _reconcileUsageCountsFromEntries(_buildUsageHistory());
+    _refreshDeviceUsageCounts();
     _historyPatchLinks.removeWhere(
       (_, patchKey) => !_durationPatches.containsKey(patchKey),
     );
@@ -347,20 +347,6 @@ class WaterProvider extends ChangeNotifier {
           await prefs.setString('water_initial_balance', currentBalance.trim());
         }
 
-        _upsertLocalDurationRecord(
-          WaterUsageHistoryEntry(
-            createdAt: startTime!,
-            deviceName: _localHistoryDeviceName(device),
-            amount: 0,
-            orderNum: orderNum,
-            deviceId: targetDeviceId,
-            isLocalOnly: true,
-          ),
-        );
-        _incrementUsageCount(targetDeviceId, orderNum);
-        await _persistLocalDurationPatchesOnly(prefs: prefs);
-        await _persistHistoryCaches(prefs: prefs);
-
         _startRunningTimer();
         ToastService.show('\u8bbe\u5907\u5df2\u5f00\u542f\uff0c\u51fa\u6c34\u4e2d...');
         return true;
@@ -458,7 +444,6 @@ class WaterProvider extends ChangeNotifier {
           ),
         );
         await _persistLocalDurationPatchesOnly(prefs: prefs);
-        await _persistHistoryCaches(prefs: prefs);
       }
     } finally {
       isRequesting = false;
@@ -514,12 +499,12 @@ class WaterProvider extends ChangeNotifier {
           .toList(growable: false)
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      final mergedMonthEntries = _mergeServerEntriesWithLocalDurations(
+      _mergeServerEntriesWithLocalDurations(
         serverEntries: monthEntries,
         rememberLinks: true,
       );
-      _monthlyServerHistoryCache[monthKey] = mergedMonthEntries;
-      _reconcileUsageCountsFromEntries(mergedMonthEntries);
+      _monthlyServerHistoryCache[monthKey] = monthEntries;
+      _refreshDeviceUsageCounts();
       _syncedHistoryMonths.add(monthKey);
       if (selectAfterSync) {
         _selectedHistoryMonthKey = monthKey;
@@ -601,12 +586,12 @@ class WaterProvider extends ChangeNotifier {
               .map(WaterUsageHistoryEntry.fromServerBill)
               .toList(growable: false)
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          final mergedMonthEntries = _mergeServerEntriesWithLocalDurations(
+          _mergeServerEntriesWithLocalDurations(
             serverEntries: monthEntries,
             rememberLinks: true,
           );
-          _monthlyServerHistoryCache[monthKey] = mergedMonthEntries;
-          _reconcileUsageCountsFromEntries(mergedMonthEntries);
+          _monthlyServerHistoryCache[monthKey] = monthEntries;
+          _refreshDeviceUsageCounts();
           _syncedHistoryMonths.add(monthKey);
           emptyMonthStreak = monthEntries.isEmpty ? emptyMonthStreak + 1 : 0;
 
@@ -652,6 +637,8 @@ class WaterProvider extends ChangeNotifier {
     await prefs.remove(_legacyHistoryStorageKey);
     await prefs.remove(_historySelectedMonthKey);
     await prefs.remove(_historySyncedMonthsKey);
+    final historyBox = await _historyBox();
+    await historyBox.delete(_localSessionHiveKey);
     notifyListeners();
   }
 
@@ -778,6 +765,16 @@ class WaterProvider extends ChangeNotifier {
         (_deviceUsageCounts[resolvedDeviceId] ?? 0) + 1;
   }
 
+  void _refreshDeviceUsageCounts() {
+    _deviceUsageCounts.clear();
+    _countedUsageOrderNums.clear();
+
+    _reconcileUsageCountsFromEntries(_localDurationRecords);
+    for (final entries in _monthlyServerHistoryCache.values) {
+      _reconcileUsageCountsFromEntries(entries);
+    }
+  }
+
   void _reconcileUsageCountsFromEntries(
     Iterable<WaterUsageHistoryEntry> entries,
   ) {
@@ -878,33 +875,13 @@ class WaterProvider extends ChangeNotifier {
       _historyMonthCacheKey,
       jsonEncode(monthCachePayload),
     );
-    final patchPayload = <String, Map<String, dynamic>>{};
-    for (final entry in _durationPatches.entries) {
-      patchPayload[entry.key] = entry.value.toJson();
-    }
     _historyPatchLinks.removeWhere(
       (_, patchKey) => !_durationPatches.containsKey(patchKey),
     );
     await _persistLocalDurationPatchesOnly(prefs: resolvedPrefs);
     await resolvedPrefs.setString(
-      _durationPatchStorageKey,
-      jsonEncode(patchPayload),
-    );
-    await resolvedPrefs.setString(
       _historyPatchLinksKey,
       jsonEncode(_historyPatchLinks),
-    );
-    await resolvedPrefs.setString(
-      _deviceUsageStatsKey,
-      jsonEncode(_deviceUsageCounts),
-    );
-    await resolvedPrefs.setStringList(
-      _countedUsageOrderNumsKey,
-      _countedUsageOrderNums.toList()..sort(),
-    );
-    await resolvedPrefs.setStringList(
-      _localDurationStorageKey,
-      _localDurationRecords.map((entry) => jsonEncode(entry.toJson())).toList(),
     );
     await resolvedPrefs.setString(
       _historySelectedMonthKey,
@@ -921,26 +898,28 @@ class WaterProvider extends ChangeNotifier {
         _historySchemaVersion,
       );
     }
+
+    await resolvedPrefs.remove(_durationPatchStorageKey);
+    await resolvedPrefs.remove(_durationPatchEntriesKey);
+    await resolvedPrefs.remove(_localDurationStorageKey);
+    await resolvedPrefs.remove(_deviceUsageStatsKey);
+    await resolvedPrefs.remove(_countedUsageOrderNumsKey);
   }
 
   Future<void> _persistLocalDurationPatchesOnly({
     SharedPreferences? prefs,
   }) async {
     final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
-    final patchEntries = _durationPatches.entries
-        .map(
-          (entry) => jsonEncode({
-            'key': entry.key,
-            'entry': entry.value.toJson(),
-          }),
-        )
-        .toList(growable: false);
+    final historyBox = await _historyBox();
+    final patchPayload = <String, Map<String, dynamic>>{};
+    for (final entry in _durationPatches.entries) {
+      patchPayload[entry.key] = entry.value.toJson();
+    }
 
-    await resolvedPrefs.setStringList(_durationPatchEntriesKey, patchEntries);
-    await resolvedPrefs.setStringList(
-      _localDurationStorageKey,
-      _localDurationRecords.map((entry) => jsonEncode(entry.toJson())).toList(),
-    );
+    await historyBox.put(_localSessionHiveKey, jsonEncode(patchPayload));
+    await resolvedPrefs.remove(_durationPatchEntriesKey);
+    await resolvedPrefs.remove(_durationPatchStorageKey);
+    await resolvedPrefs.remove(_localDurationStorageKey);
   }
 
   Future<void> _persistSelectedHistoryMonth({
@@ -951,6 +930,41 @@ class WaterProvider extends ChangeNotifier {
       _historySelectedMonthKey,
       selectedHistoryMonthKey,
     );
+  }
+
+  Future<Box<dynamic>> _historyBox() async {
+    if (Hive.isBoxOpen(_historyHiveBoxName)) {
+      return Hive.box<dynamic>(_historyHiveBoxName);
+    }
+    return Hive.openBox<dynamic>(_historyHiveBoxName);
+  }
+
+  Map<String, WaterUsageHistoryEntry> _decodeHiveDurationPatches(Object? raw) {
+    if (raw == null) {
+      return <String, WaterUsageHistoryEntry>{};
+    }
+
+    if (raw is String) {
+      return _decodeDurationPatches(raw);
+    }
+
+    if (raw is Map) {
+      try {
+        return _decodeDurationPatches(jsonEncode(raw));
+      } catch (_) {
+        return <String, WaterUsageHistoryEntry>{};
+      }
+    }
+
+    if (raw is Iterable) {
+      final encodedItems = raw
+          .whereType<String>()
+          .where((item) => item.trim().isNotEmpty)
+          .toList(growable: false);
+      return _decodeDurationPatchEntries(encodedItems);
+    }
+
+    return <String, WaterUsageHistoryEntry>{};
   }
 
   Map<String, List<WaterUsageHistoryEntry>> _decodeMonthlyHistoryCache(
@@ -1166,6 +1180,7 @@ class WaterProvider extends ChangeNotifier {
     _durationPatches[patchKey] = mergedEntry;
     if (rebuildList) {
       _rebuildLocalDurationRecordsFromPatches();
+      _refreshDeviceUsageCounts();
     }
   }
 
@@ -1174,6 +1189,7 @@ class WaterProvider extends ChangeNotifier {
       _upsertDurationPatch(entry, rebuildList: false);
     }
     _rebuildLocalDurationRecordsFromPatches();
+    _refreshDeviceUsageCounts();
   }
 
   void _rebuildLocalDurationRecordsFromPatches() {
