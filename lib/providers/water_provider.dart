@@ -55,6 +55,7 @@ class WaterProvider extends ChangeNotifier {
   final Set<String> _syncedHistoryMonths = <String>{};
   String _selectedHistoryMonthKey = '';
   bool _needsHistoryBackfill = false;
+  bool _hasLoadedLocalState = false;
 
   DateTime? startTime;
   Timer? timer;
@@ -90,6 +91,7 @@ class WaterProvider extends ChangeNotifier {
   }
 
   bool get needsHistoryBackfill => _needsHistoryBackfill;
+  bool get hasLoadedLocalState => _hasLoadedLocalState;
 
   Map<String, int> get deviceUsageCounts => Map.unmodifiable(_deviceUsageCounts);
 
@@ -103,6 +105,7 @@ class WaterProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromLocal() async {
+    _hasLoadedLocalState = false;
     final prefs = await SharedPreferences.getInstance();
     final historyBox = await _historyBox();
     orderNum = prefs.getString('water_orderNum') ?? '';
@@ -190,6 +193,7 @@ class WaterProvider extends ChangeNotifier {
       activeDeviceId = '';
     }
 
+    _hasLoadedLocalState = true;
     notifyListeners();
   }
 
@@ -470,6 +474,9 @@ class WaterProvider extends ChangeNotifier {
     bool selectAfterSync = false,
     bool muteToast = false,
   }) async {
+    if (!_hasLoadedLocalState) {
+      return false;
+    }
     if (token.trim().isEmpty || userId.trim().isEmpty) {
       return false;
     }
@@ -538,7 +545,8 @@ class WaterProvider extends ChangeNotifier {
     required String token,
     required String userId,
   }) async {
-    if (!_needsHistoryBackfill ||
+    if (!_hasLoadedLocalState ||
+        !_needsHistoryBackfill ||
         isHistoryBackfilling ||
         token.trim().isEmpty ||
         userId.trim().isEmpty) {
@@ -639,6 +647,7 @@ class WaterProvider extends ChangeNotifier {
     await prefs.remove(_historySyncedMonthsKey);
     final historyBox = await _historyBox();
     await historyBox.delete(_localSessionHiveKey);
+    await historyBox.flush();
     notifyListeners();
   }
 
@@ -917,6 +926,7 @@ class WaterProvider extends ChangeNotifier {
     }
 
     await historyBox.put(_localSessionHiveKey, jsonEncode(patchPayload));
+    await historyBox.flush();
     await resolvedPrefs.remove(_durationPatchEntriesKey);
     await resolvedPrefs.remove(_durationPatchStorageKey);
     await resolvedPrefs.remove(_localDurationStorageKey);
