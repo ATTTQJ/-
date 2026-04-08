@@ -84,159 +84,146 @@ class _HomePageState extends State<HomePage> {
               
               SafeArea(
                 bottom: false, 
-                // 🌟 终极重构：Stack 双层布局，控制 Z 轴景深
                 child: Stack(
                   children: [
-                    // ==========================================
-                    // 🌟 底层：设备卡片滑动区 (Bottom Layer)
-                    // 它被推到了深色面板之下，阴影会盖在它上面
-                    // ==========================================
-                    Column(
-                      children: [
-                        // 用一个精准的 SizedBox 把滑动区的视口天花板推到深色卡片正下方
-                        // 高度 = 顶部留白(7) + 头像(46) + 间距(25) + 标题(~52) + 间距(42) + 深色卡片(~148) = 320
-                        const SizedBox(height: 320),
-                        // 🌟 核心：Expanded 动态霸占下方所有剩余空间，完美限定最大高度边界
-                        Expanded(
-                          child: _DeviceDeck(
-                            paddingTop: 20.0, // 给滑动区内部留一点舒服的起始间距
-                            devices: displayDevices,
-                            selectedId: selectedId,
-                            activeId: activeId,
-                            expandedId: _expandedId,
-                            working: working,
-                            loading: waterProvider.isRequesting,
-                            usageCounts: usageCounts,
-                            nameOf: (device) => _deviceName(deviceProvider, device),
-                            onTapCard: (device) {
-                              if (device['isAddCard'] == true) {
-                                DialogUtils.showCascadingAddDeviceDialog(context);
-                                return;
-                              }
-                              final id = device['deviceInfId'].toString();
-                              deviceProvider.selectDevice(id);
-                              setState(() {
-                                _expandedId = _expandedId == id ? null : id;
-                              });
-                            },
-                            onTogglePower: (device) =>
-                                _handleDevicePowerTap(
-                              context,
-                              device,
-                              userProvider,
-                              waterProvider,
-                              deviceProvider,
-                            ),
-                            onMove: (device) => _showMoveDeviceDialog(
-                              context,
-                              device,
-                              deviceProvider,
-                            ),
-                            onRename: (device) => DialogUtils.showEditRemarkDialog(
-                              context,
-                              device['deviceInfId'].toString(),
-                              _deviceName(deviceProvider, device),
-                            ),
-                            onDelete: (device) {
-                              final commonlyId =
-                                  (device['commonlyId'] ?? '').toString();
-                              if (commonlyId.isEmpty) {
-                                ToastService.show('无法删除该设备');
-                                return;
-                              }
-                              DialogUtils.showDeleteConfirmDialog(
-                                context,
-                                commonlyId,
-                                _deviceName(deviceProvider, device),
+                    Positioned(
+                      top: 7, 
+                      left: 0,
+                      right: 0,
+                      child: _TopButtons(
+                        onProfile: () => _showLogoutConfirm(context),
+                        onHistory: () async {
+                          await context.read<WaterProvider>().syncHistoryFromServer(
+                                token: userProvider.token,
+                                userId: userProvider.userId,
+                                muteToast: true,
                               );
-                            },
+                          DialogUtils.showGlassBottomSheet(
+                            context,
+                            const HistoryBottomSheet(),
+                          );
+                        },
+                      ),
+                    ),
+                    
+                    const Positioned(
+                      top: 78, 
+                      left: 30,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "John's Home", 
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ),
-                      ],
+                          SizedBox(height: 6),
+                          Text(
+                            "Monitor and control your devices",
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
-                    // ==========================================
-                    // 🌟 顶层：固定控制面板 (Top Layer)
-                    // 这一层渲染在最后，因此深色卡片的阴影会投射在滑动卡片上！
-                    // ==========================================
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 7),
-                        _TopButtons(
-                          onProfile: () => _showLogoutConfirm(context),
-                          onHistory: () async {
-                            DialogUtils.showGlassBottomSheet(
-                              context,
-                              const HistoryBottomSheet(),
-                            );
-                            unawaited(
-                              context.read<WaterProvider>().syncHistoryFromServer(
-                                    token: userProvider.token,
-                                    userId: userProvider.userId,
-                                    muteToast: true,
-                                  ),
-                            );
-                          },
+                    // 🌟 核心修复 2：卡片区域定位于 340，完美承接在加高后的深色面板下方
+                    Positioned(
+                      top: 340, 
+                      left: 19,
+                      right: 19,
+                      bottom: 0, 
+                      child: _DeviceDeck(
+                        devices: displayDevices,
+                        selectedId: selectedId,
+                        activeId: activeId,
+                        expandedId: _expandedId,
+                        working: working,
+                        loading: waterProvider.isRequesting,
+                        usageCounts: usageCounts,
+                        nameOf: (device) => _deviceName(deviceProvider, device),
+                        onTapCard: (device) {
+                          if (device['isAddCard'] == true) {
+                            DialogUtils.showCascadingAddDeviceDialog(context);
+                            return;
+                          }
+                          final id = device['deviceInfId'].toString();
+                          deviceProvider.selectDevice(id);
+                          setState(() {
+                            _expandedId = _expandedId == id ? null : id;
+                          });
+                        },
+                        onTogglePower: (device) =>
+                            _handleDevicePowerTap(
+                          context,
+                          device,
+                          userProvider,
+                          waterProvider,
+                          deviceProvider,
                         ),
-                        const SizedBox(height: 25),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 30),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "John's Home", 
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5,
+                        onMove: (device) => _showMoveDeviceDialog(
+                          context,
+                          device,
+                          deviceProvider,
+                        ),
+                        onRename: (device) => DialogUtils.showEditRemarkDialog(
+                          context,
+                          device['deviceInfId'].toString(),
+                          _deviceName(deviceProvider, device),
+                        ),
+                        onDelete: (device) {
+                          final commonlyId =
+                              (device['commonlyId'] ?? '').toString();
+                          if (commonlyId.isEmpty) {
+                            ToastService.show('无法删除该设备');
+                            return;
+                          }
+                          DialogUtils.showDeleteConfirmDialog(
+                            context,
+                            commonlyId,
+                            _deviceName(deviceProvider, device),
+                          );
+                        },
+                      ),
+                    ),
+
+                    Positioned(
+                      top: 172, 
+                      left: 20,
+                      right: 20,
+                      child: _DashboardCard(
+                        balance: userProvider.balance,
+                        working: working,
+                        runningTime: waterProvider.runningTime,
+                        activeDevicesCount: working ? 1 : 0,
+                        totalDevicesCount: deviceProvider.deviceList.length,
+                        activeDeviceName: currentActiveName, 
+                        onStatusTap: working
+                            ? null
+                            : () => DialogUtils.showCascadingAddDeviceDialog(
+                                  context,
                                 ),
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                'Monitor and control your devices',
-                                style: TextStyle(
-                                  color: Colors.white60,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w400,
+                        lastUsedDeviceName: predictedDevice == null
+                            ? '暂无可用设备'
+                            : _deviceName(deviceProvider, predictedDevice),
+                        onActionTap: dashboardDevice == null ||
+                                waterProvider.isRequesting
+                            ? null
+                            : () => _handleDevicePowerTap(
+                                  context,
+                                  dashboardDevice,
+                                  userProvider,
+                                  waterProvider,
+                                  deviceProvider,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 42),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: _DashboardCard(
-                            balance: userProvider.balance,
-                            working: working,
-                            runningTime: waterProvider.runningTime,
-                            activeDevicesCount: working ? 1 : 0,
-                            totalDevicesCount: deviceProvider.deviceList.length,
-                            activeDeviceName: currentActiveName, 
-                            onStatusTap: working
-                                ? null
-                                : () => DialogUtils.showCascadingAddDeviceDialog(
-                                      context,
-                                    ),
-                            lastUsedDeviceName: predictedDevice == null
-                                ? '暂无可用设备'
-                                : _deviceName(deviceProvider, predictedDevice),
-                            onActionTap: dashboardDevice == null ||
-                                    waterProvider.isRequesting
-                                ? null
-                                : () => _handleDevicePowerTap(
-                                      context,
-                                      dashboardDevice,
-                                      userProvider,
-                                      waterProvider,
-                                      deviceProvider,
-                                    ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -473,9 +460,7 @@ class _HomePageState extends State<HomePage> {
       final stopTarget = activeDevice ?? device;
       if (waterProvider.activeDeviceId.isNotEmpty &&
           stopTarget['deviceInfId']?.toString() != deviceId) {
-        ToastService.show(
-          '请先关闭当前正在用水的设备',
-        );
+        ToastService.show('请先关闭当前正在用水的设备');
         return;
       }
       await waterProvider.stopWater(
@@ -662,7 +647,8 @@ class _DashboardCard extends StatelessWidget {
     final isDimmed = onActionTap == null && !working;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
+      // 🌟 核心修复 3：通过大幅增加上下 Padding，完美恢复深色卡片的原始高度与力量感
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1F2A),
         borderRadius: BorderRadius.circular(32),
@@ -753,6 +739,7 @@ class _DashboardCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 300),
                 height: 48,
                 decoration: BoxDecoration(
+                  // 🌟 核心功能：开水状态瞬间过渡到高级警示红
                   color: working
                       ? const Color(0xFFFF453A)
                       : isDimmed
@@ -1026,20 +1013,23 @@ class _DeviceDeck extends StatelessWidget {
       final selected = selectedId == id;
       final active = activeId == id;
       
+      // 🌟 核心修复 1：彻底抛弃错误的挤压上移动画算法！
+      // 恢复原版“卡片各司其职，点击后就地弹起”的完美逻辑！
       double top = 0.0;
       if (expandedIndex == null) {
-        top = index * 100.0; 
+        top = index * 120.0; // 恢复了最佳的 120 垂直间距
       } else {
         if (index < expandedIndex) {
-          top = index * 55.0; 
+          top = index * 120.0; // 上面的卡片保持原位，绝对不会再向上飞去撞击深色面板！
         } else if (index == expandedIndex) {
-          top = index * 55.0; 
+          top = index * 120.0 - 10.0; // 选中的卡片微微上浮 10 像素以突出层级
         } else {
-          top = expandedIndex * 55.0 + 250.0 + (index - expandedIndex - 1) * 60.0; 
+          // 下方的卡片被平滑地向下推开，为展开的内容腾出空间
+          top = index * 120.0 + 140.0; 
         }
       }
 
-      final double cardHeight = expanded ? 240.0 : 180.0;
+      final double cardHeight = expanded ? 250.0 : 180.0;
       if (top + cardHeight > maxStackHeight) {
         maxStackHeight = top + cardHeight;
       }
@@ -1049,8 +1039,8 @@ class _DeviceDeck extends StatelessWidget {
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic, 
         top: top,
-        left: 23, 
-        right: 23, 
+        left: 4,
+        right: 4,
         child: AnimatedScale(
           duration: const Duration(milliseconds: 380),
           scale: expanded ? 1.02 : 1, 
@@ -1075,11 +1065,11 @@ class _DeviceDeck extends StatelessWidget {
     }).toList();
 
     return SingleChildScrollView(
-      // 🌟 启用弹性滑动，找回灵魂手感
-      physics: const BouncingScrollPhysics(), 
+      physics: const BouncingScrollPhysics(),
+      // 适度给一点 Padding 预留空间
       padding: EdgeInsets.only(top: paddingTop, bottom: 60), 
-      // 🌟 核心：启用边界裁切！滑出 Expanded 区域的卡片将被一刀切断，不再漏到深色卡片下面
-      clipBehavior: Clip.hardEdge,
+      // 保持 clip.none 避免阴影被左右切割，卡片因为逻辑修复不再往上飞，所以也不会发生重叠了
+      clipBehavior: Clip.none, 
       child: SizedBox(
         height: maxStackHeight,
         child: Stack(
@@ -1170,7 +1160,7 @@ class _DeckCard extends StatelessWidget {
       child: AnimatedContainer( 
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
-        height: expanded ? 240 : 180, 
+        height: expanded ? 250 : 180, 
         decoration: BoxDecoration(
           gradient: palette.gradient,
           borderRadius: BorderRadius.circular(40), 
