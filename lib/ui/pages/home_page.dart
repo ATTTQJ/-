@@ -98,10 +98,12 @@ class _HomePageState extends State<HomePage> {
                                 userId: userProvider.userId,
                                 muteToast: true,
                               );
-                          DialogUtils.showGlassBottomSheet(
-                            context,
-                            const HistoryBottomSheet(),
-                          );
+                          if (context.mounted) {
+                            DialogUtils.showGlassBottomSheet(
+                              context,
+                              const HistoryBottomSheet(),
+                            );
+                          }
                         },
                       ),
                     ),
@@ -134,13 +136,15 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                    // 🌟 核心修复 2：卡片区域定位于 340，完美承接在加高后的深色面板下方
+                    // ?? 核心修复 1：补齐必填的 paddingTop 参数！
+                    // 这个值控制列表内容在视口顶部的起始留白
                     Positioned(
-                      top: 340, 
-                      left: 19,
-                      right: 19,
+                      top: 340, // 配合恢复高度的深色卡片，将整体滑动区域下移到 340
+                      left: 0,   // 必须为0，让内部卡片控制左右边距，否则阴影会被切断
+                      right: 0,
                       bottom: 0, 
                       child: _DeviceDeck(
+                        paddingTop: 24.0, // ?? 修复编译错误，并预留舒服的顶部滑动间距
                         devices: displayDevices,
                         selectedId: selectedId,
                         activeId: activeId,
@@ -242,6 +246,7 @@ class _HomePageState extends State<HomePage> {
   }) {
     if (userProvider.token.trim().isEmpty ||
         userProvider.userId.trim().isEmpty ||
+        !waterProvider.hasLoadedLocalState ||
         deviceProvider.deviceList.isEmpty) {
       return;
     }
@@ -644,10 +649,10 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDimmed = onActionTap == null && !working;
+    final bool isDimmed = onActionTap == null && !working;
 
     return Container(
-      // 🌟 核心修复 3：通过大幅增加上下 Padding，完美恢复深色卡片的原始高度与力量感
+      // ?? 核心修复 2：恢复饱满的深色卡片高度！
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1F2A),
@@ -676,7 +681,7 @@ class _DashboardCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '¥$balance',
+                    '￥$balance',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -739,7 +744,7 @@ class _DashboardCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 300),
                 height: 48,
                 decoration: BoxDecoration(
-                  // 🌟 核心功能：开水状态瞬间过渡到高级警示红
+                  // ?? 核心修复 3：状态变为经典高亮红
                   color: working
                       ? const Color(0xFFFF453A)
                       : isDimmed
@@ -1013,19 +1018,18 @@ class _DeviceDeck extends StatelessWidget {
       final selected = selectedId == id;
       final active = activeId == id;
       
-      // 🌟 核心修复 1：彻底抛弃错误的挤压上移动画算法！
-      // 恢复原版“卡片各司其职，点击后就地弹起”的完美逻辑！
+      // ?? 核心修复 4：还原卡片“各司其职”的原位展开动画算法！
+      // 绝对禁止顶部的卡片继续往上飞去撞击深色面板！
       double top = 0.0;
       if (expandedIndex == null) {
-        top = index * 120.0; // 恢复了最佳的 120 垂直间距
+        top = index * 120.0; // 恢复 120 舒服的默认堆叠间距
       } else {
         if (index < expandedIndex) {
-          top = index * 120.0; // 上面的卡片保持原位，绝对不会再向上飞去撞击深色面板！
+          top = index * 120.0; // 选中卡片上方的卡片原地待命，绝对不上移！
         } else if (index == expandedIndex) {
-          top = index * 120.0 - 10.0; // 选中的卡片微微上浮 10 像素以突出层级
+          top = index * 120.0 - 10.0; // 被选中的卡片微微上浮一点点，突出层级感
         } else {
-          // 下方的卡片被平滑地向下推开，为展开的内容腾出空间
-          top = index * 120.0 + 140.0; 
+          top = expandedIndex * 120.0 + 260.0 + (index - expandedIndex - 1) * 60.0; // 下方卡片被平滑推开
         }
       }
 
@@ -1039,8 +1043,8 @@ class _DeviceDeck extends StatelessWidget {
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic, 
         top: top,
-        left: 4,
-        right: 4,
+        left: 23, 
+        right: 23, 
         child: AnimatedScale(
           duration: const Duration(milliseconds: 380),
           scale: expanded ? 1.02 : 1, 
@@ -1065,11 +1069,11 @@ class _DeviceDeck extends StatelessWidget {
     }).toList();
 
     return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      // 适度给一点 Padding 预留空间
+      // ?? 核心修复 5：保留 iOS 原生的弹性滑动，让果味贯穿始终！
+      physics: const BouncingScrollPhysics(), 
       padding: EdgeInsets.only(top: paddingTop, bottom: 60), 
-      // 保持 clip.none 避免阴影被左右切割，卡片因为逻辑修复不再往上飞，所以也不会发生重叠了
-      clipBehavior: Clip.none, 
+      // ?? 核心修复 6：启动硬件裁剪！被挤出顶部边界的卡片直接被一刀切断，坚决不让它滑到深色面板底下去！
+      clipBehavior: Clip.hardEdge,
       child: SizedBox(
         height: maxStackHeight,
         child: Stack(
