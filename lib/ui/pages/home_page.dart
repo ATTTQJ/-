@@ -1,9 +1,8 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -89,7 +88,7 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   children: [
                     // ==========================================
-                    // 🌟 顶层区域：保持自然撑开
+                    // 🌟 顶层区域：完全顺排，自然撑开高度！
                     // ==========================================
                     const SizedBox(height: 7),
                     _TopButtons(
@@ -170,11 +169,10 @@ class _HomePageState extends State<HomePage> {
                     ),
                     
                     // ==========================================
-                    // 🌟 底层滑动区域：彻底修复手势拦截！
+                    // 🌟 底层滑动区域：Expanded 动态霸占剩余空间
                     // ==========================================
                     Expanded(
                       child: _DeviceDeck(
-                        // 起始视觉 Padding
                         paddingTop: 48.0, 
                         devices: displayDevices,
                         selectedId: selectedId,
@@ -948,7 +946,7 @@ class _GlassCircleButton extends StatelessWidget {
   }
 }
 
-// 🌟 终极手势透传重构：DeviceDeck 变身 Stateful 组件，亲自接管滑动物理引擎！
+// 🌟 终极 GPU 视差重构：彻底接管滚动动画，告别穿模！
 class _DeviceDeck extends StatefulWidget {
   const _DeviceDeck({
     required this.devices,
@@ -986,68 +984,14 @@ class _DeviceDeck extends StatefulWidget {
   State<_DeviceDeck> createState() => _DeviceDeckState();
 }
 
-class _DeviceDeckState extends State<_DeviceDeck> with SingleTickerProviderStateMixin {
-  // 内部维护的滑动偏移量
-  double _scrollOffset = 0.0;
-  
-  // 用于物理回弹的动画控制器
-  late AnimationController _springController;
-  Animation<double>? _springAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _springController = AnimationController(vsync: this);
-    _springController.addListener(() {
-      if (_springAnimation != null) {
-        setState(() {
-          _scrollOffset = _springAnimation!.value;
-        });
-      }
-    });
-  }
+class _DeviceDeckState extends State<_DeviceDeck> {
+  // 绑定原生 ScrollView，用于读取当前偏移量
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void dispose() {
-    _springController.dispose();
+    _scrollController.dispose();
     super.dispose();
-  }
-
-  // 模拟 iOS 橡皮筋回弹效果
-  void _runSpringSimulation(double velocity) {
-    // 假设卡片最大可滑动高度为内容总高减去视口高度 (这里做了个简化的底部边界限制)
-    double maxScrollExtent = (widget.devices.length * 105.0) - 200.0;
-    if (maxScrollExtent < 0) maxScrollExtent = 0;
-
-    final springDescription = const SpringDescription(
-      mass: 1,
-      stiffness: 100,
-      damping: 15,
-    );
-
-    double targetOffset = _scrollOffset;
-    if (_scrollOffset < 0) {
-      targetOffset = 0;
-    } else if (_scrollOffset > maxScrollExtent) {
-      targetOffset = maxScrollExtent;
-    } else if (velocity.abs() < 10) {
-      return; // 速度太小，且在边界内，直接停止
-    }
-
-    final simulation = ScrollSpringSimulation(
-      springDescription,
-      _scrollOffset,
-      targetOffset,
-      velocity,
-      tolerance: const Tolerance(velocity: 1.0, distance: 1.0),
-    );
-
-    _springAnimation = _springController.drive(
-      Tween<double>(begin: _scrollOffset, end: targetOffset)
-        ..chain(CurveTween(curve: Curves.easeOut)),
-    );
-
-    _springController.animateWith(simulation);
   }
 
   @override
@@ -1071,7 +1015,35 @@ class _DeviceDeckState extends State<_DeviceDeck> with SingleTickerProviderState
       return ae ? 1 : -1; 
     });
 
-    const double minStackSpacing = 28.0; 
+    // 🌟 阶梯参数配置
+    const double minStackSpacing = 28.0; // 堆叠时漏出的标题圆角距离
+    const double stickyCeiling = 12.0;   // 距离深色卡片底部的最小空隙
+
+    double maxStackHeight = 0;
+    final List<double> targetTops = [];
+    
+    // 1. 预计算所有卡片在未滑动时的基础 Top 位置
+    for (int i = 0; i < widget.devices.length; i++) {
+      double baseTop = widget.paddingTop;
+      if (expandedIndex == null) {
+        baseTop += i * 105.0; 
+      } else {
+        if (i < expandedIndex) {
+          baseTop += i * 45.0; 
+        } else if (i == expandedIndex) {
+          baseTop += i * 45.0 + 10.0; 
+        } else {
+          baseTop += expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0; 
+        }
+      }
+      targetTops.add(baseTop);
+
+      final bool isExpanded = widget.expandedId == widget.devices[i]['deviceInfId'].toString();
+      final double cardHeight = isExpanded ? 250.0 : 180.0;
+      if (baseTop + cardHeight > maxStackHeight) {
+        maxStackHeight = baseTop + cardHeight;
+      }
+    }
 
     final stackChildren = ordered.map((entry) {
       final index = entry.key;
@@ -1083,86 +1055,76 @@ class _DeviceDeckState extends State<_DeviceDeck> with SingleTickerProviderState
       final selected = widget.selectedId == id;
       final active = widget.activeId == id;
       
-      double baseTop = widget.paddingTop;
-      if (expandedIndex == null) {
-        baseTop += index * 105.0; 
-      } else {
-        if (index < expandedIndex) {
-          baseTop += index * 45.0; 
-        } else if (index == expandedIndex) {
-          baseTop += index * 45.0 + 10.0; 
-        } else {
-          baseTop += expandedIndex * 45.0 + 280.0 + (index - expandedIndex - 1) * 70.0; 
-        }
-      }
+      final double targetBaseTop = targetTops[index];
+      // 计算这张卡片的专属吸顶线
+      final double minTopLimit = stickyCeiling + index * minStackSpacing;
 
-      // 实时位置：基础位置减去滑动偏移
-      double currentTop = baseTop - _scrollOffset;
-
-      final double minTopLimit = index * minStackSpacing;
-      final double finalTop = math.max(minTopLimit, currentTop);
-
-      return AnimatedPositioned(
-        key: ValueKey(id),
-        duration: _springController.isAnimating || _scrollOffset != 0 
-            ? Duration.zero // 滑动时取消动画，完美跟手
-            : const Duration(milliseconds: 380),
-        curve: Curves.easeOutCubic, 
-        top: finalTop,
+      return Positioned(
+        key: ValueKey('pos_$id'),
+        // Positioned top 写死为 0，因为我们要完全用 GPU Transform 来位移
+        top: 0,
         left: 23, 
         right: 23, 
-        child: AnimatedScale(
+        child: TweenAnimationBuilder<double>(
+          key: ValueKey('tween_$id'),
+          tween: Tween<double>(end: targetBaseTop),
           duration: const Duration(milliseconds: 380),
-          scale: expanded ? 1.02 : 1, 
-          child: isAddCard 
-            ? _AddDeviceCard(onTap: () => widget.onTapCard(device))
-            : _DeckCard(
-                palette: _paletteFor(index, device['billType'] == 2),
-                title: widget.nameOf(device),
-                count: widget.usageCounts[id] ?? 0,
-                selected: selected,
-                active: active,
-                loading: widget.loading && (widget.working ? active : selected),
-                expanded: expanded,
-                onTap: () => widget.onTapCard(device),
-                onTogglePower: () => widget.onTogglePower(device),
-                onMove: () => widget.onMove(device),
-                onRename: () => widget.onRename(device),
-                onDelete: () => widget.onDelete(device),
-              ),
+          curve: Curves.easeOutCubic, 
+          builder: (context, animatedBaseTop, child) {
+            // 🌟 AnimatedBuilder 监听 ScrollController
+            // 只要手指在动，这里每一帧都会极速计算出新的 translateY，让卡片看起来吸顶！
+            return AnimatedBuilder(
+              animation: _scrollController,
+              builder: (context, scrollChild) {
+                // 读取真实的原生滑动距离
+                double offset = _scrollController.hasClients ? math.max(0.0, _scrollController.offset) : 0.0;
+                
+                // 🌟 GPU 欺骗算法核心：
+                // 如果 offset 超过了 (当前卡片基础位置 - 吸顶线)，就施加向下补偿位移
+                double stickyOffset = math.max(0.0, offset - animatedBaseTop + minTopLimit);
+                double translateY = animatedBaseTop + stickyOffset;
+
+                return Transform.translate(
+                  offset: Offset(0, translateY),
+                  child: scrollChild,
+                );
+              },
+              child: child,
+            );
+          },
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 380),
+            scale: expanded ? 1.02 : 1, 
+            child: isAddCard 
+              ? _AddDeviceCard(onTap: () => widget.onTapCard(device))
+              : _DeckCard(
+                  palette: _paletteFor(index, device['billType'] == 2),
+                  title: widget.nameOf(device),
+                  count: widget.usageCounts[id] ?? 0,
+                  selected: selected,
+                  active: active,
+                  loading: widget.loading && (widget.working ? active : selected),
+                  expanded: expanded,
+                  onTap: () => widget.onTapCard(device),
+                  onTogglePower: () => widget.onTogglePower(device),
+                  onMove: () => widget.onMove(device),
+                  onRename: () => widget.onRename(device),
+                  onDelete: () => widget.onDelete(device),
+                ),
+          ),
         ),
       );
     }).toList();
 
-    // 🌟 核心突破：直接在此层拦截 VerticalDrag 手势，把偏移量灌给所有卡片！
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragDown: (_) {
-        _springController.stop(); // 手指按下，停止惯性滚动
-      },
-      onVerticalDragUpdate: (details) {
-        setState(() {
-          // 加入一点滑动阻力模拟真实的滚动物理
-          _scrollOffset -= details.delta.dy * 0.8;
-        });
-      },
-      onVerticalDragEnd: (details) {
-        // 手指抬起，触发带初速度的橡皮筋回弹计算
-        _runSpringSimulation(-details.velocity.pixelsPerSecond.dy); // ✅ 改成 pixelsPerSecond
-      },
-      onVerticalDragCancel: () {
-        _runSpringSimulation(0);
-      },
-      child: ShaderMask(
-        shaderCallback: (Rect bounds) {
-          return const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.transparent, Colors.black],
-            stops: [0.0, 0.06], 
-          ).createShader(bounds);
-        },
-        blendMode: BlendMode.dstIn,
+    // 🌟 回归最纯正的原生 SingleChildScrollView，绝对不卡！
+    return SingleChildScrollView(
+      controller: _scrollController,
+      physics: const BouncingScrollPhysics(), 
+      padding: const EdgeInsets.only(bottom: 60), 
+      // 放开裁剪，因为吸顶算法已经保证卡片绝对不可能越界！
+      clipBehavior: Clip.none, 
+      child: SizedBox(
+        height: maxStackHeight,
         child: Stack(
           clipBehavior: Clip.none,
           children: stackChildren,
