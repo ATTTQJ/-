@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show FontFeature, ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -72,7 +73,8 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
         final history = waterProvider.displayHistory;
         final isLoading = waterProvider.isHistoryLoading || _isMonthSwitching;
         final selectedYear = _pendingYear ?? waterProvider.selectedHistoryYear;
-        final selectedMonth = _pendingMonth ?? waterProvider.selectedHistoryMonth;
+        final selectedMonth =
+            _pendingMonth ?? waterProvider.selectedHistoryMonth;
         final availableYears = waterProvider.availableHistoryYears;
 
         return Column(
@@ -81,14 +83,15 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const Text(
-                  '\u7528\u6c34\u8bb0\u5f55',
+                  '用水记录',
                   style: TextStyle(
-                    color: Color(0xFF2C2C2E),
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 Row(
@@ -105,7 +108,7 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
                         );
                       },
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     _HistoryMonthTrigger(
                       month: selectedMonth,
                       onTap: () async {
@@ -115,33 +118,37 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
                             initialYear: selectedYear,
                             initialMonth: selectedMonth,
                             availableYears: availableYears,
-                            monthsForYear: waterProvider.availableMonthsForYear,
+                            monthsForYear:
+                                waterProvider.availableMonthsForYear,
                           ),
                         );
                         if (result == null) {
                           return;
                         }
-                        unawaited(_switchHistoryMonth(
-                          userProvider: userProvider,
-                          waterProvider: waterProvider,
-                          year: result.year,
-                          month: result.month,
-                        ));
+                        unawaited(
+                          _switchHistoryMonth(
+                            userProvider: userProvider,
+                            waterProvider: waterProvider,
+                            year: result.year,
+                            month: result.month,
+                          ),
+                        );
                       },
                     ),
                   ],
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
-              isLoading ? '\u540c\u6b65\u4e2d...' : '\u5171 ${history.length} \u6761',
+              isLoading ? '同步中...' : '共 ${history.length} 条',
               style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 13,
+                color: Colors.white54,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             SizedBox(
               height: _historyViewportHeight,
               child: AnimatedSwitcher(
@@ -169,10 +176,11 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
                             key: ValueKey<String>('history_empty'),
                             child: Center(
                               child: Text(
-                                '\u6682\u65e0\u5386\u53f2\u8bb0\u5f55',
+                                '暂无历史记录',
                                 style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14,
+                                  color: Colors.white38,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -187,11 +195,11 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
                                   ? const BouncingScrollPhysics()
                                   : const NeverScrollableScrollPhysics(),
                               itemCount: history.length,
-                              separatorBuilder: (context, index) =>
-                                  Divider(
-                                    height: _historyDividerHeight,
-                                    color: Colors.grey[100],
-                                  ),
+                              separatorBuilder: (context, index) => Divider(
+                                height: _historyDividerHeight,
+                                indent: 48,
+                                color: Colors.white.withOpacity(0.06),
+                              ),
                               itemBuilder: (context, index) {
                                 return _HistoryItem(entry: history[index]);
                               },
@@ -219,30 +227,33 @@ class _HistoryMonthTrigger extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.05),
+            width: 0.5,
+          ),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$month\u6708',
+              '$month月',
               style: const TextStyle(
-                color: Color(0xFF2C2C2E),
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                height: 1.2,
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 2),
-            const Padding(
-              padding: EdgeInsets.only(top: 1),
-              child: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 18,
-                color: Color(0xFF2C2C2E),
-              ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: Colors.white70,
             ),
           ],
         ),
@@ -264,17 +275,253 @@ class _LocalRecordsTrigger extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: Text(
-          '本地记录($count)',
+          '本地($count)',
           style: const TextStyle(
-            color: Color(0xFF8E8E93),
-            fontSize: 12,
+            color: Colors.white54,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _HistoryItem extends StatelessWidget {
+  const _HistoryItem({required this.entry});
+
+  final WaterUsageHistoryEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = double.tryParse(entry.formattedAmount) ?? 0.0;
+    final isZero = amount == 0.0;
+
+    return _HistoryRowFrame(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFF7A58FF).withOpacity(0.15),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFF7A58FF).withOpacity(0.3),
+                  width: 0.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.history_rounded,
+                color: Color(0xFF9B82FF),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.displayDeviceName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text(
+                        entry.formattedDate,
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '时长: ${entry.formattedDuration}',
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  isZero ? '0.00' : entry.formattedAmount,
+                  style: TextStyle(
+                    color:
+                        isZero ? Colors.white38 : const Color(0xFF32D7D2),
+                    fontSize: isZero ? 16 : 18,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                if (!isZero)
+                  const Text(
+                    'RMB',
+                    style: TextStyle(
+                      color: Colors.white38,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HistorySkeletonList extends StatelessWidget {
+  const _HistorySkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: EdgeInsets.zero,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _historyVisibleCount,
+      separatorBuilder: (context, index) => Divider(
+        height: _historyDividerHeight,
+        indent: 48,
+        color: Colors.white.withOpacity(0.03),
+      ),
+      itemBuilder: (context, index) => const _HistorySkeletonItem(),
+    );
+  }
+}
+
+class _HistoryRowFrame extends StatelessWidget {
+  const _HistoryRowFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _historyItemExtent,
+      child: child,
+    );
+  }
+}
+
+class _HistorySkeletonItem extends StatelessWidget {
+  const _HistorySkeletonItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _HistoryRowFrame(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _SkeletonCircle(),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SkeletonBar(width: 116, height: 14),
+                  SizedBox(height: 10),
+                  _SkeletonBar(width: 160, height: 10),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            _SkeletonPill(width: 48, height: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SkeletonCircle extends StatelessWidget {
+  const _SkeletonCircle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({
+    required this.width,
+    required this.height,
+  });
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+    );
+  }
+}
+
+class _SkeletonPill extends StatelessWidget {
+  const _SkeletonPill({
+    required this.width,
+    required this.height,
+  });
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(6),
       ),
     );
   }
@@ -327,92 +574,111 @@ class _HistoryMonthPickerDialogState extends State<_HistoryMonthPickerDialog> {
     }
 
     return Dialog(
+      backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '\u9009\u62e9\u67e5\u8be2\u6708\u4efd',
-              style: TextStyle(
-                color: Color(0xFF2C2C2E),
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              '\u5e74\u4efd',
-              style: TextStyle(
-                color: Color(0xFF8E8E93),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: widget.availableYears
-                  .map(
-                    (year) => _PickerChip(
-                      label: '$year\u5e74',
-                      selected: year == _selectedYear,
-                      onTap: () {
-                        setState(() {
-                          _selectedYear = year;
-                          final yearMonths = widget.monthsForYear(year);
-                          if (!yearMonths.contains(_selectedMonth)) {
-                            _selectedMonth = yearMonths.last;
-                          }
-                        });
-                      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1F2A).withOpacity(0.85),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: Colors.white.withOpacity(0.1), width: 0.5),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '选择查询月份',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
                     ),
-                  )
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              '\u6708\u4efd',
-              style: TextStyle(
-                color: Color(0xFF8E8E93),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: months
-                  .map(
-                    (month) => _PickerChip(
-                      label: '$month\u6708',
-                      selected: month == _selectedMonth,
-                      onTap: () {
-                        Navigator.of(context).pop(
-                          _HistoryMonthSelection(
-                            year: _selectedYear,
-                            month: month,
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '年份',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: widget.availableYears
+                        .map(
+                          (year) => _PickerChip(
+                            label: '$year年',
+                            selected: year == _selectedYear,
+                            onTap: () {
+                              setState(() {
+                                _selectedYear = year;
+                                final yearMonths = widget.monthsForYear(year);
+                                if (!yearMonths.contains(_selectedMonth)) {
+                                  _selectedMonth = yearMonths.last;
+                                }
+                              });
+                            },
                           ),
-                        );
-                      },
+                        )
+                        .toList(growable: false),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '月份',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
-                  )
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: 18),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('\u53d6\u6d88'),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: months
+                        .map(
+                          (month) => _PickerChip(
+                            label: '$month月',
+                            selected: month == _selectedMonth,
+                            onTap: () {
+                              Navigator.of(context).pop(
+                                _HistoryMonthSelection(
+                                  year: _selectedYear,
+                                  month: month,
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(
+                        '取消',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -434,20 +700,28 @@ class _PickerChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF2C2C2E) : const Color(0xFFF4F5F7),
-          borderRadius: BorderRadius.circular(12),
+          color: selected
+              ? const Color(0xFF7A58FF)
+              : Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: selected
+              ? null
+              : Border.all(
+                  color: Colors.white.withOpacity(0.04),
+                  width: 0.5,
+                ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : const Color(0xFF2C2C2E),
+            color: selected ? Colors.white : Colors.white70,
           ),
         ),
       ),
@@ -465,67 +739,87 @@ class _LocalHistoryRecordsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '本地记录 (${records.length})',
-              style: const TextStyle(
-                color: Color(0xFF2C2C2E),
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '用于核对本地是否写入了用水时长补丁',
-              style: TextStyle(
-                color: Color(0xFF8E8E93),
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 420),
-              child: records.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Text(
-                          '暂无本地记录',
-                          style: TextStyle(
-                            color: Color(0xFF8E8E93),
-                            fontSize: 14,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1F2A).withOpacity(0.85),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: Colors.white.withOpacity(0.1), width: 0.5),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '本地记录 (${records.length})',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '用于核对本地是否写入了用水时长补丁',
+                    style: TextStyle(
+                      color: Colors.white38,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 420),
+                    child: records.isEmpty
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 32),
+                              child: Text(
+                                '暂无本地记录',
+                                style: TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: records.length,
+                            separatorBuilder: (context, index) => Divider(
+                              height: 1,
+                              color: Colors.white.withOpacity(0.06),
+                            ),
+                            itemBuilder: (context, index) => _LocalHistoryRecordItem(
+                              entry: records[index],
+                            ),
                           ),
-                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white70,
                       ),
-                    )
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: records.length,
-                      separatorBuilder: (context, index) => Divider(
-                        height: 1,
-                        color: Colors.grey[200],
-                      ),
-                      itemBuilder: (context, index) => _LocalHistoryRecordItem(
-                        entry: records[index],
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(
+                        '关闭',
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
-            ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('关闭'),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -542,245 +836,49 @@ class _LocalHistoryRecordItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final orderNum = entry.orderNum.trim().isEmpty ? '无' : entry.orderNum.trim();
-    final deviceId = (entry.deviceId?.trim().isEmpty ?? true)
-        ? '无'
-        : entry.deviceId!.trim();
+    final deviceId =
+        (entry.deviceId?.trim().isEmpty ?? true) ? '无' : entry.deviceId!.trim();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             entry.displayDeviceName,
             style: const TextStyle(
-              color: Color(0xFF2C2C2E),
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${entry.formattedDate}  |  时长 ${entry.formattedDuration}  |  ¥${entry.formattedAmount}',
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            '${entry.formattedDate}  |  时长 ${entry.formattedDuration}  |  ¥${entry.formattedAmount}',
-            style: const TextStyle(
-              color: Color(0xFF636366),
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
             'orderNum: $orderNum',
             style: const TextStyle(
-              color: Color(0xFF8E8E93),
+              color: Colors.white38,
               fontSize: 11,
+              fontFamily: 'monospace',
             ),
           ),
           const SizedBox(height: 2),
           Text(
             'deviceId: $deviceId',
             style: const TextStyle(
-              color: Color(0xFF8E8E93),
+              color: Colors.white38,
               fontSize: 11,
+              fontFamily: 'monospace',
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _HistorySkeletonList extends StatelessWidget {
-  const _HistorySkeletonList();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: EdgeInsets.zero,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _historyVisibleCount,
-      separatorBuilder: (context, index) => Divider(
-        height: _historyDividerHeight,
-        color: Colors.grey[100],
-      ),
-      itemBuilder: (context, index) => const _HistorySkeletonItem(),
-    );
-  }
-}
-
-class _HistoryRowFrame extends StatelessWidget {
-  const _HistoryRowFrame({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: _historyItemExtent,
-      child: child,
-    );
-  }
-}
-
-class _HistorySkeletonItem extends StatelessWidget {
-  const _HistorySkeletonItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _HistoryRowFrame(
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SkeletonCircle(),
-            SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SkeletonBar(width: 116, height: 14),
-                  SizedBox(height: 8),
-                  _SkeletonBar(width: 84, height: 11),
-                  SizedBox(height: 8),
-                  _SkeletonBar(width: 140, height: 11),
-                ],
-              ),
-            ),
-            SizedBox(width: 12),
-            _SkeletonPill(width: 68, height: 32),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SkeletonCircle extends StatelessWidget {
-  const _SkeletonCircle();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF2F3F7),
-        borderRadius: BorderRadius.circular(14),
-      ),
-    );
-  }
-}
-
-class _SkeletonBar extends StatelessWidget {
-  const _SkeletonBar({
-    required this.width,
-    required this.height,
-  });
-
-  final double width;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF2F3F7),
-        borderRadius: BorderRadius.circular(height / 2),
-      ),
-    );
-  }
-}
-
-class _SkeletonPill extends StatelessWidget {
-  const _SkeletonPill({
-    required this.width,
-    required this.height,
-  });
-
-  final double width;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF1E5),
-        borderRadius: BorderRadius.circular(14),
-      ),
-    );
-  }
-}
-
-class _HistoryItem extends StatelessWidget {
-  const _HistoryItem({required this.entry});
-
-  final WaterUsageHistoryEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    return _HistoryRowFrame(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 2),
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.history, color: Colors.blue, size: 16),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.displayDeviceName,
-                    style: const TextStyle(
-                      color: Color(0xFF2C2C2E),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    entry.formattedDate,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '\u7528\u6c34\u65f6\u957f\uff1a${entry.formattedDuration}',
-                    style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF4EA),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                '\u00A5${entry.formattedAmount}',
-                style: const TextStyle(
-                  color: Color(0xFFD85B00),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

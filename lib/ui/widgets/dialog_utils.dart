@@ -16,7 +16,7 @@ class DialogUtils {
       barrierDismissible: true,
       barrierLabel: 'GlassBottomSheet',
       barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 600),
+      transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (context, anim1, anim2) {
         final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
         final screenHeight = MediaQuery.of(context).size.height;
@@ -39,27 +39,41 @@ class DialogUtils {
                 curve: Curves.easeOutCubic,
                 child: Container(
                   margin: const EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    bottom: 20,
+                    left: 16,
+                    right: 16,
+                    bottom: 24,
                   ),
                   width: double.infinity,
                   constraints: BoxConstraints(maxHeight: maxDialogHeight),
                   decoration: ShapeDecoration(
-                    color: Colors.white.withOpacity(0.92),
+                    color: Colors.black.withOpacity(0.35),
                     shape: ContinuousRectangleBorder(
-                      borderRadius: BorderRadius.circular(45),
+                      borderRadius: BorderRadius.circular(60),
+                      side: BorderSide(
+                        color: Colors.white.withOpacity(0.12),
+                        width: 0.5,
+                      ),
                     ),
+                    shadows: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 30,
+                        offset: const Offset(0, 15),
+                      ),
+                    ],
                   ),
                   child: Material(
                     color: Colors.transparent,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(22.5),
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: child,
+                      borderRadius: BorderRadius.circular(30),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 40.0, sigmaY: 40.0),
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: child,
+                          ),
                         ),
                       ),
                     ),
@@ -74,19 +88,19 @@ class DialogUtils {
         final curve = Curves.easeOutCubic;
         return Stack(
           children: [
-            BackdropFilter(
-              filter: ImageFilter.blur(
-                sigmaX: 4.5 * curve.transform(anim1.value),
-                sigmaY: 4.5 * curve.transform(anim1.value),
-              ),
-              child: Container(color: Colors.transparent),
+            FadeTransition(
+              opacity: Tween<double>(begin: 0, end: 1).animate(anim1),
+              child: Container(color: Colors.black.withOpacity(0.4)),
             ),
             SlideTransition(
               position: Tween<Offset>(
-                begin: const Offset(0, 1),
+                begin: const Offset(0, 0.2),
                 end: Offset.zero,
               ).animate(CurvedAnimation(parent: anim1, curve: curve)),
-              child: child,
+              child: FadeTransition(
+                opacity: anim1,
+                child: child,
+              ),
             ),
           ],
         );
@@ -116,7 +130,7 @@ class DialogUtils {
               const Text(
                 'Edit Device Name',
                 style: TextStyle(
-                  color: Color(0xFF2C2C2E),
+                  color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -142,10 +156,12 @@ class DialogUtils {
           TextField(
             controller: editingController,
             autofocus: true,
+            style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: 'For example: My Shower or Dorm 536',
+              hintStyle: const TextStyle(color: Colors.white38),
               filled: true,
-              fillColor: Colors.grey[100],
+              fillColor: Colors.white.withOpacity(0.08),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -164,7 +180,7 @@ class DialogUtils {
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
                     'Cancel',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: Colors.white54),
                   ),
                 ),
               ),
@@ -172,7 +188,7 @@ class DialogUtils {
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C2C2E),
+                    backgroundColor: const Color(0xFF7A58FF),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -212,7 +228,7 @@ class DialogUtils {
           const Text(
             'Remove Device',
             style: TextStyle(
-              color: Color(0xFF2C2C2E),
+              color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -221,7 +237,7 @@ class DialogUtils {
           Text(
             'Remove "$deviceName" from your saved devices?',
             style: const TextStyle(
-              color: Color(0xFF666666),
+              color: Colors.white70,
               fontSize: 15,
               height: 1.5,
             ),
@@ -235,7 +251,7 @@ class DialogUtils {
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
                     'Cancel',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: Colors.white54),
                   ),
                 ),
               ),
@@ -288,7 +304,7 @@ class DialogUtils {
           const Text(
             'Clear History',
             style: TextStyle(
-              color: Color(0xFF2C2C2E),
+              color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -297,7 +313,7 @@ class DialogUtils {
           const Text(
             'Clear all water usage history? This action cannot be undone.',
             style: TextStyle(
-              color: Color(0xFF666666),
+              color: Colors.white70,
               fontSize: 15,
               height: 1.5,
             ),
@@ -311,7 +327,7 @@ class DialogUtils {
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
                     'Cancel',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: Colors.white54),
                   ),
                 ),
               ),
@@ -359,7 +375,7 @@ class DialogUtils {
           const Text(
             '\u975e\u70ed\u6c34\u4f9b\u5e94\u65f6\u6bb5',
             style: TextStyle(
-              color: Color(0xFF2C2C2E),
+              color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -368,7 +384,7 @@ class DialogUtils {
           const Text(
             '\u5f53\u524d\u4e0d\u5728\u89c4\u5b9a\u7684\u70ed\u6c34\u4f9b\u5e94\u65f6\u6bb5\u3002\n(06:00-09:30\u300111:30-14:30\u300118:00-23:50)\n\n\u6b64\u65f6\u5f00\u542f\u53ef\u80fd\u53ea\u6709\u51b7\u6c34\uff0c\u662f\u5426\u7ee7\u7eed\uff1f',
             style: TextStyle(
-              color: Color(0xFF666666),
+              color: Colors.white70,
               fontSize: 14,
               height: 1.5,
             ),
@@ -383,7 +399,7 @@ class DialogUtils {
                   child: const Text(
                     '\u53d6\u6d88',
                     style: TextStyle(
-                      color: Colors.grey,
+                      color: Colors.white54,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
