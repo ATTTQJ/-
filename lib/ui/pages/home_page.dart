@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -22,8 +23,29 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String? _expandedId;
   String? _historySyncKey;
+  
+  // 🌟 核心 1：用于接管和窃听滑动距离的控制器
+  final ScrollController _scrollController = ScrollController();
+  double _scrollOffset = 0.0;
 
   static const Duration _switchMotionDuration = Duration(milliseconds: 320);
+
+  @override
+  void initState() {
+    super.initState();
+    // 监听滑动事件，实时重绘卡片坐标，过滤负数（防止下拉橡皮筋时卡片下移）
+    _scrollController.addListener(() {
+      setState(() {
+        _scrollOffset = math.max(0, _scrollController.offset);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,125 +106,62 @@ class _HomePageState extends State<HomePage> {
               
               SafeArea(
                 bottom: false, 
-                child: Stack(
+                child: Column(
                   children: [
-                    Positioned(
-                      top: 7, 
-                      left: 0,
-                      right: 0,
-                      child: _TopButtons(
-                        onProfile: () => _showLogoutConfirm(context),
-                        onHistory: () async {
-                          await context.read<WaterProvider>().syncHistoryFromServer(
-                                token: userProvider.token,
-                                userId: userProvider.userId,
-                                muteToast: true,
-                              );
-                          if (context.mounted) {
-                            DialogUtils.showGlassBottomSheet(
-                              context,
-                              const HistoryBottomSheet(),
+                    // ==========================================
+                    // 🌟 顶层区域：完全顺排，自然撑开高度！告别硬编码！
+                    // ==========================================
+                    const SizedBox(height: 7),
+                    _TopButtons(
+                      onProfile: () => _showLogoutConfirm(context),
+                      onHistory: () async {
+                        await context.read<WaterProvider>().syncHistoryFromServer(
+                              token: userProvider.token,
+                              userId: userProvider.userId,
+                              muteToast: true,
                             );
-                          }
-                        },
-                      ),
-                    ),
-                    
-                    const Positioned(
-                      top: 78, 
-                      left: 30,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "John's Home", 
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            "Monitor and control your devices",
-                            style: TextStyle(
-                              color: Colors.white60,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // 🌟 核心视觉魔法：上移视口并使用 padding 对冲！
-                    Positioned(
-                      // 把物理顶部往上抬升 24px，藏到深色面板的底层阴影里
-                      top: 316, 
-                      left: 0,
-                      right: 0,
-                      bottom: 0, 
-                      child: _DeviceDeck(
-                        // 增加 24px paddingTop，使得初始视觉高度保持绝对不变！
-                        paddingTop: 48.0, 
-                        devices: displayDevices,
-                        selectedId: selectedId,
-                        activeId: activeId,
-                        expandedId: _expandedId,
-                        working: working,
-                        loading: waterProvider.isRequesting,
-                        usageCounts: usageCounts,
-                        nameOf: (device) => _deviceName(deviceProvider, device),
-                        onTapCard: (device) {
-                          if (device['isAddCard'] == true) {
-                            DialogUtils.showCascadingAddDeviceDialog(context);
-                            return;
-                          }
-                          final id = device['deviceInfId'].toString();
-                          deviceProvider.selectDevice(id);
-                          setState(() {
-                            _expandedId = _expandedId == id ? null : id;
-                          });
-                        },
-                        onTogglePower: (device) =>
-                            _handleDevicePowerTap(
-                          context,
-                          device,
-                          userProvider,
-                          waterProvider,
-                          deviceProvider,
-                        ),
-                        onMove: (device) => _showMoveDeviceDialog(
-                          context,
-                          device,
-                          deviceProvider,
-                        ),
-                        onRename: (device) => DialogUtils.showEditRemarkDialog(
-                          context,
-                          device['deviceInfId'].toString(),
-                          _deviceName(deviceProvider, device),
-                        ),
-                        onDelete: (device) {
-                          final commonlyId =
-                              (device['commonlyId'] ?? '').toString();
-                          if (commonlyId.isEmpty) {
-                            ToastService.show('无法删除该设备');
-                            return;
-                          }
-                          DialogUtils.showDeleteConfirmDialog(
+                        if (context.mounted) {
+                          DialogUtils.showGlassBottomSheet(
                             context,
-                            commonlyId,
-                            _deviceName(deviceProvider, device),
+                            const HistoryBottomSheet(),
                           );
-                        },
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 25),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 30),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "John's Home", 
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              "Monitor and control your devices",
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-
-                    Positioned(
-                      top: 172, 
-                      left: 20,
-                      right: 20,
+                    const SizedBox(height: 42),
+                    // 仪表盘
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: _DashboardCard(
                         balance: userProvider.balance,
                         working: working,
@@ -228,6 +187,97 @@ class _HomePageState extends State<HomePage> {
                                   waterProvider,
                                   deviceProvider,
                                 ),
+                      ),
+                    ),
+                    
+                    // ==========================================
+                    // 🌟 底层滑动区域：Expanded 动态霸占剩余空间！
+                    // ==========================================
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          // 1. 隐形的滚动视图，只负责收集用户的滑动意图和距离
+                          Positioned.fill(
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              physics: const BouncingScrollPhysics(),
+                              // 为了让最后一张卡片能滑上来，底部留出足够的空间
+                              padding: const EdgeInsets.only(top: 48, bottom: 200),
+                              itemCount: 1,
+                              itemBuilder: (context, index) {
+                                double totalHeight = 0;
+                                for (int i = 0; i < displayDevices.length; i++) {
+                                  final bool isExpanded = _expandedId == displayDevices[i]['deviceInfId'].toString();
+                                  // 这里用粗略的高度撑开即可，精确控制在上面的 Stack 里
+                                  totalHeight += isExpanded ? 260.0 : 120.0; 
+                                }
+                                return SizedBox(height: totalHeight);
+                              },
+                            ),
+                          ),
+
+                          // 2. 真实的卡片渲染区，基于滑动的偏移量自己计算绝对位置
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              // 这个 Stack 的点击事件需要放行给卡片自己处理
+                              ignoring: false,
+                              child: _DeviceDeck(
+                                paddingTop: 48.0, // 🌟 利用 paddingTop 对冲上滑，保持初始视觉位置不变！
+                                scrollOffset: _scrollOffset, // 传入控制器的实时偏移量
+                                devices: displayDevices,
+                                selectedId: selectedId,
+                                activeId: activeId,
+                                expandedId: _expandedId,
+                                working: working,
+                                loading: waterProvider.isRequesting,
+                                usageCounts: usageCounts,
+                                nameOf: (device) => _deviceName(deviceProvider, device),
+                                onTapCard: (device) {
+                                  if (device['isAddCard'] == true) {
+                                    DialogUtils.showCascadingAddDeviceDialog(context);
+                                    return;
+                                  }
+                                  final id = device['deviceInfId'].toString();
+                                  deviceProvider.selectDevice(id);
+                                  setState(() {
+                                    _expandedId = _expandedId == id ? null : id;
+                                  });
+                                },
+                                onTogglePower: (device) =>
+                                    _handleDevicePowerTap(
+                                  context,
+                                  device,
+                                  userProvider,
+                                  waterProvider,
+                                  deviceProvider,
+                                ),
+                                onMove: (device) => _showMoveDeviceDialog(
+                                  context,
+                                  device,
+                                  deviceProvider,
+                                ),
+                                onRename: (device) => DialogUtils.showEditRemarkDialog(
+                                  context,
+                                  device['deviceInfId'].toString(),
+                                  _deviceName(deviceProvider, device),
+                                ),
+                                onDelete: (device) {
+                                  final commonlyId =
+                                      (device['commonlyId'] ?? '').toString();
+                                  if (commonlyId.isEmpty) {
+                                    ToastService.show('无法删除该设备');
+                                    return;
+                                  }
+                                  DialogUtils.showDeleteConfirmDialog(
+                                    context,
+                                    commonlyId,
+                                    _deviceName(deviceProvider, device),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -961,6 +1011,7 @@ class _DeviceDeck extends StatelessWidget {
     required this.usageCounts,
     required this.nameOf,
     required this.paddingTop,
+    required this.scrollOffset, // 🌟 接收滑动偏移量
     required this.onTapCard,
     required this.onTogglePower,
     required this.onMove,
@@ -976,6 +1027,7 @@ class _DeviceDeck extends StatelessWidget {
   final bool loading;
   final Map<String, int> usageCounts;
   final double paddingTop;
+  final double scrollOffset;
   final String Function(Map<String, dynamic>) nameOf;
   final ValueChanged<Map<String, dynamic>> onTapCard;
   final ValueChanged<Map<String, dynamic>> onTogglePower;
@@ -1004,94 +1056,94 @@ class _DeviceDeck extends StatelessWidget {
       return ae ? 1 : -1; 
     });
 
-    double maxStackHeight = 0;
-    
-    final stackChildren = ordered.map((entry) {
-      final index = entry.key;
-      final device = entry.value;
-      final isAddCard = device['isAddCard'] == true;
-      final id = device['deviceInfId'].toString();
-      
-      final expanded = isAddCard ? false : expandedId == id;
-      final selected = selectedId == id;
-      final active = activeId == id;
-      
-      // 🌟 核心：手风琴式紧凑堆叠算法
-      double top = 0.0;
-      if (expandedIndex == null) {
-        top = index * 105.0; // 未展开时：舒适堆叠
-      } else {
-        if (index < expandedIndex) {
-          top = index * 45.0; // 🌟 展开时：上方未选中的卡片会极度紧凑折叠 (45间距)
-        } else if (index == expandedIndex) {
-          top = index * 45.0 + 10.0; // 当前选中的卡片接在折叠组下方，稍微留缝
-        } else {
-          top = expandedIndex * 45.0 + 280.0 + (index - expandedIndex - 1) * 70.0; 
-        }
-      }
+    // 🌟 核心算法 1：定义阶梯式吸顶时的漏出距离
+    const double minStackSpacing = 28.0; 
 
-      final double cardHeight = expanded ? 250.0 : 180.0;
-      if (top + cardHeight > maxStackHeight) {
-        maxStackHeight = top + cardHeight;
-      }
-
-      return AnimatedPositioned(
-        key: ValueKey(id),
-        duration: const Duration(milliseconds: 380),
-        curve: Curves.easeOutCubic, 
-        top: top,
-        left: 23, 
-        right: 23, 
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 380),
-          scale: expanded ? 1.02 : 1, 
-          child: isAddCard 
-            ? _AddDeviceCard(onTap: () => onTapCard(device))
-            : _DeckCard(
-                palette: _paletteFor(index, device['billType'] == 2),
-                title: nameOf(device),
-                count: usageCounts[id] ?? 0,
-                selected: selected,
-                active: active,
-                loading: loading && (working ? active : selected),
-                expanded: expanded,
-                onTap: () => onTapCard(device),
-                onTogglePower: () => onTogglePower(device),
-                onMove: () => onMove(device),
-                onRename: () => onRename(device),
-                onDelete: () => onDelete(device),
-              ),
-        ),
-      );
-    }).toList();
-
-    // 🌟 终极解决方案：ShaderMask 实现顶部完美淡出过渡！
+    // 🌟 核心算法 2：使用 ShaderMask 实现极具高级感的顶部消散淡出效果
     return ShaderMask(
       shaderCallback: (Rect bounds) {
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.transparent,
-            Colors.black,
+            Colors.transparent, // 顶部完全透明（融化消失）
+            Colors.black,       // 向下渐变为不透明
           ],
-          // 顶部 8% 区域渐隐，让卡片看起来像是融化进深色面板底下！
-          stops: [0.0, 0.08], 
+          // 顶部 6% 的区域作为渐变缓冲带，既保留堆叠感，又顺滑消失
+          stops: [0.0, 0.06], 
         ).createShader(bounds);
       },
       blendMode: BlendMode.dstIn,
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(), 
-        padding: EdgeInsets.only(top: paddingTop, bottom: 60), 
-        // 🌟 禁用硬裁剪，交由 ShaderMask 软过渡处理！再也不会出现一刀切的僵硬感
-        clipBehavior: Clip.none, 
-        child: SizedBox(
-          height: maxStackHeight,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: stackChildren,
-          ),
-        ),
+      child: Stack(
+        // 取消 Clip，让 ShaderMask 全权接管边缘柔和裁切！
+        clipBehavior: Clip.none,
+        children: ordered.map((entry) {
+          final index = entry.key;
+          final device = entry.value;
+          final isAddCard = device['isAddCard'] == true;
+          final id = device['deviceInfId'].toString();
+          
+          final expanded = isAddCard ? false : expandedId == id;
+          final selected = selectedId == id;
+          final active = activeId == id;
+          
+          // 1. 计算未滑动时的绝对基础 Top 位置
+          double baseTop = paddingTop;
+          if (expandedIndex == null) {
+            // 收起状态：采用手风琴紧密堆叠
+            baseTop += index * 105.0; 
+          } else {
+            // 展开状态：手风琴极致挤压，留出超大视野
+            if (index < expandedIndex) {
+              baseTop += index * 45.0; 
+            } else if (index == expandedIndex) {
+              baseTop += index * 45.0 + 10.0; 
+            } else {
+              baseTop += expandedIndex * 45.0 + 280.0 + (index - expandedIndex - 1) * 70.0; 
+            }
+          }
+
+          // 2. 根据用户手势计算动态滑动位置
+          double currentTop = baseTop - scrollOffset;
+
+          // 3. 🌟 阶梯式吸顶拦截！
+          // 每张卡片都有自己专属的最低底线，永远不会完全重叠！
+          final double minTopLimit = index * minStackSpacing;
+          final double finalTop = math.max(minTopLimit, currentTop);
+
+          return AnimatedPositioned(
+            key: ValueKey(id),
+            // 当触发了真实手势滑动时关闭补间动画，实现真正的“指哪打哪”零延迟跟手；
+            // 当只是展开/收起时，恢复柔和的弹簧动画。
+            duration: scrollOffset > 0 && expandedIndex == null
+                ? Duration.zero 
+                : const Duration(milliseconds: 380),
+            curve: Curves.easeOutCubic, 
+            top: finalTop,
+            left: 23, 
+            right: 23, 
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 380),
+              scale: expanded ? 1.02 : 1, 
+              child: isAddCard 
+                ? _AddDeviceCard(onTap: () => onTapCard(device))
+                : _DeckCard(
+                    palette: _paletteFor(index, device['billType'] == 2),
+                    title: nameOf(device),
+                    count: usageCounts[id] ?? 0,
+                    selected: selected,
+                    active: active,
+                    loading: loading && (working ? active : selected),
+                    expanded: expanded,
+                    onTap: () => onTapCard(device),
+                    onTogglePower: () => onTogglePower(device),
+                    onMove: () => onMove(device),
+                    onRename: () => onRename(device),
+                    onDelete: () => onDelete(device),
+                  ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
