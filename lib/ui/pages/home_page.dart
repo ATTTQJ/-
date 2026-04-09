@@ -1148,7 +1148,7 @@ class _DeviceDeckState extends State<_DeviceDeck> with SingleTickerProviderState
       },
       onVerticalDragEnd: (details) {
         // 手指抬起，触发带初速度的橡皮筋回弹计算
-        _runSpringSimulation(-details.velocity.pixelsPixelsPerSecond.dy);
+        _runSpringSimulation(-details.velocity.pixelsPerSecond.dy); // ✅ 改成 pixelsPerSecond
       },
       onVerticalDragCancel: () {
         _runSpringSimulation(0);
