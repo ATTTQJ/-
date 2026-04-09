@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -136,15 +136,16 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                    // ?? 核心修复 1：补齐必填的 paddingTop 参数！
-                    // 这个值控制列表内容在视口顶部的起始留白
+                    // 🌟 核心视觉魔法：上移视口并使用 padding 对冲！
                     Positioned(
-                      top: 340, // 配合恢复高度的深色卡片，将整体滑动区域下移到 340
-                      left: 0,   // 必须为0，让内部卡片控制左右边距，否则阴影会被切断
+                      // 把物理顶部往上抬升 24px，藏到深色面板的底层阴影里
+                      top: 316, 
+                      left: 0,
                       right: 0,
                       bottom: 0, 
                       child: _DeviceDeck(
-                        paddingTop: 24.0, // ?? 修复编译错误，并预留舒服的顶部滑动间距
+                        // 增加 24px paddingTop，使得初始视觉高度保持绝对不变！
+                        paddingTop: 48.0, 
                         devices: displayDevices,
                         selectedId: selectedId,
                         activeId: activeId,
@@ -246,7 +247,6 @@ class _HomePageState extends State<HomePage> {
   }) {
     if (userProvider.token.trim().isEmpty ||
         userProvider.userId.trim().isEmpty ||
-        !waterProvider.hasLoadedLocalState ||
         deviceProvider.deviceList.isEmpty) {
       return;
     }
@@ -649,10 +649,9 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDimmed = onActionTap == null && !working;
+    final isDimmed = onActionTap == null && !working;
 
     return Container(
-      // ?? 核心修复 2：恢复饱满的深色卡片高度！
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1F2A),
@@ -681,7 +680,7 @@ class _DashboardCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '￥$balance',
+                    '¥$balance',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -744,7 +743,6 @@ class _DashboardCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 300),
                 height: 48,
                 decoration: BoxDecoration(
-                  // ?? 核心修复 3：状态变为经典高亮红
                   color: working
                       ? const Color(0xFFFF453A)
                       : isDimmed
@@ -1018,18 +1016,17 @@ class _DeviceDeck extends StatelessWidget {
       final selected = selectedId == id;
       final active = activeId == id;
       
-      // ?? 核心修复 4：还原卡片“各司其职”的原位展开动画算法！
-      // 绝对禁止顶部的卡片继续往上飞去撞击深色面板！
+      // 🌟 核心：手风琴式紧凑堆叠算法
       double top = 0.0;
       if (expandedIndex == null) {
-        top = index * 120.0; // 恢复 120 舒服的默认堆叠间距
+        top = index * 105.0; // 未展开时：舒适堆叠
       } else {
         if (index < expandedIndex) {
-          top = index * 120.0; // 选中卡片上方的卡片原地待命，绝对不上移！
+          top = index * 45.0; // 🌟 展开时：上方未选中的卡片会极度紧凑折叠 (45间距)
         } else if (index == expandedIndex) {
-          top = index * 120.0 - 10.0; // 被选中的卡片微微上浮一点点，突出层级感
+          top = index * 45.0 + 10.0; // 当前选中的卡片接在折叠组下方，稍微留缝
         } else {
-          top = expandedIndex * 120.0 + 260.0 + (index - expandedIndex - 1) * 60.0; // 下方卡片被平滑推开
+          top = expandedIndex * 45.0 + 280.0 + (index - expandedIndex - 1) * 70.0; 
         }
       }
 
@@ -1068,17 +1065,32 @@ class _DeviceDeck extends StatelessWidget {
       );
     }).toList();
 
-    return SingleChildScrollView(
-      // ?? 核心修复 5：保留 iOS 原生的弹性滑动，让果味贯穿始终！
-      physics: const BouncingScrollPhysics(), 
-      padding: EdgeInsets.only(top: paddingTop, bottom: 60), 
-      // ?? 核心修复 6：启动硬件裁剪！被挤出顶部边界的卡片直接被一刀切断，坚决不让它滑到深色面板底下去！
-      clipBehavior: Clip.hardEdge,
-      child: SizedBox(
-        height: maxStackHeight,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: stackChildren,
+    // 🌟 终极解决方案：ShaderMask 实现顶部完美淡出过渡！
+    return ShaderMask(
+      shaderCallback: (Rect bounds) {
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black,
+          ],
+          // 顶部 8% 区域渐隐，让卡片看起来像是融化进深色面板底下！
+          stops: [0.0, 0.08], 
+        ).createShader(bounds);
+      },
+      blendMode: BlendMode.dstIn,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(), 
+        padding: EdgeInsets.only(top: paddingTop, bottom: 60), 
+        // 🌟 禁用硬裁剪，交由 ShaderMask 软过渡处理！再也不会出现一刀切的僵硬感
+        clipBehavior: Clip.none, 
+        child: SizedBox(
+          height: maxStackHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: stackChildren,
+          ),
         ),
       ),
     );
