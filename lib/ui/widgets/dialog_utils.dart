@@ -16,7 +16,7 @@ class DialogUtils {
       barrierDismissible: true,
       barrierLabel: 'GlassBottomSheet',
       barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 560),
+      transitionDuration: const Duration(milliseconds: 480),
       pageBuilder: (context, anim1, anim2) {
         final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
         final screenHeight = MediaQuery.of(context).size.height;
@@ -25,74 +25,66 @@ class DialogUtils {
           maxDialogHeight = 200;
         }
 
-        return Stack(
-          children: [
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(color: const Color(0x72090B10)),
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: AnimatedPadding(
-                padding: EdgeInsets.only(bottom: keyboardHeight),
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                child: Container(
-                  margin: const EdgeInsets.only(
-                    left: 18,
-                    right: 18,
-                    bottom: 20,
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: AnimatedPadding(
+            padding: EdgeInsets.only(bottom: keyboardHeight),
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            child: Container(
+              margin: const EdgeInsets.only(
+                left: 18,
+                right: 18,
+                bottom: 20,
+              ),
+              width: double.infinity,
+              constraints: BoxConstraints(maxHeight: maxDialogHeight),
+              decoration: ShapeDecoration(
+                color: const Color(0xF2171A20),
+                shape: ContinuousRectangleBorder(
+                  borderRadius: BorderRadius.circular(36),
+                  side: BorderSide(
+                    color: Colors.white.withOpacity(0.06),
+                    width: 0.6,
                   ),
-                  width: double.infinity,
-                  constraints: BoxConstraints(maxHeight: maxDialogHeight),
-                  decoration: ShapeDecoration(
-                    color: const Color(0xF2171A20),
-                    shape: ContinuousRectangleBorder(
-                      borderRadius: BorderRadius.circular(36),
-                      side: BorderSide(
-                        color: Colors.white.withOpacity(0.06),
-                        width: 0.6,
-                      ),
-                    ),
-                    shadows: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.28),
-                        blurRadius: 18,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
+                ),
+                shadows: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.22),
+                    blurRadius: 14,
+                    offset: const Offset(0, 8),
                   ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                        child: SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
-                          child: Padding(
-                            padding: const EdgeInsets.all(22),
-                            child: child,
-                          ),
-                        ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(22),
+                        child: child,
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         );
       },
       transitionBuilder: (context, anim1, anim2, child) {
         final animation = CurvedAnimation(
           parent: anim1,
-          curve: Curves.easeOutCubic,
+          curve: Curves.easeOutQuart,
           reverseCurve: Curves.easeInOutCubic,
         );
         return SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0, 0.16),
+            begin: const Offset(0, 0.12),
             end: Offset.zero,
           ).animate(animation),
           child: child,
