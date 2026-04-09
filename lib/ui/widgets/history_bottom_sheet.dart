@@ -9,7 +9,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/water_provider.dart';
 
 const int _historyVisibleCount = 5;
-const double _historyItemExtent = 76.0;
+const double _historyItemExtent = 72.0;
 const double _historyDividerHeight = 1.0;
 const double _historyViewportHeight =
     (_historyVisibleCount * _historyItemExtent) +
@@ -82,78 +82,73 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text(
-                  '用水记录',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+                const Expanded(
+                  child: Text(
+                    '用水记录',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _LocalRecordsTrigger(
-                      count: waterProvider.localDurationRecords.length,
-                      onTap: () async {
-                        await showDialog<void>(
-                          context: context,
-                          builder: (dialogContext) => _LocalHistoryRecordsDialog(
-                            records: waterProvider.localDurationRecords,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _HistoryMonthTrigger(
-                      month: selectedMonth,
-                      onTap: () async {
-                        final result = await showDialog<_HistoryMonthSelection>(
-                          context: context,
-                          builder: (dialogContext) => _HistoryMonthPickerDialog(
-                            initialYear: selectedYear,
-                            initialMonth: selectedMonth,
-                            availableYears: availableYears,
-                            monthsForYear:
-                                waterProvider.availableMonthsForYear,
-                          ),
-                        );
-                        if (result == null) {
-                          return;
-                        }
-                        unawaited(
-                          _switchHistoryMonth(
-                            userProvider: userProvider,
-                            waterProvider: waterProvider,
-                            year: result.year,
-                            month: result.month,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                _LocalRecordsTrigger(
+                  count: waterProvider.localDurationRecords.length,
+                  onTap: () async {
+                    await showDialog<void>(
+                      context: context,
+                      builder: (dialogContext) => _LocalHistoryRecordsDialog(
+                        records: waterProvider.localDurationRecords,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 10),
+                _HistoryMonthTrigger(
+                  month: selectedMonth,
+                  onTap: () async {
+                    final result = await showDialog<_HistoryMonthSelection>(
+                      context: context,
+                      builder: (dialogContext) => _HistoryMonthPickerDialog(
+                        initialYear: selectedYear,
+                        initialMonth: selectedMonth,
+                        availableYears: availableYears,
+                        monthsForYear: waterProvider.availableMonthsForYear,
+                      ),
+                    );
+                    if (result == null) {
+                      return;
+                    }
+                    unawaited(
+                      _switchHistoryMonth(
+                        userProvider: userProvider,
+                        waterProvider: waterProvider,
+                        year: result.year,
+                        month: result.month,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Text(
               isLoading ? '同步中...' : '共 ${history.length} 条',
               style: const TextStyle(
                 color: Colors.white54,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             SizedBox(
               height: _historyViewportHeight,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 320),
-                reverseDuration: const Duration(milliseconds: 560),
+                duration: const Duration(milliseconds: 280),
+                reverseDuration: const Duration(milliseconds: 520),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeOutCubic,
                 transitionBuilder: (child, animation) => FadeTransition(
@@ -179,7 +174,7 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
                                 '暂无历史记录',
                                 style: TextStyle(
                                   color: Colors.white38,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -197,8 +192,8 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
                               itemCount: history.length,
                               separatorBuilder: (context, index) => Divider(
                                 height: _historyDividerHeight,
-                                indent: 48,
-                                color: Colors.white.withOpacity(0.06),
+                                indent: 42,
+                                color: Colors.white.withOpacity(0.05),
                               ),
                               itemBuilder: (context, index) {
                                 return _HistoryItem(entry: history[index]);
@@ -227,14 +222,14 @@ class _HistoryMonthTrigger extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: Colors.white.withOpacity(0.05),
+            color: Colors.white.withOpacity(0.04),
             width: 0.5,
           ),
         ),
@@ -245,15 +240,15 @@ class _HistoryMonthTrigger extends StatelessWidget {
               '$month月',
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 2),
             const Icon(
               Icons.keyboard_arrow_down_rounded,
-              size: 16,
-              color: Colors.white70,
+              size: 15,
+              color: Colors.white60,
             ),
           ],
         ),
@@ -275,18 +270,18 @@ class _LocalRecordsTrigger extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Text(
-          '本地($count)',
+          '本地 $count',
           style: const TextStyle(
             color: Colors.white54,
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -307,28 +302,24 @@ class _HistoryItem extends StatelessWidget {
 
     return _HistoryRowFrame(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: const Color(0xFF7A58FF).withOpacity(0.15),
+                color: Colors.white.withOpacity(0.06),
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: const Color(0xFF7A58FF).withOpacity(0.3),
-                  width: 0.5,
-                ),
               ),
               child: const Icon(
                 Icons.history_rounded,
                 color: Color(0xFF9B82FF),
-                size: 18,
+                size: 16,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -338,29 +329,34 @@ class _HistoryItem extends StatelessWidget {
                     entry.displayDeviceName,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: 0.3,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text(
-                        entry.formattedDate,
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
+                      Flexible(
+                        child: Text(
+                          entry.formattedDate,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        '时长: ${entry.formattedDuration}',
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 12,
+                      Flexible(
+                        child: Text(
+                          '时长 ${entry.formattedDuration}',
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 11.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -369,30 +365,14 @@ class _HistoryItem extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  isZero ? '0.00' : entry.formattedAmount,
-                  style: TextStyle(
-                    color:
-                        isZero ? Colors.white38 : const Color(0xFF32D7D2),
-                    fontSize: isZero ? 16 : 18,
-                    fontWeight: FontWeight.w800,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                if (!isZero)
-                  const Text(
-                    'RMB',
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-              ],
+            Text(
+              '¥${entry.formattedAmount}',
+              style: TextStyle(
+                color: isZero ? Colors.white38 : const Color(0xFF58D2CB),
+                fontSize: 15.5,
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ],
         ),
@@ -412,8 +392,8 @@ class _HistorySkeletonList extends StatelessWidget {
       itemCount: _historyVisibleCount,
       separatorBuilder: (context, index) => Divider(
         height: _historyDividerHeight,
-        indent: 48,
-        color: Colors.white.withOpacity(0.03),
+        indent: 42,
+        color: Colors.white.withOpacity(0.04),
       ),
       itemBuilder: (context, index) => const _HistorySkeletonItem(),
     );
@@ -441,25 +421,25 @@ class _HistorySkeletonItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return const _HistoryRowFrame(
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
+        padding: EdgeInsets.symmetric(vertical: 11),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _SkeletonCircle(),
-            SizedBox(width: 16),
+            SizedBox(width: 14),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SkeletonBar(width: 116, height: 14),
-                  SizedBox(height: 10),
-                  _SkeletonBar(width: 160, height: 10),
+                  _SkeletonBar(width: 108, height: 13),
+                  SizedBox(height: 8),
+                  _SkeletonBar(width: 150, height: 9),
                 ],
               ),
             ),
             SizedBox(width: 12),
-            _SkeletonPill(width: 48, height: 18),
+            _SkeletonPill(width: 54, height: 12),
           ],
         ),
       ),
@@ -473,10 +453,10 @@ class _SkeletonCircle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 36,
-      height: 36,
+      width: 32,
+      height: 32,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withOpacity(0.05),
         shape: BoxShape.circle,
       ),
     );
@@ -498,7 +478,7 @@ class _SkeletonBar extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(height / 2),
       ),
     );
@@ -578,16 +558,23 @@ class _HistoryMonthPickerDialogState extends State<_HistoryMonthPickerDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 28),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1F2A).withOpacity(0.85),
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: Colors.white.withOpacity(0.1), width: 0.5),
+          color: const Color(0xF1171A20),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.white.withOpacity(0.06), width: 0.6),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.24),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(26),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,23 +583,23 @@ class _HistoryMonthPickerDialogState extends State<_HistoryMonthPickerDialog> {
                     '选择查询月份',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: 17,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   const Text(
                     '年份',
                     style: TextStyle(
                       color: Colors.white54,
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: widget.availableYears
                         .map(
                           (year) => _PickerChip(
@@ -631,19 +618,19 @@ class _HistoryMonthPickerDialogState extends State<_HistoryMonthPickerDialog> {
                         )
                         .toList(growable: false),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   const Text(
                     '月份',
                     style: TextStyle(
                       color: Colors.white54,
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: months
                         .map(
                           (month) => _PickerChip(
@@ -661,7 +648,7 @@ class _HistoryMonthPickerDialogState extends State<_HistoryMonthPickerDialog> {
                         )
                         .toList(growable: false),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
@@ -700,26 +687,26 @@ class _PickerChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF7A58FF)
-              : Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: selected
-              ? null
-              : Border.all(
-                  color: Colors.white.withOpacity(0.04),
-                  width: 0.5,
-                ),
+              ? const Color(0xFF7162FF)
+              : Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? Colors.transparent
+                : Colors.white.withOpacity(0.04),
+            width: 0.5,
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
             color: selected ? Colors.white : Colors.white70,
           ),
@@ -743,16 +730,23 @@ class _LocalHistoryRecordsDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1F2A).withOpacity(0.85),
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: Colors.white.withOpacity(0.1), width: 0.5),
+          color: const Color(0xF1171A20),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.white.withOpacity(0.06), width: 0.6),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.24),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(26),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -761,7 +755,7 @@ class _LocalHistoryRecordsDialog extends StatelessWidget {
                     '本地记录 (${records.length})',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: 17,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -770,10 +764,10 @@ class _LocalHistoryRecordsDialog extends StatelessWidget {
                     '用于核对本地是否写入了用水时长补丁',
                     style: TextStyle(
                       color: Colors.white38,
-                      fontSize: 13,
+                      fontSize: 12.5,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 420),
                     child: records.isEmpty
@@ -784,7 +778,7 @@ class _LocalHistoryRecordsDialog extends StatelessWidget {
                                 '暂无本地记录',
                                 style: TextStyle(
                                   color: Colors.white38,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -795,14 +789,14 @@ class _LocalHistoryRecordsDialog extends StatelessWidget {
                             itemCount: records.length,
                             separatorBuilder: (context, index) => Divider(
                               height: 1,
-                              color: Colors.white.withOpacity(0.06),
+                              color: Colors.white.withOpacity(0.05),
                             ),
                             itemBuilder: (context, index) => _LocalHistoryRecordItem(
                               entry: records[index],
                             ),
                           ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
@@ -840,7 +834,7 @@ class _LocalHistoryRecordItem extends StatelessWidget {
         (entry.deviceId?.trim().isEmpty ?? true) ? '无' : entry.deviceId!.trim();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -848,16 +842,16 @@ class _LocalHistoryRecordItem extends StatelessWidget {
             entry.displayDeviceName,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           Text(
             '${entry.formattedDate}  |  时长 ${entry.formattedDuration}  |  ¥${entry.formattedAmount}',
             style: const TextStyle(
               color: Colors.white70,
-              fontSize: 13,
+              fontSize: 12.5,
             ),
           ),
           const SizedBox(height: 6),

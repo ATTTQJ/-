@@ -16,7 +16,7 @@ class DialogUtils {
       barrierDismissible: true,
       barrierLabel: 'GlassBottomSheet',
       barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 400),
+      transitionDuration: const Duration(milliseconds: 560),
       pageBuilder: (context, anim1, anim2) {
         final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
         final screenHeight = MediaQuery.of(context).size.height;
@@ -29,7 +29,7 @@ class DialogUtils {
           children: [
             GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: Container(color: Colors.transparent),
+              child: Container(color: const Color(0x72090B10)),
             ),
             Align(
               alignment: Alignment.bottomCenter,
@@ -39,39 +39,39 @@ class DialogUtils {
                 curve: Curves.easeOutCubic,
                 child: Container(
                   margin: const EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    bottom: 24,
+                    left: 18,
+                    right: 18,
+                    bottom: 20,
                   ),
                   width: double.infinity,
                   constraints: BoxConstraints(maxHeight: maxDialogHeight),
                   decoration: ShapeDecoration(
-                    color: Colors.black.withOpacity(0.35),
+                    color: const Color(0xF2171A20),
                     shape: ContinuousRectangleBorder(
-                      borderRadius: BorderRadius.circular(60),
+                      borderRadius: BorderRadius.circular(36),
                       side: BorderSide(
-                        color: Colors.white.withOpacity(0.12),
-                        width: 0.5,
+                        color: Colors.white.withOpacity(0.06),
+                        width: 0.6,
                       ),
                     ),
                     shadows: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
-                        blurRadius: 30,
-                        offset: const Offset(0, 15),
+                        color: Colors.black.withOpacity(0.28),
+                        blurRadius: 18,
+                        offset: const Offset(0, 10),
                       ),
                     ],
                   ),
                   child: Material(
                     color: Colors.transparent,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(30),
+                      borderRadius: BorderRadius.circular(28),
                       child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 40.0, sigmaY: 40.0),
+                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                         child: SingleChildScrollView(
                           physics: const BouncingScrollPhysics(),
                           child: Padding(
-                            padding: const EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(22),
                             child: child,
                           ),
                         ),
@@ -85,24 +85,17 @@ class DialogUtils {
         );
       },
       transitionBuilder: (context, anim1, anim2, child) {
-        final curve = Curves.easeOutCubic;
-        return Stack(
-          children: [
-            FadeTransition(
-              opacity: Tween<double>(begin: 0, end: 1).animate(anim1),
-              child: Container(color: Colors.black.withOpacity(0.4)),
-            ),
-            SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.2),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(parent: anim1, curve: curve)),
-              child: FadeTransition(
-                opacity: anim1,
-                child: child,
-              ),
-            ),
-          ],
+        final animation = CurvedAnimation(
+          parent: anim1,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInOutCubic,
+        );
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.16),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
         );
       },
     );
