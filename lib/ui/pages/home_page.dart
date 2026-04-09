@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -23,29 +24,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String? _expandedId;
   String? _historySyncKey;
-  
-  // 🌟 核心 1：用于接管和窃听滑动距离的控制器
-  final ScrollController _scrollController = ScrollController();
-  double _scrollOffset = 0.0;
 
   static const Duration _switchMotionDuration = Duration(milliseconds: 320);
-
-  @override
-  void initState() {
-    super.initState();
-    // 监听滑动事件，实时重绘卡片坐标，过滤负数（防止下拉橡皮筋时卡片下移）
-    _scrollController.addListener(() {
-      setState(() {
-        _scrollOffset = math.max(0, _scrollController.offset);
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +89,7 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   children: [
                     // ==========================================
-                    // 🌟 顶层区域：完全顺排，自然撑开高度！告别硬编码！
+                    // 🌟 顶层区域：保持自然撑开
                     // ==========================================
                     const SizedBox(height: 7),
                     _TopButtons(
@@ -159,7 +139,6 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     const SizedBox(height: 42),
-                    // 仪表盘
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: _DashboardCard(
@@ -191,93 +170,62 @@ class _HomePageState extends State<HomePage> {
                     ),
                     
                     // ==========================================
-                    // 🌟 底层滑动区域：Expanded 动态霸占剩余空间！
+                    // 🌟 底层滑动区域：彻底修复手势拦截！
                     // ==========================================
                     Expanded(
-                      child: Stack(
-                        children: [
-                          // 1. 隐形的滚动视图，只负责收集用户的滑动意图和距离
-                          Positioned.fill(
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              physics: const BouncingScrollPhysics(),
-                              // 为了让最后一张卡片能滑上来，底部留出足够的空间
-                              padding: const EdgeInsets.only(top: 48, bottom: 200),
-                              itemCount: 1,
-                              itemBuilder: (context, index) {
-                                double totalHeight = 0;
-                                for (int i = 0; i < displayDevices.length; i++) {
-                                  final bool isExpanded = _expandedId == displayDevices[i]['deviceInfId'].toString();
-                                  // 这里用粗略的高度撑开即可，精确控制在上面的 Stack 里
-                                  totalHeight += isExpanded ? 260.0 : 120.0; 
-                                }
-                                return SizedBox(height: totalHeight);
-                              },
-                            ),
-                          ),
-
-                          // 2. 真实的卡片渲染区，基于滑动的偏移量自己计算绝对位置
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              // 这个 Stack 的点击事件需要放行给卡片自己处理
-                              ignoring: false,
-                              child: _DeviceDeck(
-                                paddingTop: 48.0, // 🌟 利用 paddingTop 对冲上滑，保持初始视觉位置不变！
-                                scrollOffset: _scrollOffset, // 传入控制器的实时偏移量
-                                devices: displayDevices,
-                                selectedId: selectedId,
-                                activeId: activeId,
-                                expandedId: _expandedId,
-                                working: working,
-                                loading: waterProvider.isRequesting,
-                                usageCounts: usageCounts,
-                                nameOf: (device) => _deviceName(deviceProvider, device),
-                                onTapCard: (device) {
-                                  if (device['isAddCard'] == true) {
-                                    DialogUtils.showCascadingAddDeviceDialog(context);
-                                    return;
-                                  }
-                                  final id = device['deviceInfId'].toString();
-                                  deviceProvider.selectDevice(id);
-                                  setState(() {
-                                    _expandedId = _expandedId == id ? null : id;
-                                  });
-                                },
-                                onTogglePower: (device) =>
-                                    _handleDevicePowerTap(
-                                  context,
-                                  device,
-                                  userProvider,
-                                  waterProvider,
-                                  deviceProvider,
-                                ),
-                                onMove: (device) => _showMoveDeviceDialog(
-                                  context,
-                                  device,
-                                  deviceProvider,
-                                ),
-                                onRename: (device) => DialogUtils.showEditRemarkDialog(
-                                  context,
-                                  device['deviceInfId'].toString(),
-                                  _deviceName(deviceProvider, device),
-                                ),
-                                onDelete: (device) {
-                                  final commonlyId =
-                                      (device['commonlyId'] ?? '').toString();
-                                  if (commonlyId.isEmpty) {
-                                    ToastService.show('无法删除该设备');
-                                    return;
-                                  }
-                                  DialogUtils.showDeleteConfirmDialog(
-                                    context,
-                                    commonlyId,
-                                    _deviceName(deviceProvider, device),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: _DeviceDeck(
+                        // 起始视觉 Padding
+                        paddingTop: 48.0, 
+                        devices: displayDevices,
+                        selectedId: selectedId,
+                        activeId: activeId,
+                        expandedId: _expandedId,
+                        working: working,
+                        loading: waterProvider.isRequesting,
+                        usageCounts: usageCounts,
+                        nameOf: (device) => _deviceName(deviceProvider, device),
+                        onTapCard: (device) {
+                          if (device['isAddCard'] == true) {
+                            DialogUtils.showCascadingAddDeviceDialog(context);
+                            return;
+                          }
+                          final id = device['deviceInfId'].toString();
+                          deviceProvider.selectDevice(id);
+                          setState(() {
+                            _expandedId = _expandedId == id ? null : id;
+                          });
+                        },
+                        onTogglePower: (device) =>
+                            _handleDevicePowerTap(
+                          context,
+                          device,
+                          userProvider,
+                          waterProvider,
+                          deviceProvider,
+                        ),
+                        onMove: (device) => _showMoveDeviceDialog(
+                          context,
+                          device,
+                          deviceProvider,
+                        ),
+                        onRename: (device) => DialogUtils.showEditRemarkDialog(
+                          context,
+                          device['deviceInfId'].toString(),
+                          _deviceName(deviceProvider, device),
+                        ),
+                        onDelete: (device) {
+                          final commonlyId =
+                              (device['commonlyId'] ?? '').toString();
+                          if (commonlyId.isEmpty) {
+                            ToastService.show('无法删除该设备');
+                            return;
+                          }
+                          DialogUtils.showDeleteConfirmDialog(
+                            context,
+                            commonlyId,
+                            _deviceName(deviceProvider, device),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -1000,7 +948,8 @@ class _GlassCircleButton extends StatelessWidget {
   }
 }
 
-class _DeviceDeck extends StatelessWidget {
+// 🌟 终极手势透传重构：DeviceDeck 变身 Stateful 组件，亲自接管滑动物理引擎！
+class _DeviceDeck extends StatefulWidget {
   const _DeviceDeck({
     required this.devices,
     required this.selectedId,
@@ -1011,7 +960,6 @@ class _DeviceDeck extends StatelessWidget {
     required this.usageCounts,
     required this.nameOf,
     required this.paddingTop,
-    required this.scrollOffset, // 🌟 接收滑动偏移量
     required this.onTapCard,
     required this.onTogglePower,
     required this.onMove,
@@ -1027,7 +975,6 @@ class _DeviceDeck extends StatelessWidget {
   final bool loading;
   final Map<String, int> usageCounts;
   final double paddingTop;
-  final double scrollOffset;
   final String Function(Map<String, dynamic>) nameOf;
   final ValueChanged<Map<String, dynamic>> onTapCard;
   final ValueChanged<Map<String, dynamic>> onTogglePower;
@@ -1036,114 +983,190 @@ class _DeviceDeck extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onDelete;
 
   @override
+  State<_DeviceDeck> createState() => _DeviceDeckState();
+}
+
+class _DeviceDeckState extends State<_DeviceDeck> with SingleTickerProviderStateMixin {
+  // 内部维护的滑动偏移量
+  double _scrollOffset = 0.0;
+  
+  // 用于物理回弹的动画控制器
+  late AnimationController _springController;
+  Animation<double>? _springAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _springController = AnimationController(vsync: this);
+    _springController.addListener(() {
+      if (_springAnimation != null) {
+        setState(() {
+          _scrollOffset = _springAnimation!.value;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _springController.dispose();
+    super.dispose();
+  }
+
+  // 模拟 iOS 橡皮筋回弹效果
+  void _runSpringSimulation(double velocity) {
+    // 假设卡片最大可滑动高度为内容总高减去视口高度 (这里做了个简化的底部边界限制)
+    double maxScrollExtent = (widget.devices.length * 105.0) - 200.0;
+    if (maxScrollExtent < 0) maxScrollExtent = 0;
+
+    final springDescription = const SpringDescription(
+      mass: 1,
+      stiffness: 100,
+      damping: 15,
+    );
+
+    double targetOffset = _scrollOffset;
+    if (_scrollOffset < 0) {
+      targetOffset = 0;
+    } else if (_scrollOffset > maxScrollExtent) {
+      targetOffset = maxScrollExtent;
+    } else if (velocity.abs() < 10) {
+      return; // 速度太小，且在边界内，直接停止
+    }
+
+    final simulation = ScrollSpringSimulation(
+      springDescription,
+      _scrollOffset,
+      targetOffset,
+      velocity,
+      tolerance: const Tolerance(velocity: 1.0, distance: 1.0),
+    );
+
+    _springAnimation = _springController.drive(
+      Tween<double>(begin: _scrollOffset, end: targetOffset)
+        ..chain(CurveTween(curve: Curves.easeOut)),
+    );
+
+    _springController.animateWith(simulation);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (devices.isEmpty) return const SizedBox.shrink();
+    if (widget.devices.isEmpty) return const SizedBox.shrink();
 
     int? expandedIndex;
-    if (expandedId != null) {
-      expandedIndex = devices.indexWhere((d) => d['deviceInfId'].toString() == expandedId);
+    if (widget.expandedId != null) {
+      expandedIndex = widget.devices.indexWhere((d) => d['deviceInfId'].toString() == widget.expandedId);
       if (expandedIndex == -1) expandedIndex = null;
     }
 
-    final ordered = List.generate(devices.length, (i) => MapEntry(i, devices[i]));
+    final ordered = List.generate(widget.devices.length, (i) => MapEntry(i, widget.devices[i]));
     
     ordered.sort((a, b) {
-      final ae = expandedId == a.value['deviceInfId'].toString();
-      final be = expandedId == b.value['deviceInfId'].toString();
+      final ae = widget.expandedId == a.value['deviceInfId'].toString();
+      final be = widget.expandedId == b.value['deviceInfId'].toString();
       if (ae == be) {
         return a.key.compareTo(b.key); 
       }
       return ae ? 1 : -1; 
     });
 
-    // 🌟 核心算法 1：定义阶梯式吸顶时的漏出距离
     const double minStackSpacing = 28.0; 
 
-    // 🌟 核心算法 2：使用 ShaderMask 实现极具高级感的顶部消散淡出效果
-    return ShaderMask(
-      shaderCallback: (Rect bounds) {
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent, // 顶部完全透明（融化消失）
-            Colors.black,       // 向下渐变为不透明
-          ],
-          // 顶部 6% 的区域作为渐变缓冲带，既保留堆叠感，又顺滑消失
-          stops: [0.0, 0.06], 
-        ).createShader(bounds);
+    final stackChildren = ordered.map((entry) {
+      final index = entry.key;
+      final device = entry.value;
+      final isAddCard = device['isAddCard'] == true;
+      final id = device['deviceInfId'].toString();
+      
+      final expanded = isAddCard ? false : widget.expandedId == id;
+      final selected = widget.selectedId == id;
+      final active = widget.activeId == id;
+      
+      double baseTop = widget.paddingTop;
+      if (expandedIndex == null) {
+        baseTop += index * 105.0; 
+      } else {
+        if (index < expandedIndex) {
+          baseTop += index * 45.0; 
+        } else if (index == expandedIndex) {
+          baseTop += index * 45.0 + 10.0; 
+        } else {
+          baseTop += expandedIndex * 45.0 + 280.0 + (index - expandedIndex - 1) * 70.0; 
+        }
+      }
+
+      // 实时位置：基础位置减去滑动偏移
+      double currentTop = baseTop - _scrollOffset;
+
+      final double minTopLimit = index * minStackSpacing;
+      final double finalTop = math.max(minTopLimit, currentTop);
+
+      return AnimatedPositioned(
+        key: ValueKey(id),
+        duration: _springController.isAnimating || _scrollOffset != 0 
+            ? Duration.zero // 滑动时取消动画，完美跟手
+            : const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic, 
+        top: finalTop,
+        left: 23, 
+        right: 23, 
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 380),
+          scale: expanded ? 1.02 : 1, 
+          child: isAddCard 
+            ? _AddDeviceCard(onTap: () => widget.onTapCard(device))
+            : _DeckCard(
+                palette: _paletteFor(index, device['billType'] == 2),
+                title: widget.nameOf(device),
+                count: widget.usageCounts[id] ?? 0,
+                selected: selected,
+                active: active,
+                loading: widget.loading && (widget.working ? active : selected),
+                expanded: expanded,
+                onTap: () => widget.onTapCard(device),
+                onTogglePower: () => widget.onTogglePower(device),
+                onMove: () => widget.onMove(device),
+                onRename: () => widget.onRename(device),
+                onDelete: () => widget.onDelete(device),
+              ),
+        ),
+      );
+    }).toList();
+
+    // 🌟 核心突破：直接在此层拦截 VerticalDrag 手势，把偏移量灌给所有卡片！
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragDown: (_) {
+        _springController.stop(); // 手指按下，停止惯性滚动
       },
-      blendMode: BlendMode.dstIn,
-      child: Stack(
-        // 取消 Clip，让 ShaderMask 全权接管边缘柔和裁切！
-        clipBehavior: Clip.none,
-        children: ordered.map((entry) {
-          final index = entry.key;
-          final device = entry.value;
-          final isAddCard = device['isAddCard'] == true;
-          final id = device['deviceInfId'].toString();
-          
-          final expanded = isAddCard ? false : expandedId == id;
-          final selected = selectedId == id;
-          final active = activeId == id;
-          
-          // 1. 计算未滑动时的绝对基础 Top 位置
-          double baseTop = paddingTop;
-          if (expandedIndex == null) {
-            // 收起状态：采用手风琴紧密堆叠
-            baseTop += index * 105.0; 
-          } else {
-            // 展开状态：手风琴极致挤压，留出超大视野
-            if (index < expandedIndex) {
-              baseTop += index * 45.0; 
-            } else if (index == expandedIndex) {
-              baseTop += index * 45.0 + 10.0; 
-            } else {
-              baseTop += expandedIndex * 45.0 + 280.0 + (index - expandedIndex - 1) * 70.0; 
-            }
-          }
-
-          // 2. 根据用户手势计算动态滑动位置
-          double currentTop = baseTop - scrollOffset;
-
-          // 3. 🌟 阶梯式吸顶拦截！
-          // 每张卡片都有自己专属的最低底线，永远不会完全重叠！
-          final double minTopLimit = index * minStackSpacing;
-          final double finalTop = math.max(minTopLimit, currentTop);
-
-          return AnimatedPositioned(
-            key: ValueKey(id),
-            // 当触发了真实手势滑动时关闭补间动画，实现真正的“指哪打哪”零延迟跟手；
-            // 当只是展开/收起时，恢复柔和的弹簧动画。
-            duration: scrollOffset > 0 && expandedIndex == null
-                ? Duration.zero 
-                : const Duration(milliseconds: 380),
-            curve: Curves.easeOutCubic, 
-            top: finalTop,
-            left: 23, 
-            right: 23, 
-            child: AnimatedScale(
-              duration: const Duration(milliseconds: 380),
-              scale: expanded ? 1.02 : 1, 
-              child: isAddCard 
-                ? _AddDeviceCard(onTap: () => onTapCard(device))
-                : _DeckCard(
-                    palette: _paletteFor(index, device['billType'] == 2),
-                    title: nameOf(device),
-                    count: usageCounts[id] ?? 0,
-                    selected: selected,
-                    active: active,
-                    loading: loading && (working ? active : selected),
-                    expanded: expanded,
-                    onTap: () => onTapCard(device),
-                    onTogglePower: () => onTogglePower(device),
-                    onMove: () => onMove(device),
-                    onRename: () => onRename(device),
-                    onDelete: () => onDelete(device),
-                  ),
-            ),
-          );
-        }).toList(),
+      onVerticalDragUpdate: (details) {
+        setState(() {
+          // 加入一点滑动阻力模拟真实的滚动物理
+          _scrollOffset -= details.delta.dy * 0.8;
+        });
+      },
+      onVerticalDragEnd: (details) {
+        // 手指抬起，触发带初速度的橡皮筋回弹计算
+        _runSpringSimulation(-details.velocity.pixelsPixelsPerSecond.dy);
+      },
+      onVerticalDragCancel: () {
+        _runSpringSimulation(0);
+      },
+      child: ShaderMask(
+        shaderCallback: (Rect bounds) {
+          return const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Colors.black],
+            stops: [0.0, 0.06], 
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: stackChildren,
+        ),
       ),
     );
   }
