@@ -12,6 +12,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/water_provider.dart';
 import '../widgets/dialog_utils.dart';
 import '../widgets/history_bottom_sheet.dart';
+import '../widgets/user_profile_sheet.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -92,7 +93,9 @@ class _HomePageState extends State<HomePage> {
                     // ==========================================
                     const SizedBox(height: 7),
                     _TopButtons(
-                      onProfile: () => _showLogoutConfirm(context),
+                      avatarUrl: userProvider.avatarUrl,
+                      uploadingAvatar: userProvider.isUploadingAvatar,
+                      onProfile: () => _showUserProfileSheet(context),
                       onHistory: () async {
                         await context.read<WaterProvider>().syncHistoryFromServer(
                               token: userProvider.token,
@@ -571,52 +574,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showLogoutConfirm(BuildContext context) {
-    DialogUtils.showGlassBottomSheet(
-      context,
-      Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '退出登录',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2C2C2E),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            '确定要退出当前账号吗？',
-            style: TextStyle(color: Color(0xFF666666), fontSize: 15),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('取消'),
-                ),
-              ),
-              Expanded(
-                child: TextButton(
-                  onPressed: () {
-                    context.read<UserProvider>().logout();
-                    Navigator.pop(context);
-                  },
-                  child: const Text(
-                    '退出登录',
-                    style: TextStyle(color: Colors.redAccent),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  void _showUserProfileSheet(BuildContext context) {
+    DialogUtils.showGlassBottomSheet(context, const UserProfileSheet());
   }
 }
 
@@ -893,10 +852,14 @@ class _BackdropLayer extends StatelessWidget {
 
 class _TopButtons extends StatelessWidget {
   const _TopButtons({
+    required this.avatarUrl,
+    required this.uploadingAvatar,
     required this.onProfile,
     required this.onHistory,
   });
 
+  final String avatarUrl;
+  final bool uploadingAvatar;
   final VoidCallback onProfile;
   final VoidCallback onHistory;
 
@@ -907,8 +870,21 @@ class _TopButtons extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _GlassCircleButton(icon: Icons.person_outline_rounded, onTap: onProfile),
-          _GlassCircleButton(icon: Icons.history_rounded, onTap: onHistory), 
+          _GlassCircleButton(
+            onTap: onProfile,
+            child: _ProfileAvatarButton(
+              avatarUrl: avatarUrl,
+              loading: uploadingAvatar,
+            ),
+          ),
+          _GlassCircleButton(
+            onTap: onHistory,
+            child: const Icon(
+              Icons.history_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
         ],
       ),
     );
@@ -917,11 +893,11 @@ class _TopButtons extends StatelessWidget {
 
 class _GlassCircleButton extends StatelessWidget {
   const _GlassCircleButton({
-    required this.icon,
+    required this.child,
     required this.onTap,
   });
 
-  final IconData icon;
+  final Widget child;
   final VoidCallback onTap;
 
   @override
@@ -938,8 +914,59 @@ class _GlassCircleButton extends StatelessWidget {
               shape: BoxShape.circle,
               color: Color(0x22FFFFFF),
             ),
-            child: Icon(icon, color: Colors.white, size: 22),
+            child: child,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAvatarButton extends StatelessWidget {
+  const _ProfileAvatarButton({
+    required this.avatarUrl,
+    required this.loading,
+  });
+
+  final String avatarUrl;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Center(
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ),
+      );
+    }
+
+    final trimmedUrl = avatarUrl.trim();
+    if (trimmedUrl.isEmpty) {
+      return const Icon(
+        Icons.person_outline_rounded,
+        color: Colors.white,
+        size: 22,
+      );
+    }
+
+    return ClipOval(
+      child: SizedBox.expand(
+        child: Image.network(
+          trimmedUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return const Icon(
+              Icons.person_outline_rounded,
+              color: Colors.white,
+              size: 22,
+            );
+          },
         ),
       ),
     );

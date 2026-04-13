@@ -48,6 +48,10 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>The app uses the camera to scan device QR codes.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>The app uses your photo library so you can choose a profile picture.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>The app may save processed profile pictures to your photo library.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The app uses your local network to discover nearby water devices.</string>
 	<key>UIApplicationSceneManifest</key>

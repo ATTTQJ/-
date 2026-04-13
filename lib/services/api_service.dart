@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http2/http2.dart';
@@ -276,7 +277,127 @@ class ApiService {
     );
   }
 
+  static Future<bool> uploadUserAvatar({
+    required String token,
+    required String userId,
+    required Uint8List fileBytes,
+    required String fileName,
+    int retry = 1,
+    bool muteToast = false,
+  }) async {
+    final boundary = 'avatar-${DateTime.now().microsecondsSinceEpoch}';
+    final bodyBytes = _buildAvatarUploadBody(
+      boundary: boundary,
+      token: token,
+      userId: userId,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
+
+    try {
+      final transport = await _getTransport();
+      final stream = transport.makeRequest([
+        Header.ascii(':method', 'POST'),
+        Header.ascii(':authority', _domain),
+        Header.ascii(':path', '/ue/app/user/modifyUserInformation'),
+        Header.ascii(':scheme', 'https'),
+        Header.ascii(
+          'content-type',
+          'multipart/mixed; boundary=$boundary',
+        ),
+        Header.ascii('content-length', bodyBytes.length.toString()),
+        Header.ascii('user-agent', 'okhttp/4.9.0'),
+        Header.ascii('accept-encoding', 'gzip'),
+      ], endStream: false);
+
+      stream.sendData(bodyBytes, endStream: true);
+
+      final responseBytes = <int>[];
+      final responseHeaders = <String, String>{};
+
+      await for (final message in stream.incomingMessages) {
+        if (message is HeadersStreamMessage) {
+          for (final header in message.headers) {
+            responseHeaders[utf8.decode(header.name).toLowerCase()] = utf8
+                .decode(header.value);
+          }
+        } else if (message is DataStreamMessage) {
+          responseBytes.addAll(message.bytes);
+        }
+      }
+
+      final decodedBody = responseHeaders['content-encoding'] == 'gzip'
+          ? utf8.decode(gzip.decode(responseBytes))
+          : utf8.decode(responseBytes);
+      final response = jsonDecode(decodedBody);
+
+      if (!muteToast && !_isSuccessCode(response['code'])) {
+        ToastService.show(
+          response['msg']?.toString() ?? '头像上传失败',
+        );
+      }
+
+      return _isSuccessCode(response['code']);
+    } catch (_) {
+      _sharedTransport = null;
+      if (retry > 0) {
+        return uploadUserAvatar(
+          token: token,
+          userId: userId,
+          fileBytes: fileBytes,
+          fileName: fileName,
+          retry: retry - 1,
+          muteToast: muteToast,
+        );
+      }
+      if (!muteToast) {
+        ToastService.show('头像上传失败，请重试');
+      }
+      return false;
+    }
+  }
+
   static bool _isSuccessCode(Object? code) {
     return code == 0 || code == '0' || code == 200 || code == '200';
+  }
+
+  static Uint8List _buildAvatarUploadBody({
+    required String boundary,
+    required String token,
+    required String userId,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) {
+    final builder = BytesBuilder(copy: false);
+
+    void writeText(String value) {
+      builder.add(utf8.encode(value));
+    }
+
+    void writeField(String name, String value) {
+      final valueBytes = utf8.encode(value);
+      writeText('--$boundary\r\n');
+      writeText('Content-Disposition: form-data; name="$name"\r\n');
+      writeText('Content-Length: ${valueBytes.length}\r\n');
+      writeText('\r\n');
+      builder.add(valueBytes);
+      writeText('\r\n');
+    }
+
+    writeField('userId', userId);
+    writeField('token', token);
+
+    writeText('--$boundary\r\n');
+    writeText(
+      'Content-Disposition: form-data; name="uPictureFile"; '
+      'filename="$fileName"\r\n',
+    );
+    writeText('Content-Type: multipart/form-data\r\n');
+    writeText('Content-Length: ${fileBytes.length}\r\n');
+    writeText('\r\n');
+    builder.add(fileBytes);
+    writeText('\r\n--$boundary--\r\n');
+
+    return builder.toBytes();
   }
 }
