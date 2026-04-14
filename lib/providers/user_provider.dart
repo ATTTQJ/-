@@ -1,8 +1,5 @@
-import 'dart:math' as math;
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -162,9 +159,45 @@ class UserProvider extends ChangeNotifier {
       isUploadingAvatar = true;
       notifyListeners();
 
-      final sourceBytes = await pickedFile.readAsBytes();
-      final croppedBytes = _cropToSquareAvatar(sourceBytes);
-      final fileName = _buildAvatarFileName(pickedFile.name);
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: pickedFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        maxWidth: 500,
+        maxHeight: 500,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 92,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: '裁剪头像',
+            toolbarColor: const Color(0xFF111318),
+            toolbarWidgetColor: Colors.white,
+            backgroundColor: const Color(0xFF111318),
+            activeControlsWidgetColor: const Color(0xFF7C5CFF),
+            dimmedLayerColor: const Color(0xCC000000),
+            cropFrameColor: Colors.white,
+            cropGridColor: Colors.white24,
+            hideBottomControls: true,
+            lockAspectRatio: true,
+            initAspectRatio: CropAspectRatioPreset.square,
+          ),
+          IOSUiSettings(
+            title: '裁剪头像',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+            aspectRatioPickerButtonHidden: true,
+            rotateButtonsHidden: true,
+            rotateClockwiseButtonHidden: true,
+            doneButtonTitle: '完成',
+            cancelButtonTitle: '取消',
+          ),
+        ],
+      );
+      if (croppedFile == null) {
+        return false;
+      }
+
+      final croppedBytes = await croppedFile.readAsBytes();
+      final fileName = _buildAvatarFileName();
 
       final success = await ApiService.uploadUserAvatar(
         token: token,
@@ -201,7 +234,7 @@ class UserProvider extends ChangeNotifier {
   }
 
   void checkLowBalance() {
-    double bal = double.tryParse(balance) ?? 0.0;
+    final bal = double.tryParse(balance) ?? 0.0;
     if (bal >= 5.0) {
       hasShownBalanceWarning = false;
     } else if (bal < 5.0 && !hasShownBalanceWarning) {
@@ -281,9 +314,8 @@ class UserProvider extends ChangeNotifier {
     grade = data["grade"]?.toString() ?? "";
 
     final realNameValue = data["isRealName"] ?? data["isRealNmeFlag"];
-    isRealName = realNameValue == true ||
-        realNameValue == 1 ||
-        realNameValue == "1";
+    isRealName =
+        realNameValue == true || realNameValue == 1 || realNameValue == "1";
   }
 
   String _pickFirstNonEmpty(List<String?> values, {required String fallback}) {
@@ -313,38 +345,14 @@ class UserProvider extends ChangeNotifier {
     return 'https://h5.uyxy.xin:9000$trimmed';
   }
 
-  Uint8List _cropToSquareAvatar(Uint8List sourceBytes) {
-    final decoded = img.decodeImage(sourceBytes);
-    if (decoded == null) {
-      throw StateError('invalid image');
-    }
-
-    final edge = math.min(decoded.width, decoded.height);
-    final x = (decoded.width - edge) ~/ 2;
-    final y = (decoded.height - edge) ~/ 2;
-
-    final square = img.copyCrop(
-      decoded,
-      x: x,
-      y: y,
-      width: edge,
-      height: edge,
-    );
-    final resized = img.copyResize(
-      square,
-      width: 720,
-      height: 720,
-      interpolation: img.Interpolation.average,
-    );
-    return Uint8List.fromList(img.encodeJpg(resized, quality: 92));
-  }
-
-  String _buildAvatarFileName(String originalName) {
+  String _buildAvatarFileName() {
     final now = DateTime.now();
-    final date = now.year.toString().padLeft(4, '0') +
+    final date =
+        now.year.toString().padLeft(4, '0') +
         now.month.toString().padLeft(2, '0') +
         now.day.toString().padLeft(2, '0');
-    final time = now.hour.toString().padLeft(2, '0') +
+    final time =
+        now.hour.toString().padLeft(2, '0') +
         now.minute.toString().padLeft(2, '0') +
         now.second.toString().padLeft(2, '0');
     return 'IMG_${date}_${time}_CROP.jpg';
