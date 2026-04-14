@@ -144,7 +144,9 @@ class ApiService {
         );
       }
       if (!muteToast) {
-        ToastService.show('\u7f51\u7edc\u8fde\u63a5\u5f02\u5e38\uff0c\u8bf7\u91cd\u8bd5');
+        ToastService.show(
+          '\u7f51\u7edc\u8fde\u63a5\u5f02\u5e38\uff0c\u8bf7\u91cd\u8bd5',
+        );
       }
       return null;
     }
@@ -286,35 +288,42 @@ class ApiService {
     bool muteToast = false,
   }) async {
     try {
-      final primaryResponse = await _uploadUserAvatarOnce(
-        token: token,
-        userId: userId,
-        fileBytes: fileBytes,
-        fileName: fileName,
-        fileContentType: 'multipart/form-data',
-      );
-      if (primaryResponse != null && _isSuccessCode(primaryResponse['code'])) {
-        return true;
-      }
+      Map<String, dynamic>? failedResponse;
+      final attempts = <({String topLevelContentType, String fileContentType})>[
+        (
+          topLevelContentType: 'multipart/form-data',
+          fileContentType: 'multipart/form-data',
+        ),
+        (
+          topLevelContentType: 'multipart/form-data',
+          fileContentType: 'image/jpeg',
+        ),
+        (
+          topLevelContentType: 'multipart/mixed',
+          fileContentType: 'multipart/form-data',
+        ),
+        (topLevelContentType: 'multipart/mixed', fileContentType: 'image/jpeg'),
+      ];
 
-      // Some server nodes are stricter about the file part MIME.
-      final fallbackResponse = await _uploadUserAvatarOnce(
-        token: token,
-        userId: userId,
-        fileBytes: fileBytes,
-        fileName: fileName,
-        fileContentType: 'image/jpeg',
-        resetTransport: true,
-      );
-      if (fallbackResponse != null && _isSuccessCode(fallbackResponse['code'])) {
-        return true;
-      }
-
-      final failedResponse = fallbackResponse ?? primaryResponse;
-      if (!muteToast && failedResponse != null) {
-        ToastService.show(
-          failedResponse['msg']?.toString() ?? '头像上传失败',
+      for (var i = 0; i < attempts.length; i++) {
+        final attempt = attempts[i];
+        final response = await _uploadUserAvatarOnce(
+          token: token,
+          userId: userId,
+          fileBytes: fileBytes,
+          fileName: fileName,
+          topLevelContentType: attempt.topLevelContentType,
+          fileContentType: attempt.fileContentType,
+          resetTransport: true,
         );
+        if (response != null && _isSuccessCode(response['code'])) {
+          return true;
+        }
+        failedResponse ??= response;
+      }
+
+      if (!muteToast && failedResponse != null) {
+        ToastService.show(failedResponse['msg']?.toString() ?? '头像上传失败');
       }
       return false;
     } catch (_) {
@@ -345,6 +354,7 @@ class ApiService {
     required String userId,
     required Uint8List fileBytes,
     required String fileName,
+    required String topLevelContentType,
     required String fileContentType,
     bool resetTransport = false,
   }) async {
@@ -368,10 +378,7 @@ class ApiService {
       Header.ascii(':authority', _domain),
       Header.ascii(':path', '/ue/app/user/modifyUserInformation'),
       Header.ascii(':scheme', 'https'),
-      Header.ascii(
-        'content-type',
-        'multipart/mixed; boundary=$boundary',
-      ),
+      Header.ascii('content-type', '$topLevelContentType; boundary=$boundary'),
       Header.ascii('content-length', bodyBytes.length.toString()),
       Header.ascii('user-agent', 'okhttp/4.9.0'),
       Header.ascii('accept-encoding', 'gzip'),
@@ -385,8 +392,9 @@ class ApiService {
     await for (final message in stream.incomingMessages) {
       if (message is HeadersStreamMessage) {
         for (final header in message.headers) {
-          responseHeaders[utf8.decode(header.name).toLowerCase()] = utf8
-              .decode(header.value);
+          responseHeaders[utf8.decode(header.name).toLowerCase()] = utf8.decode(
+            header.value,
+          );
         }
       } else if (message is DataStreamMessage) {
         responseBytes.addAll(message.bytes);
