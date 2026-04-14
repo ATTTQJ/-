@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -29,14 +29,16 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ));
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+    );
 
     return Consumer3<UserProvider, WaterProvider, DeviceProvider>(
       builder: (context, userProvider, waterProvider, deviceProvider, child) {
-        final List<Map<String, dynamic>> displayDevices = 
+        final List<Map<String, dynamic>> displayDevices =
             List<Map<String, dynamic>>.from(deviceProvider.deviceList);
         while (displayDevices.length < 4) {
           displayDevices.add({
@@ -83,9 +85,9 @@ class _HomePageState extends State<HomePage> {
           body: Stack(
             children: [
               const Positioned.fill(child: _BackdropLayer()),
-              
+
               SafeArea(
-                bottom: false, 
+                bottom: false,
                 child: Column(
                   children: [
                     // ==========================================
@@ -97,7 +99,9 @@ class _HomePageState extends State<HomePage> {
                       uploadingAvatar: userProvider.isUploadingAvatar,
                       onProfile: () => _showUserProfileSheet(context),
                       onHistory: () async {
-                        await context.read<WaterProvider>().syncHistoryFromServer(
+                        await context
+                            .read<WaterProvider>()
+                            .syncHistoryFromServer(
                               token: userProvider.token,
                               userId: userProvider.userId,
                               muteToast: true,
@@ -119,7 +123,7 @@ class _HomePageState extends State<HomePage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "John's Home", 
+                              "WELCOME",
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 28,
@@ -149,34 +153,35 @@ class _HomePageState extends State<HomePage> {
                         runningTime: waterProvider.runningTime,
                         activeDevicesCount: working ? 1 : 0,
                         totalDevicesCount: deviceProvider.deviceList.length,
-                        activeDeviceName: currentActiveName, 
+                        activeDeviceName: currentActiveName,
                         onStatusTap: working
                             ? null
                             : () => DialogUtils.showCascadingAddDeviceDialog(
-                                  context,
-                                ),
+                                context,
+                              ),
                         lastUsedDeviceName: predictedDevice == null
                             ? '暂无可用设备'
                             : _deviceName(deviceProvider, predictedDevice),
-                        onActionTap: dashboardDevice == null ||
+                        onActionTap:
+                            dashboardDevice == null ||
                                 waterProvider.isRequesting
                             ? null
                             : () => _handleDevicePowerTap(
-                                  context,
-                                  dashboardDevice,
-                                  userProvider,
-                                  waterProvider,
-                                  deviceProvider,
-                                ),
+                                context,
+                                dashboardDevice,
+                                userProvider,
+                                waterProvider,
+                                deviceProvider,
+                              ),
                       ),
                     ),
-                    
+
                     // ==========================================
                     // 🌟 底层滑动区域：Expanded 动态霸占剩余空间
                     // ==========================================
                     Expanded(
                       child: _DeviceDeck(
-                        paddingTop: 48.0, 
+                        paddingTop: 48.0,
                         devices: displayDevices,
                         selectedId: selectedId,
                         activeId: activeId,
@@ -196,8 +201,7 @@ class _HomePageState extends State<HomePage> {
                             _expandedId = _expandedId == id ? null : id;
                           });
                         },
-                        onTogglePower: (device) =>
-                            _handleDevicePowerTap(
+                        onTogglePower: (device) => _handleDevicePowerTap(
                           context,
                           device,
                           userProvider,
@@ -215,8 +219,8 @@ class _HomePageState extends State<HomePage> {
                           _deviceName(deviceProvider, device),
                         ),
                         onDelete: (device) {
-                          final commonlyId =
-                              (device['commonlyId'] ?? '').toString();
+                          final commonlyId = (device['commonlyId'] ?? '')
+                              .toString();
                           if (commonlyId.isEmpty) {
                             ToastService.show('无法删除该设备');
                             return;
@@ -271,21 +275,24 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  String _deviceName(
-    DeviceProvider provider,
-    Map<String, dynamic> device,
-  ) {
+  String _deviceName(DeviceProvider provider, Map<String, dynamic> device) {
     if (device['isAddCard'] == true) return '添加设备';
-    
+
     final id = device['deviceInfId'].toString();
     final remark = provider.customRemarks[id];
     if (remark != null && remark.trim().isNotEmpty) {
       return remark.trim();
     }
-    return device['deviceInfName'].toString().replaceFirst(RegExp(r'^[12]-'), '');
+    return device['deviceInfName'].toString().replaceFirst(
+      RegExp(r'^[12]-'),
+      '',
+    );
   }
 
-  String _historyDeviceName(Map<String, dynamic> device, DeviceProvider provider) {
+  String _historyDeviceName(
+    Map<String, dynamic> device,
+    DeviceProvider provider,
+  ) {
     final suffix = device['billType'] == 2 ? '\u70ed\u6c34' : '\u76f4\u996e';
     return '${_deviceName(provider, device)}$suffix';
   }
@@ -298,7 +305,9 @@ class _HomePageState extends State<HomePage> {
     final rawName = device['deviceInfName']?.toString() ?? '';
     final strippedRaw = rawName.replaceFirst(RegExp(r'^[12]-'), '');
     final aliases = <String>{
-      _normalizeUsageHistoryDeviceName('${_deviceName(provider, device)}$suffix'),
+      _normalizeUsageHistoryDeviceName(
+        '${_deviceName(provider, device)}$suffix',
+      ),
       _normalizeUsageHistoryDeviceName('$strippedRaw$suffix'),
       _normalizeUsageHistoryDeviceName('$rawName$suffix'),
     }..removeWhere((value) => value.isEmpty);
@@ -379,8 +388,9 @@ class _HomePageState extends State<HomePage> {
     pool.sort((a, b) {
       final aId = a['deviceInfId'].toString();
       final bId = b['deviceInfId'].toString();
-      final countCompare =
-          (usageCounts[bId] ?? 0).compareTo(usageCounts[aId] ?? 0);
+      final countCompare = (usageCounts[bId] ?? 0).compareTo(
+        usageCounts[aId] ?? 0,
+      );
       if (countCompare != 0) {
         return countCompare;
       }
@@ -503,7 +513,7 @@ class _HomePageState extends State<HomePage> {
           const Text(
             '移动设备',
             style: TextStyle(
-              color: Color(0xFF2C2C2E),
+              color: DialogUtils.titleColor,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -511,10 +521,7 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 16),
           Text(
             '请输入 1 到 $maxPosition 之间的位置。',
-            style: const TextStyle(
-              color: Color(0xFF666666),
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: DialogUtils.bodyColor, fontSize: 14),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -523,7 +530,7 @@ class _HomePageState extends State<HomePage> {
             decoration: InputDecoration(
               hintText: '位置',
               filled: true,
-              fillColor: Colors.grey[100],
+              fillColor: DialogUtils.surfaceBackgroundColor,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -542,7 +549,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C2C2E),
+                    backgroundColor: DialogUtils.primaryColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -652,10 +659,16 @@ class _DashboardCard extends StatelessWidget {
                   width: 116,
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 800),
-                    switchInCurve:
-                        const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
-                    switchOutCurve:
-                        const Interval(0.5, 1.0, curve: Curves.easeInOutCubic),
+                    switchInCurve: const Interval(
+                      0.5,
+                      1.0,
+                      curve: Curves.easeInOutCubic,
+                    ),
+                    switchOutCurve: const Interval(
+                      0.5,
+                      1.0,
+                      curve: Curves.easeInOutCubic,
+                    ),
                     transitionBuilder: (child, animation) =>
                         FadeTransition(opacity: animation, child: child),
                     child: Row(
@@ -701,8 +714,8 @@ class _DashboardCard extends StatelessWidget {
                   color: working
                       ? const Color(0xFFFF453A)
                       : isDimmed
-                          ? const Color(0xFF7A58FF).withOpacity(0.45)
-                          : const Color(0xFF7A58FF),
+                      ? const Color(0xFF7A58FF).withOpacity(0.45)
+                      : const Color(0xFF7A58FF),
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Row(
@@ -718,9 +731,7 @@ class _DashboardCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        working
-                            ? '$activeDeviceName 使用中'
-                            : lastUsedDeviceName,
+                        working ? '$activeDeviceName 使用中' : lastUsedDeviceName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -779,7 +790,8 @@ class _RollingDigit extends StatelessWidget {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
       transitionBuilder: (Widget child, Animation<double> animation) {
-        final isEntering = (child.key as ValueKey<String>).value == '${index}_$char';
+        final isEntering =
+            (child.key as ValueKey<String>).value == '${index}_$char';
         final offsetTween = isEntering
             ? Tween<Offset>(begin: const Offset(0.0, 0.5), end: Offset.zero)
             : Tween<Offset>(begin: const Offset(0.0, -0.5), end: Offset.zero);
@@ -820,7 +832,7 @@ class _BackdropLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Container(color: const Color(0xFF111217)), 
+        Container(color: const Color(0xFF111217)),
         Positioned(
           left: 14,
           right: 14,
@@ -866,7 +878,7 @@ class _TopButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24), 
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -892,10 +904,7 @@ class _TopButtons extends StatelessWidget {
 }
 
 class _GlassCircleButton extends StatelessWidget {
-  const _GlassCircleButton({
-    required this.child,
-    required this.onTap,
-  });
+  const _GlassCircleButton({required this.child, required this.onTap});
 
   final Widget child;
   final VoidCallback onTap;
@@ -908,7 +917,7 @@ class _GlassCircleButton extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
           child: Container(
-            width: 46, 
+            width: 46,
             height: 46,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
@@ -923,52 +932,17 @@ class _GlassCircleButton extends StatelessWidget {
 }
 
 class _ProfileAvatarButton extends StatelessWidget {
-  const _ProfileAvatarButton({
-    required this.avatarUrl,
-    required this.loading,
-  });
+  const _ProfileAvatarButton({required this.avatarUrl, required this.loading});
 
   final String avatarUrl;
   final bool loading;
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const Center(
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-          ),
-        ),
-      );
-    }
-
-    final trimmedUrl = avatarUrl.trim();
-    if (trimmedUrl.isEmpty) {
-      return const Icon(
-        Icons.person_outline_rounded,
-        color: Colors.white,
-        size: 22,
-      );
-    }
-
-    return ClipOval(
-      child: SizedBox.expand(
-        child: Image.network(
-          trimmedUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return const Icon(
-              Icons.person_outline_rounded,
-              color: Colors.white,
-              size: 22,
-            );
-          },
-        ),
-      ),
+    return const Icon(
+      Icons.person_outline_rounded,
+      color: Colors.white,
+      size: 22,
     );
   }
 }
@@ -1027,45 +1001,52 @@ class _DeviceDeckState extends State<_DeviceDeck> {
 
     int? expandedIndex;
     if (widget.expandedId != null) {
-      expandedIndex = widget.devices.indexWhere((d) => d['deviceInfId'].toString() == widget.expandedId);
+      expandedIndex = widget.devices.indexWhere(
+        (d) => d['deviceInfId'].toString() == widget.expandedId,
+      );
       if (expandedIndex == -1) expandedIndex = null;
     }
 
-    final ordered = List.generate(widget.devices.length, (i) => MapEntry(i, widget.devices[i]));
-    
+    final ordered = List.generate(
+      widget.devices.length,
+      (i) => MapEntry(i, widget.devices[i]),
+    );
+
     ordered.sort((a, b) {
       final ae = widget.expandedId == a.value['deviceInfId'].toString();
       final be = widget.expandedId == b.value['deviceInfId'].toString();
       if (ae == be) {
-        return a.key.compareTo(b.key); 
+        return a.key.compareTo(b.key);
       }
-      return ae ? 1 : -1; 
+      return ae ? 1 : -1;
     });
 
     // 🌟 阶梯参数配置
     const double minStackSpacing = 28.0; // 堆叠时漏出的标题圆角距离
-    const double stickyCeiling = 12.0;   // 距离深色卡片底部的最小空隙
+    const double stickyCeiling = 12.0; // 距离深色卡片底部的最小空隙
 
     double maxStackHeight = 0;
     final List<double> targetTops = [];
-    
+
     // 1. 预计算所有卡片在未滑动时的基础 Top 位置
     for (int i = 0; i < widget.devices.length; i++) {
       double baseTop = widget.paddingTop;
       if (expandedIndex == null) {
-        baseTop += i * 105.0; 
+        baseTop += i * 105.0;
       } else {
         if (i < expandedIndex) {
-          baseTop += i * 45.0; 
+          baseTop += i * 45.0;
         } else if (i == expandedIndex) {
-          baseTop += i * 45.0 + 10.0; 
+          baseTop += i * 45.0 + 10.0;
         } else {
-          baseTop += expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0; 
+          baseTop +=
+              expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0;
         }
       }
       targetTops.add(baseTop);
 
-      final bool isExpanded = widget.expandedId == widget.devices[i]['deviceInfId'].toString();
+      final bool isExpanded =
+          widget.expandedId == widget.devices[i]['deviceInfId'].toString();
       final double cardHeight = isExpanded ? 250.0 : 180.0;
       if (baseTop + cardHeight > maxStackHeight) {
         maxStackHeight = baseTop + cardHeight;
@@ -1077,11 +1058,11 @@ class _DeviceDeckState extends State<_DeviceDeck> {
       final device = entry.value;
       final isAddCard = device['isAddCard'] == true;
       final id = device['deviceInfId'].toString();
-      
+
       final expanded = isAddCard ? false : widget.expandedId == id;
       final selected = widget.selectedId == id;
       final active = widget.activeId == id;
-      
+
       final double targetBaseTop = targetTops[index];
       // 计算这张卡片的专属吸顶线
       final double minTopLimit = stickyCeiling + index * minStackSpacing;
@@ -1090,13 +1071,13 @@ class _DeviceDeckState extends State<_DeviceDeck> {
         key: ValueKey('pos_$id'),
         // Positioned top 写死为 0，因为我们要完全用 GPU Transform 来位移
         top: 0,
-        left: 23, 
-        right: 23, 
+        left: 23,
+        right: 23,
         child: TweenAnimationBuilder<double>(
           key: ValueKey('tween_$id'),
           tween: Tween<double>(end: targetBaseTop),
           duration: const Duration(milliseconds: 380),
-          curve: Curves.easeOutCubic, 
+          curve: Curves.easeOutCubic,
           builder: (context, animatedBaseTop, child) {
             // 🌟 AnimatedBuilder 监听 ScrollController
             // 只要手指在动，这里每一帧都会极速计算出新的 translateY，让卡片看起来吸顶！
@@ -1104,11 +1085,16 @@ class _DeviceDeckState extends State<_DeviceDeck> {
               animation: _scrollController,
               builder: (context, scrollChild) {
                 // 读取真实的原生滑动距离
-                double offset = _scrollController.hasClients ? math.max(0.0, _scrollController.offset) : 0.0;
-                
+                double offset = _scrollController.hasClients
+                    ? math.max(0.0, _scrollController.offset)
+                    : 0.0;
+
                 // 🌟 GPU 欺骗算法核心：
                 // 如果 offset 超过了 (当前卡片基础位置 - 吸顶线)，就施加向下补偿位移
-                double stickyOffset = math.max(0.0, offset - animatedBaseTop + minTopLimit);
+                double stickyOffset = math.max(
+                  0.0,
+                  offset - animatedBaseTop + minTopLimit,
+                );
                 double translateY = animatedBaseTop + stickyOffset;
 
                 return Transform.translate(
@@ -1121,23 +1107,24 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           },
           child: AnimatedScale(
             duration: const Duration(milliseconds: 380),
-            scale: expanded ? 1.02 : 1, 
-            child: isAddCard 
-              ? _AddDeviceCard(onTap: () => widget.onTapCard(device))
-              : _DeckCard(
-                  palette: _paletteFor(index, device['billType'] == 2),
-                  title: widget.nameOf(device),
-                  count: widget.usageCounts[id] ?? 0,
-                  selected: selected,
-                  active: active,
-                  loading: widget.loading && (widget.working ? active : selected),
-                  expanded: expanded,
-                  onTap: () => widget.onTapCard(device),
-                  onTogglePower: () => widget.onTogglePower(device),
-                  onMove: () => widget.onMove(device),
-                  onRename: () => widget.onRename(device),
-                  onDelete: () => widget.onDelete(device),
-                ),
+            scale: expanded ? 1.02 : 1,
+            child: isAddCard
+                ? _AddDeviceCard(onTap: () => widget.onTapCard(device))
+                : _DeckCard(
+                    palette: _paletteFor(index, device['billType'] == 2),
+                    title: widget.nameOf(device),
+                    count: widget.usageCounts[id] ?? 0,
+                    selected: selected,
+                    active: active,
+                    loading:
+                        widget.loading && (widget.working ? active : selected),
+                    expanded: expanded,
+                    onTap: () => widget.onTapCard(device),
+                    onTogglePower: () => widget.onTogglePower(device),
+                    onMove: () => widget.onMove(device),
+                    onRename: () => widget.onRename(device),
+                    onDelete: () => widget.onDelete(device),
+                  ),
           ),
         ),
       );
@@ -1146,16 +1133,13 @@ class _DeviceDeckState extends State<_DeviceDeck> {
     // 🌟 回归最纯正的原生 SingleChildScrollView，绝对不卡！
     return SingleChildScrollView(
       controller: _scrollController,
-      physics: const BouncingScrollPhysics(), 
-      padding: const EdgeInsets.only(bottom: 60), 
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.only(bottom: 60),
       // 放开裁剪，因为吸顶算法已经保证卡片绝对不可能越界！
-      clipBehavior: Clip.none, 
+      clipBehavior: Clip.none,
       child: SizedBox(
         height: maxStackHeight,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: stackChildren,
-        ),
+        child: Stack(clipBehavior: Clip.none, children: stackChildren),
       ),
     );
   }
@@ -1184,12 +1168,16 @@ class _AddDeviceCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add_circle_outline_rounded, color: Colors.white38, size: 42),
+                  Icon(
+                    Icons.add_circle_outline_rounded,
+                    color: Colors.white38,
+                    size: 42,
+                  ),
                   SizedBox(height: 12),
                   Text(
                     '点击添加新设备',
                     style: TextStyle(
-                      color: Colors.white38, 
+                      color: Colors.white38,
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                     ),
@@ -1237,13 +1225,13 @@ class _DeckCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer( 
+      child: AnimatedContainer(
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
-        height: expanded ? 250 : 180, 
+        height: expanded ? 250 : 180,
         decoration: BoxDecoration(
           gradient: palette.gradient,
-          borderRadius: BorderRadius.circular(40), 
+          borderRadius: BorderRadius.circular(40),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.15),
@@ -1267,9 +1255,9 @@ class _DeckCard extends StatelessWidget {
                 painter: _CornerLinePainter(),
               ),
             ),
-            
+
             Padding(
-              padding: const EdgeInsets.fromLTRB(28, 20, 22, 22), 
+              padding: const EdgeInsets.fromLTRB(28, 20, 22, 22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1277,14 +1265,14 @@ class _DeckCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(top: 12), 
+                        padding: const EdgeInsets.only(top: 12),
                         child: Icon(
                           palette.icon,
                           color: palette.foreground,
                           size: 28,
                         ),
                       ),
-                      const SizedBox(width: 8), 
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.only(top: 15),
@@ -1294,7 +1282,7 @@ class _DeckCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: palette.foreground,
-                              fontSize: 18, 
+                              fontSize: 18,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.2,
                               height: 1.1,
@@ -1314,7 +1302,7 @@ class _DeckCard extends StatelessWidget {
                   if (expanded) ...[
                     const SizedBox(height: 8),
                     Text(
-                      '已使用', 
+                      '已使用',
                       style: TextStyle(
                         color: palette.secondaryText,
                         fontSize: 14,
@@ -1335,7 +1323,7 @@ class _DeckCard extends StatelessWidget {
                             ),
                           ),
                           TextSpan(
-                            text: ' 次', 
+                            text: ' 次',
                             style: TextStyle(
                               color: palette.secondaryText,
                               fontSize: 18,
@@ -1345,18 +1333,18 @@ class _DeckCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const Spacer(), 
+                    const Spacer(),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _CardActionButton(
-                          icon: Icons.swap_vert_rounded, 
+                          icon: Icons.swap_vert_rounded,
                           label: '位置',
                           color: palette.foreground,
                           bgColor: Colors.black.withOpacity(0.06),
                           onTap: onMove,
                         ),
-                        const SizedBox(width: 8), 
+                        const SizedBox(width: 8),
                         _CardActionButton(
                           icon: Icons.edit_rounded,
                           label: '重命名',
@@ -1366,10 +1354,10 @@ class _DeckCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         _CardActionButton(
-                          icon: Icons.delete_outline_rounded, 
+                          icon: Icons.delete_outline_rounded,
                           label: '删除',
-                          color: const Color(0xFFE53935), 
-                          bgColor: const Color(0xFFE53935).withOpacity(0.12), 
+                          color: const Color(0xFFE53935),
+                          bgColor: const Color(0xFFE53935).withOpacity(0.12),
                           onTap: onDelete,
                         ),
                       ],
@@ -1408,7 +1396,7 @@ class _CardActionButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: bgColor,
-          borderRadius: BorderRadius.circular(18), 
+          borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1416,10 +1404,10 @@ class _CardActionButton extends StatelessWidget {
             Icon(icon, size: 16, color: color),
             const SizedBox(width: 6),
             Text(
-              label, 
+              label,
               style: TextStyle(
-                fontSize: 13, 
-                fontWeight: FontWeight.w600, 
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
                 color: color,
               ),
             ),
@@ -1434,14 +1422,14 @@ class _CornerLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.85) 
+      ..color = Colors.white.withOpacity(0.85)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5
-      ..strokeCap = StrokeCap.round; 
+      ..strokeCap = StrokeCap.round;
 
     final path = Path();
-    const double radius = 28.0; 
-    
+    const double radius = 28.0;
+
     path.moveTo(0, 42);
     path.lineTo(0, radius);
     path.arcToPoint(
@@ -1485,22 +1473,10 @@ _CardPalette _paletteFor(int index, bool hotWater) {
       gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFFE2F57A), Color(0xFFC4D857)], 
+        colors: [Color(0xFFE2F57A), Color(0xFFC4D857)],
       ),
       badgeColor: Color(0x19000000),
-      foreground: textColor, 
-      secondaryText: secondaryTextColor,
-      switchRail: Color(0x1A000000),
-      icon: Icons.water_drop_rounded, 
-    ),
-    const _CardPalette(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFFFA7739), Color(0xFFE35A1E)], 
-      ),
-      badgeColor: Color(0x22FFFFFF),
-      foreground: textColor, 
+      foreground: textColor,
       secondaryText: secondaryTextColor,
       switchRail: Color(0x1A000000),
       icon: Icons.water_drop_rounded,
@@ -1509,7 +1485,7 @@ _CardPalette _paletteFor(int index, bool hotWater) {
       gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFFFBA87D), Color(0xFFE58F63)], 
+        colors: [Color(0xFFFA7739), Color(0xFFE35A1E)],
       ),
       badgeColor: Color(0x22FFFFFF),
       foreground: textColor,
@@ -1521,24 +1497,38 @@ _CardPalette _paletteFor(int index, bool hotWater) {
       gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFFA17DFB), Color(0xFF8661E1)], 
+        colors: [Color(0xFFFBA87D), Color(0xFFE58F63)],
       ),
       badgeColor: Color(0x22FFFFFF),
-      foreground: textColor, 
+      foreground: textColor,
+      secondaryText: secondaryTextColor,
+      switchRail: Color(0x1A000000),
+      icon: Icons.water_drop_rounded,
+    ),
+    const _CardPalette(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFFA17DFB), Color(0xFF8661E1)],
+      ),
+      badgeColor: Color(0x22FFFFFF),
+      foreground: textColor,
       secondaryText: secondaryTextColor,
       switchRail: Color(0x22000000),
       icon: Icons.water_drop_rounded,
     ),
   ];
   final base = palettes[index % palettes.length];
-  
+
   return _CardPalette(
     gradient: base.gradient,
     badgeColor: base.badgeColor,
     foreground: base.foreground,
     secondaryText: base.secondaryText,
     switchRail: base.switchRail,
-    icon: hotWater ? Icons.local_fire_department_rounded : Icons.water_drop_rounded,
+    icon: hotWater
+        ? Icons.local_fire_department_rounded
+        : Icons.water_drop_rounded,
   );
 }
 
@@ -1563,8 +1553,8 @@ class _VerticalSlideSwitch extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: _HomePageState._switchMotionDuration,
-        width: 36, 
-        height: 64, 
+        width: 36,
+        height: 64,
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: active ? const Color(0x664CAF50) : rail,
@@ -1575,7 +1565,7 @@ class _VerticalSlideSwitch extends StatelessWidget {
           curve: Curves.easeInOutCubic,
           alignment: active ? Alignment.bottomCenter : Alignment.topCenter,
           child: Container(
-            width: 28, 
+            width: 28,
             height: 28,
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.92),
@@ -1604,8 +1594,8 @@ class _VerticalSlideSwitch extends StatelessWidget {
                   : Icon(
                       Icons.power_settings_new_rounded,
                       key: ValueKey<bool>(active),
-                      color: active ? const Color(0xFF4CAF50) : Colors.white, 
-                      size: 16, 
+                      color: active ? const Color(0xFF4CAF50) : Colors.white,
+                      size: 16,
                     ),
             ),
           ),

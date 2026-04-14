@@ -10,6 +10,104 @@ import '../../providers/water_provider.dart';
 import 'device_selector_dialog.dart';
 
 class DialogUtils {
+  static const Color sheetBackgroundColor = Color(0xFF171A20);
+  static const Color surfaceBackgroundColor = Color(0xFF222731);
+  static const Color borderColor = Color(0x24FFFFFF);
+  static const Color titleColor = Colors.white;
+  static const Color bodyColor = Color(0xB3FFFFFF);
+  static const Color mutedColor = Color(0x80FFFFFF);
+  static const Color primaryColor = Color(0xFF7C5CFF);
+  static const Color dangerColor = Color(0xFFB85C6B);
+  static const Color warningColor = Color(0xFFE09A3E);
+
+  static Future<T?> showGlassDialog<T>(
+    BuildContext context,
+    Widget child, {
+    bool barrierDismissible = true,
+    double maxWidth = 420,
+    EdgeInsets insetPadding = const EdgeInsets.symmetric(
+      horizontal: 24,
+      vertical: 32,
+    ),
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      barrierLabel: 'GlassDialog',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (context, anim1, anim2) {
+        final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+
+        return Stack(
+          children: [
+            GestureDetector(
+              onTap: barrierDismissible ? () => Navigator.pop(context) : null,
+              child: Container(color: Colors.transparent),
+            ),
+            Center(
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: insetPadding.add(
+                  EdgeInsets.only(bottom: keyboardHeight),
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: sheetBackgroundColor,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: borderColor),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x66000000),
+                            blurRadius: 28,
+                            offset: Offset(0, 14),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                        child: child,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return Stack(
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: 4 * curved.value,
+                sigmaY: 4 * curved.value,
+              ),
+              child: Container(color: Colors.transparent),
+            ),
+            FadeTransition(
+              opacity: curved,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+                child: child,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   static void showGlassBottomSheet(BuildContext context, Widget child) {
     showGeneralDialog<void>(
       context: context,
@@ -46,20 +144,33 @@ class DialogUtils {
                   width: double.infinity,
                   constraints: BoxConstraints(maxHeight: maxDialogHeight),
                   decoration: ShapeDecoration(
-                    color: Colors.white.withOpacity(0.92),
+                    color: sheetBackgroundColor,
                     shape: ContinuousRectangleBorder(
                       borderRadius: BorderRadius.circular(45),
                     ),
+                    shadows: const [
+                      BoxShadow(
+                        color: Color(0x66000000),
+                        blurRadius: 28,
+                        offset: Offset(0, 14),
+                      ),
+                    ],
                   ),
                   child: Material(
                     color: Colors.transparent,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22.5),
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: child,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(22.5),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: child,
+                          ),
                         ),
                       ),
                     ),
@@ -114,9 +225,9 @@ class DialogUtils {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Edit Device Name',
+                '修改设备名称',
                 style: TextStyle(
-                  color: Color(0xFF2C2C2E),
+                  color: titleColor,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -128,9 +239,9 @@ class DialogUtils {
                     Navigator.pop(context);
                   },
                   child: const Text(
-                    'Reset',
+                    '重置',
                     style: TextStyle(
-                      color: Colors.redAccent,
+                      color: dangerColor,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -142,13 +253,27 @@ class DialogUtils {
           TextField(
             controller: editingController,
             autofocus: true,
+            style: const TextStyle(
+              color: titleColor,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
             decoration: InputDecoration(
-              hintText: 'For example: My Shower or Dorm 536',
+              hintText: '例如：536宿舍热水',
+              hintStyle: const TextStyle(color: mutedColor),
               filled: true,
-              fillColor: Colors.grey[100],
+              fillColor: surfaceBackgroundColor,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: borderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: primaryColor),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
@@ -162,17 +287,14 @@ class DialogUtils {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                  child: const Text('取消', style: TextStyle(color: mutedColor)),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C2C2E),
+                    backgroundColor: primaryColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -182,7 +304,7 @@ class DialogUtils {
                     Navigator.pop(context);
                   },
                   child: const Text(
-                    'Save',
+                    '保存',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -210,21 +332,17 @@ class DialogUtils {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            'Remove Device',
+            '删除设备',
             style: TextStyle(
-              color: Color(0xFF2C2C2E),
+              color: titleColor,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            'Remove "$deviceName" from your saved devices?',
-            style: const TextStyle(
-              color: Color(0xFF666666),
-              fontSize: 15,
-              height: 1.5,
-            ),
+            '确认将“$deviceName”从常用设备中移除？',
+            style: const TextStyle(color: bodyColor, fontSize: 15, height: 1.5),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -233,17 +351,14 @@ class DialogUtils {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                  child: const Text('取消', style: TextStyle(color: mutedColor)),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
+                    backgroundColor: dangerColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -256,11 +371,11 @@ class DialogUtils {
                       userProvider.userId,
                     );
                     if (success) {
-                      ToastService.show('Device removed');
+                      ToastService.show('设备已删除');
                     }
                   },
                   child: const Text(
-                    'Remove',
+                    '删除',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -286,21 +401,17 @@ class DialogUtils {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            'Clear History',
+            '清空记录',
             style: TextStyle(
-              color: Color(0xFF2C2C2E),
+              color: titleColor,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 16),
           const Text(
-            'Clear all water usage history? This action cannot be undone.',
-            style: TextStyle(
-              color: Color(0xFF666666),
-              fontSize: 15,
-              height: 1.5,
-            ),
+            '确认清空全部用水记录？该操作无法撤销。',
+            style: TextStyle(color: bodyColor, fontSize: 15, height: 1.5),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -309,17 +420,14 @@ class DialogUtils {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                  child: const Text('取消', style: TextStyle(color: mutedColor)),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
+                    backgroundColor: dangerColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -327,10 +435,10 @@ class DialogUtils {
                   onPressed: () {
                     context.read<WaterProvider>().clearHistory();
                     Navigator.pop(context);
-                    ToastService.show('History cleared');
+                    ToastService.show('记录已清空');
                   },
                   child: const Text(
-                    'Clear',
+                    '清空',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -354,24 +462,20 @@ class DialogUtils {
       Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.access_time_rounded, color: Colors.orange[400], size: 48),
+          const Icon(Icons.access_time_rounded, color: warningColor, size: 48),
           const SizedBox(height: 16),
           const Text(
-            '\u975e\u70ed\u6c34\u4f9b\u5e94\u65f6\u6bb5',
+            '非热水供应时段',
             style: TextStyle(
-              color: Color(0xFF2C2C2E),
+              color: titleColor,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 12),
           const Text(
-            '\u5f53\u524d\u4e0d\u5728\u89c4\u5b9a\u7684\u70ed\u6c34\u4f9b\u5e94\u65f6\u6bb5\u3002\n(06:00-09:30\u300111:30-14:30\u300118:00-23:50)\n\n\u6b64\u65f6\u5f00\u542f\u53ef\u80fd\u53ea\u6709\u51b7\u6c34\uff0c\u662f\u5426\u7ee7\u7eed\uff1f',
-            style: TextStyle(
-              color: Color(0xFF666666),
-              fontSize: 14,
-              height: 1.5,
-            ),
+            '当前不在规定的热水供应时段。\n(06:00-09:30、11:30-14:30、18:00-23:50)\n\n此时开启可能只有冷水，是否继续？',
+            style: TextStyle(color: bodyColor, fontSize: 14, height: 1.5),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 28),
@@ -381,9 +485,9 @@ class DialogUtils {
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
-                    '\u53d6\u6d88',
+                    '取消',
                     style: TextStyle(
-                      color: Colors.grey,
+                      color: mutedColor,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -394,7 +498,7 @@ class DialogUtils {
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
+                    backgroundColor: warningColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -404,7 +508,7 @@ class DialogUtils {
                     onContinue();
                   },
                   child: const Text(
-                    '\u7ee7\u7eed\u4f7f\u7528',
+                    '继续使用',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

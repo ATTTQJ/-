@@ -6,6 +6,7 @@ import '../../providers/device_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../services/api_service.dart';
 import '../pages/qr_scanner_page.dart';
+import 'dialog_utils.dart';
 
 class DeviceSelectorDialog extends StatefulWidget {
   const DeviceSelectorDialog({super.key});
@@ -253,7 +254,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
                       child: const Icon(
                         Icons.arrow_back_ios_new,
                         size: 20,
-                        color: Color(0xFF2C2C2E),
+                        color: DialogUtils.titleColor,
                       ),
                     )
                   : const SizedBox(width: 20),
@@ -262,7 +263,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: Color(0xFF2C2C2E),
+                  color: DialogUtils.titleColor,
                 ),
               ),
               GestureDetector(
@@ -270,7 +271,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
                 child: const Icon(
                   Icons.qr_code_scanner,
                   size: 22,
-                  color: Color(0xFF2C2C2E),
+                  color: DialogUtils.titleColor,
                 ),
               ),
             ],
@@ -292,7 +293,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
                           fontWeight: FontWeight.bold,
                           color: isActive
                               ? const Color(0xFF34C759)
-                              : Colors.grey[400],
+                              : DialogUtils.mutedColor,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -302,7 +303,7 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
                         decoration: BoxDecoration(
                           color: isActive
                               ? const Color(0xFF34C759)
-                              : Colors.grey[200],
+                              : DialogUtils.surfaceBackgroundColor,
                           borderRadius: BorderRadius.circular(100),
                         ),
                       ),
@@ -321,7 +322,10 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
                 ? const Padding(
                     padding: EdgeInsets.only(top: 40),
                     child: Center(
-                      child: Text('暂无数据', style: TextStyle(color: Colors.grey)),
+                      child: Text(
+                        '暂无数据',
+                        style: TextStyle(color: DialogUtils.mutedColor),
+                      ),
                     ),
                   )
                 : ListView.builder(
@@ -336,12 +340,12 @@ class _DeviceSelectorDialogState extends State<DeviceSelectorDialog> {
                         _currentList[index]['name']!,
                         style: const TextStyle(
                           fontSize: 15,
-                          color: Color(0xFF2C2C2E),
+                          color: DialogUtils.titleColor,
                         ),
                       ),
                       trailing: const Icon(
                         Icons.chevron_right,
-                        color: Colors.grey,
+                        color: DialogUtils.mutedColor,
                         size: 20,
                       ),
                       onTap: () => _onItemTap(_currentList[index]),
@@ -397,9 +401,9 @@ class _SkeletonListState extends State<_SkeletonList>
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                     colors: [
-                      Colors.grey[200]!,
-                      Colors.grey[50]!,
-                      Colors.grey[200]!,
+                      DialogUtils.surfaceBackgroundColor,
+                      const Color(0xFF2A303A),
+                      DialogUtils.surfaceBackgroundColor,
                     ],
                     stops: [_ctrl.value - 0.3, _ctrl.value, _ctrl.value + 0.3],
                   ).createShader(rect);
@@ -408,7 +412,7 @@ class _SkeletonListState extends State<_SkeletonList>
                   height: 14,
                   width: index.isEven ? 130 : 100,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: DialogUtils.surfaceBackgroundColor,
                     borderRadius: BorderRadius.circular(7),
                   ),
                 ),
