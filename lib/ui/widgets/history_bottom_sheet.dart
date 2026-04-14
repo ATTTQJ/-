@@ -14,6 +14,14 @@ const double _historyDividerHeight = 1.0;
 const double _historyViewportHeight =
     (_historyVisibleCount * _historyItemExtent) +
     ((_historyVisibleCount - 1) * _historyDividerHeight);
+const Color _historyDividerColor = Color(0x14FFFFFF);
+const Color _historyChipBorderColor = Color(0x223A465A);
+const Color _historyChipFillColor = Color(0xFF1D232D);
+const Color _historySelectedChipFillColor = Color(0xFF5B70E6);
+const Color _historyAccentIconFillColor = Color(0xFF20242B);
+const Color _historyAccentIconColor = Color(0xFF9AA3AF);
+const Color _historyAmountFillColor = Color(0xFF223235);
+const Color _historyAmountTextColor = Color(0xFF8CEEE2);
 
 class HistoryBottomSheet extends StatefulWidget {
   const HistoryBottomSheet({super.key});
@@ -199,7 +207,7 @@ class _HistoryBottomSheetState extends State<HistoryBottomSheet> {
                           itemCount: history.length,
                           separatorBuilder: (context, index) => Divider(
                             height: _historyDividerHeight,
-                            color: DialogUtils.borderColor,
+                            color: _historyDividerColor,
                           ),
                           itemBuilder: (context, index) {
                             return _HistoryItem(entry: history[index]);
@@ -433,10 +441,10 @@ class _PickerChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: selected
-              ? DialogUtils.primaryColor
-              : DialogUtils.surfaceBackgroundColor,
+              ? _historySelectedChipFillColor
+              : _historyChipFillColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: DialogUtils.borderColor),
+          border: Border.all(color: _historyChipBorderColor),
         ),
         child: Text(
           label,
@@ -495,7 +503,7 @@ class _LocalHistoryRecordsDialog extends StatelessWidget {
                   shrinkWrap: true,
                   itemCount: records.length,
                   separatorBuilder: (context, index) =>
-                      Divider(height: 1, color: DialogUtils.borderColor),
+                      Divider(height: 1, color: _historyDividerColor),
                   itemBuilder: (context, index) =>
                       _LocalHistoryRecordItem(entry: records[index]),
                 ),
@@ -570,10 +578,8 @@ class _HistorySkeletonList extends StatelessWidget {
       padding: EdgeInsets.zero,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _historyVisibleCount,
-      separatorBuilder: (context, index) => Divider(
-        height: _historyDividerHeight,
-        color: DialogUtils.borderColor,
-      ),
+      separatorBuilder: (context, index) =>
+          Divider(height: _historyDividerHeight, color: _historyDividerColor),
       itemBuilder: (context, index) => const _HistorySkeletonItem(),
     );
   }
@@ -695,12 +701,12 @@ class _HistoryItem extends StatelessWidget {
               margin: const EdgeInsets.only(top: 2),
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0x337C5CFF),
+                color: _historyAccentIconFillColor,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.history,
-                color: DialogUtils.primaryColor,
+                color: _historyAccentIconColor,
                 size: 16,
               ),
             ),
@@ -740,14 +746,13 @@ class _HistoryItem extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0x3332D7D2),
+                color: _historyAmountFillColor,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: DialogUtils.borderColor),
               ),
               child: Text(
                 '\u00A5${entry.formattedAmount}',
                 style: const TextStyle(
-                  color: Color(0xFF32D7D2),
+                  color: _historyAmountTextColor,
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                 ),
