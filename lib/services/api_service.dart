@@ -285,59 +285,38 @@ class ApiService {
     int retry = 1,
     bool muteToast = false,
   }) async {
-    final boundary = 'avatar-${DateTime.now().microsecondsSinceEpoch}';
-    final bodyBytes = _buildAvatarUploadBody(
-      boundary: boundary,
-      token: token,
-      userId: userId,
-      fileBytes: fileBytes,
-      fileName: fileName,
-    );
-
     try {
-      final transport = await _getTransport();
-      final stream = transport.makeRequest([
-        Header.ascii(':method', 'POST'),
-        Header.ascii(':authority', _domain),
-        Header.ascii(':path', '/ue/app/user/modifyUserInformation'),
-        Header.ascii(':scheme', 'https'),
-        Header.ascii(
-          'content-type',
-          'multipart/mixed; boundary=$boundary',
-        ),
-        Header.ascii('content-length', bodyBytes.length.toString()),
-        Header.ascii('user-agent', 'okhttp/4.9.0'),
-        Header.ascii('accept-encoding', 'gzip'),
-      ], endStream: false);
-
-      stream.sendData(bodyBytes, endStream: true);
-
-      final responseBytes = <int>[];
-      final responseHeaders = <String, String>{};
-
-      await for (final message in stream.incomingMessages) {
-        if (message is HeadersStreamMessage) {
-          for (final header in message.headers) {
-            responseHeaders[utf8.decode(header.name).toLowerCase()] = utf8
-                .decode(header.value);
-          }
-        } else if (message is DataStreamMessage) {
-          responseBytes.addAll(message.bytes);
-        }
+      final primaryResponse = await _uploadUserAvatarOnce(
+        token: token,
+        userId: userId,
+        fileBytes: fileBytes,
+        fileName: fileName,
+        fileContentType: 'multipart/form-data',
+      );
+      if (primaryResponse != null && _isSuccessCode(primaryResponse['code'])) {
+        return true;
       }
 
-      final decodedBody = responseHeaders['content-encoding'] == 'gzip'
-          ? utf8.decode(gzip.decode(responseBytes))
-          : utf8.decode(responseBytes);
-      final response = jsonDecode(decodedBody);
+      // Some server nodes are stricter about the file part MIME.
+      final fallbackResponse = await _uploadUserAvatarOnce(
+        token: token,
+        userId: userId,
+        fileBytes: fileBytes,
+        fileName: fileName,
+        fileContentType: 'image/jpeg',
+        resetTransport: true,
+      );
+      if (fallbackResponse != null && _isSuccessCode(fallbackResponse['code'])) {
+        return true;
+      }
 
-      if (!muteToast && !_isSuccessCode(response['code'])) {
+      final failedResponse = fallbackResponse ?? primaryResponse;
+      if (!muteToast && failedResponse != null) {
         ToastService.show(
-          response['msg']?.toString() ?? '头像上传失败',
+          failedResponse['msg']?.toString() ?? '头像上传失败',
         );
       }
-
-      return _isSuccessCode(response['code']);
+      return false;
     } catch (_) {
       _sharedTransport = null;
       if (retry > 0) {
@@ -361,12 +340,80 @@ class ApiService {
     return code == 0 || code == '0' || code == 200 || code == '200';
   }
 
+  static Future<Map<String, dynamic>?> _uploadUserAvatarOnce({
+    required String token,
+    required String userId,
+    required Uint8List fileBytes,
+    required String fileName,
+    required String fileContentType,
+    bool resetTransport = false,
+  }) async {
+    if (resetTransport) {
+      _sharedTransport = null;
+    }
+
+    final boundary = 'avatar-${DateTime.now().microsecondsSinceEpoch}';
+    final bodyBytes = _buildAvatarUploadBody(
+      boundary: boundary,
+      token: token,
+      userId: userId,
+      fileBytes: fileBytes,
+      fileName: fileName,
+      fileContentType: fileContentType,
+    );
+
+    final transport = await _getTransport();
+    final stream = transport.makeRequest([
+      Header.ascii(':method', 'POST'),
+      Header.ascii(':authority', _domain),
+      Header.ascii(':path', '/ue/app/user/modifyUserInformation'),
+      Header.ascii(':scheme', 'https'),
+      Header.ascii(
+        'content-type',
+        'multipart/mixed; boundary=$boundary',
+      ),
+      Header.ascii('content-length', bodyBytes.length.toString()),
+      Header.ascii('user-agent', 'okhttp/4.9.0'),
+      Header.ascii('accept-encoding', 'gzip'),
+    ], endStream: false);
+
+    stream.sendData(bodyBytes, endStream: true);
+
+    final responseBytes = <int>[];
+    final responseHeaders = <String, String>{};
+
+    await for (final message in stream.incomingMessages) {
+      if (message is HeadersStreamMessage) {
+        for (final header in message.headers) {
+          responseHeaders[utf8.decode(header.name).toLowerCase()] = utf8
+              .decode(header.value);
+        }
+      } else if (message is DataStreamMessage) {
+        responseBytes.addAll(message.bytes);
+      }
+    }
+
+    final decodedBody = responseHeaders['content-encoding'] == 'gzip'
+        ? utf8.decode(gzip.decode(responseBytes))
+        : utf8.decode(responseBytes);
+    final response = jsonDecode(decodedBody);
+
+    if (response is Map<String, dynamic>) {
+      return response;
+    }
+    if (response is Map) {
+      return Map<String, dynamic>.from(response);
+    }
+    return null;
+  }
+
   static Uint8List _buildAvatarUploadBody({
     required String boundary,
     required String token,
     required String userId,
     required Uint8List fileBytes,
     required String fileName,
+    required String fileContentType,
   }) {
     final builder = BytesBuilder(copy: false);
 
@@ -392,7 +439,7 @@ class ApiService {
       'Content-Disposition: form-data; name="uPictureFile"; '
       'filename="$fileName"\r\n',
     );
-    writeText('Content-Type: multipart/form-data\r\n');
+    writeText('Content-Type: $fileContentType\r\n');
     writeText('Content-Length: ${fileBytes.length}\r\n');
     writeText('\r\n');
     builder.add(fileBytes);

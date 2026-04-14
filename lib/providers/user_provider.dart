@@ -340,9 +340,13 @@ class UserProvider extends ChangeNotifier {
   }
 
   String _buildAvatarFileName(String originalName) {
-    final base = originalName.trim().isEmpty
-        ? 'avatar'
-        : originalName.replaceAll(RegExp(r'\.[^.]+$'), '');
-    return '${base}_square.jpg';
+    final now = DateTime.now();
+    final date = now.year.toString().padLeft(4, '0') +
+        now.month.toString().padLeft(2, '0') +
+        now.day.toString().padLeft(2, '0');
+    final time = now.hour.toString().padLeft(2, '0') +
+        now.minute.toString().padLeft(2, '0') +
+        now.second.toString().padLeft(2, '0');
+    return 'IMG_${date}_${time}_CROP.jpg';
   }
 }
