@@ -18,10 +18,10 @@ const Color _historyDividerColor = Color(0x14FFFFFF);
 const Color _historyChipBorderColor = Color(0x223A465A);
 const Color _historyChipFillColor = Color(0xFF1D232D);
 const Color _historySelectedChipFillColor = Color(0xFF5B70E6);
-const Color _historyAccentIconFillColor = Color(0xFF20242B);
-const Color _historyAccentIconColor = Color(0xFF9AA3AF);
-const Color _historyAmountFillColor = Color(0xFF223235);
-const Color _historyAmountTextColor = Color(0xFF8CEEE2);
+const Color _historyAccentIconFillColor = Color(0xFF24314A);
+const Color _historyAccentIconColor = Color(0xFF9BB8FF);
+const Color _historyAmountFillColor = Color(0xFF1E2C30);
+const Color _historyAmountTextColor = Color(0xFF8CE7D9);
 
 class HistoryBottomSheet extends StatefulWidget {
   const HistoryBottomSheet({super.key});
