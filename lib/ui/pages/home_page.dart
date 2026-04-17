@@ -24,8 +24,133 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String? _expandedId;
   String? _historySyncKey;
+  String? _headerNoticeMessage;
+  String? _pendingHeaderNoticeMessage;
+  Timer? _headerNoticeTimer;
+  bool _isHeaderNoticeAnimating = false;
+  late final InlineToastHandler _inlineToastHandler;
 
   static const Duration _switchMotionDuration = Duration(milliseconds: 320);
+  static const Duration _headerNoticeFadeDuration = Duration(milliseconds: 320);
+  static const Duration _headerNoticeDisplayDuration = Duration(seconds: 5);
+
+  @override
+  void initState() {
+    super.initState();
+    _inlineToastHandler = _handleInlineToast;
+    ToastService.registerInlineHandler(_inlineToastHandler);
+  }
+
+  @override
+  void dispose() {
+    _headerNoticeTimer?.cancel();
+    ToastService.unregisterInlineHandler(_inlineToastHandler);
+    super.dispose();
+  }
+
+  bool _handleInlineToast(String message, int durationMs) {
+    if (!mounted) {
+      return false;
+    }
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      return false;
+    }
+
+    final normalizedMessage = message.trim();
+    if (normalizedMessage.isEmpty) {
+      return false;
+    }
+
+    _showHeaderNotice(normalizedMessage);
+    return true;
+  }
+
+  void _showHeaderNotice(String message) {
+    _headerNoticeTimer?.cancel();
+    _headerNoticeTimer = null;
+    _pendingHeaderNoticeMessage = message;
+
+    if (_isHeaderNoticeAnimating) {
+      return;
+    }
+
+    unawaited(_drainHeaderNoticeQueue());
+  }
+
+  Future<void> _drainHeaderNoticeQueue() async {
+    if (_isHeaderNoticeAnimating || !mounted) {
+      return;
+    }
+
+    while (mounted && _pendingHeaderNoticeMessage != null) {
+      final nextMessage = _pendingHeaderNoticeMessage!;
+      _pendingHeaderNoticeMessage = null;
+
+      if (_headerNoticeMessage != nextMessage) {
+        await _transitionHeaderNotice(nextMessage);
+        if (!mounted) {
+          return;
+        }
+      }
+
+      if (_pendingHeaderNoticeMessage != null) {
+        continue;
+      }
+
+      _scheduleHeaderNoticeReset(nextMessage);
+      return;
+    }
+  }
+
+  void _scheduleHeaderNoticeReset(String currentMessage) {
+    _headerNoticeTimer?.cancel();
+    _headerNoticeTimer = Timer(_headerNoticeDisplayDuration, () {
+      _headerNoticeTimer = null;
+      if (!mounted || _headerNoticeMessage != currentMessage) {
+        return;
+      }
+      if (_pendingHeaderNoticeMessage != null) {
+        unawaited(_drainHeaderNoticeQueue());
+        return;
+      }
+      unawaited(_resetHeaderNotice());
+    });
+  }
+
+  Future<void> _resetHeaderNotice() async {
+    if (!mounted || _headerNoticeMessage == null) {
+      return;
+    }
+
+    if (_isHeaderNoticeAnimating) {
+      return;
+    }
+
+    await _transitionHeaderNotice(null);
+    if (!mounted) {
+      return;
+    }
+    if (_pendingHeaderNoticeMessage != null) {
+      unawaited(_drainHeaderNoticeQueue());
+    }
+  }
+
+  Future<void> _transitionHeaderNotice(String? nextMessage) async {
+    if (!mounted) {
+      return;
+    }
+
+    _isHeaderNoticeAnimating = true;
+    setState(() {
+      _headerNoticeMessage = nextMessage;
+    });
+    await Future<void>.delayed(_headerNoticeFadeDuration);
+    if (!mounted) {
+      return;
+    }
+    _isHeaderNoticeAnimating = false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,32 +240,12 @@ class _HomePageState extends State<HomePage> {
                       },
                     ),
                     const SizedBox(height: 25),
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(horizontal: 30),
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "WELCOME",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                              "Monitor and control your devices",
-                              style: TextStyle(
-                                color: Colors.white60,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
+                        child: _HomeHeaderNoticeSlot(
+                          message: _headerNoticeMessage,
                         ),
                       ),
                     ),
@@ -583,6 +688,76 @@ class _HomePageState extends State<HomePage> {
 
   void _showUserProfileSheet(BuildContext context) {
     DialogUtils.showGlassBottomSheet(context, const UserProfileSheet());
+  }
+}
+
+class _HomeHeaderNoticeSlot extends StatelessWidget {
+  const _HomeHeaderNoticeSlot({required this.message});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 76,
+      child: AnimatedSwitcher(
+        duration: _HomePageState._headerNoticeFadeDuration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeOutCubic,
+        transitionBuilder: (child, animation) =>
+            FadeTransition(opacity: animation, child: child),
+        layoutBuilder: (currentChild, previousChildren) {
+          return Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          );
+        },
+        child: message == null
+            ? const Column(
+                key: ValueKey<String>('header_welcome'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'WELCOME',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Monitor and control your devices',
+                    style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              )
+            : Align(
+                key: ValueKey<String>('header_notice_$message'),
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  message!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+      ),
+    );
   }
 }
 
