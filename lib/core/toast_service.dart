@@ -3,22 +3,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'global_keys.dart';
 
-typedef InlineToastHandler = bool Function(String message, int durationMs);
-
 class ToastService {
   static OverlayEntry? _toastEntry;
   static Timer? _toastOverlayTimer;
-  static InlineToastHandler? _inlineToastHandler;
-
-  static void registerInlineHandler(InlineToastHandler handler) {
-    _inlineToastHandler = handler;
-  }
-
-  static void unregisterInlineHandler(InlineToastHandler handler) {
-    if (_inlineToastHandler == handler) {
-      _inlineToastHandler = null;
-    }
-  }
 
   static void _clearOverlayToast() {
     _toastOverlayTimer?.cancel();
@@ -29,11 +16,6 @@ class ToastService {
 
   static void show(String message, {int durationMs = 3000}) {
     _clearOverlayToast();
-
-    final inlineHandler = _inlineToastHandler;
-    if (inlineHandler != null && inlineHandler(message, durationMs)) {
-      return;
-    }
 
     final overlayState = navigatorKey.currentState?.overlay;
     if (overlayState == null) return;
