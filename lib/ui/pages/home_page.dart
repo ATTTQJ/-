@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../models/water_usage_history_entry.dart';
 import '../../core/toast_service.dart';
 import '../../providers/device_provider.dart';
 import '../../providers/user_provider.dart';
@@ -28,6 +29,9 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>>? _cachedDisplayDevices;
   List<dynamic>? _cachedUsageHistory;
   Map<String, int>? _cachedUsageCounts;
+  List<Map<String, dynamic>>? _cachedMonthlySourceDevices;
+  List<WaterUsageHistoryEntry>? _cachedMonthlyUsageHistory;
+  Map<String, List<_MonthlyUsagePoint>>? _cachedMonthlyUsageByDevice;
 
   static const Duration _switchMotionDuration = Duration(milliseconds: 320);
 
@@ -133,6 +137,29 @@ class _HomePageState extends State<HomePage> {
     return _cachedUsageCounts!;
   }
 
+  Map<String, List<_MonthlyUsagePoint>> _getMonthlyUsageByDevice({
+    required DeviceProvider deviceProvider,
+    required List<WaterUsageHistoryEntry> history,
+  }) {
+    if (identical(_cachedMonthlySourceDevices, deviceProvider.deviceList) &&
+        identical(_cachedMonthlyUsageHistory, history) &&
+        _cachedMonthlyUsageByDevice != null) {
+      return _cachedMonthlyUsageByDevice!;
+    }
+
+    final monthlyUsageByDevice = _buildMonthlyUsageByDevice(
+      deviceProvider: deviceProvider,
+      history: history,
+    );
+    _cachedMonthlySourceDevices = deviceProvider.deviceList;
+    _cachedMonthlyUsageHistory = history;
+    _cachedMonthlyUsageByDevice =
+        Map<String, List<_MonthlyUsagePoint>>.unmodifiable(
+          monthlyUsageByDevice,
+        );
+    return _cachedMonthlyUsageByDevice!;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer3<UserProvider, WaterProvider, DeviceProvider>(
@@ -152,6 +179,10 @@ class _HomePageState extends State<HomePage> {
         final activeId = waterProvider.activeDeviceId;
         Map<String, dynamic>? activeDevice;
         final usageCounts = _getUsageCounts(
+          deviceProvider: deviceProvider,
+          history: waterProvider.history,
+        );
+        final monthlyUsageByDevice = _getMonthlyUsageByDevice(
           deviceProvider: deviceProvider,
           history: waterProvider.history,
         );
@@ -285,6 +316,7 @@ class _HomePageState extends State<HomePage> {
                         working: working,
                         loading: waterProvider.isRequesting,
                         usageCounts: usageCounts,
+                        monthlyUsageByDevice: monthlyUsageByDevice,
                         nameOf: (device) => _deviceName(deviceProvider, device),
                         onTapCard: (device) {
                           if (device['isAddCard'] == true) {
@@ -438,6 +470,76 @@ class _HomePageState extends State<HomePage> {
     return counts;
   }
 
+  Map<String, List<_MonthlyUsagePoint>> _buildMonthlyUsageByDevice({
+    required DeviceProvider deviceProvider,
+    required List<WaterUsageHistoryEntry> history,
+  }) {
+    final monthlyCounts = <String, Map<String, int>>{};
+    final earliestMonthByDevice = <String, DateTime>{};
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    final minimumStartMonth = DateTime(now.year, now.month - 5);
+
+    for (final device in deviceProvider.deviceList) {
+      final deviceId = device['deviceInfId'].toString();
+      monthlyCounts[deviceId] = <String, int>{};
+    }
+
+    for (final entry in history) {
+      final directDeviceId = entry.deviceId?.trim() ?? '';
+      final matchedId =
+          directDeviceId.isNotEmpty && monthlyCounts.containsKey(directDeviceId)
+          ? directDeviceId
+          : _resolveUsageHistoryDeviceId(
+              deviceProvider: deviceProvider,
+              entryName: entry.deviceName,
+            );
+      if (matchedId == null || !monthlyCounts.containsKey(matchedId)) {
+        continue;
+      }
+
+      final entryMonth = DateTime(entry.createdAt.year, entry.createdAt.month);
+      final monthKey = _monthKeyForDate(entryMonth);
+      final deviceMonthCounts = monthlyCounts[matchedId]!;
+      deviceMonthCounts[monthKey] = (deviceMonthCounts[monthKey] ?? 0) + 1;
+
+      final earliestMonth = earliestMonthByDevice[matchedId];
+      if (earliestMonth == null || entryMonth.isBefore(earliestMonth)) {
+        earliestMonthByDevice[matchedId] = entryMonth;
+      }
+    }
+
+    final result = <String, List<_MonthlyUsagePoint>>{};
+    for (final device in deviceProvider.deviceList) {
+      final deviceId = device['deviceInfId'].toString();
+      final deviceMonthCounts =
+          monthlyCounts[deviceId] ?? const <String, int>{};
+      final startMonth = _minMonth(
+        earliestMonthByDevice[deviceId] ?? currentMonth,
+        minimumStartMonth,
+      );
+      final points = <_MonthlyUsagePoint>[];
+
+      for (
+        DateTime cursor = currentMonth;
+        !_isBeforeMonth(cursor, startMonth);
+        cursor = DateTime(cursor.year, cursor.month - 1)
+      ) {
+        final monthKey = _monthKeyForDate(cursor);
+        points.add(
+          _MonthlyUsagePoint(
+            year: cursor.year,
+            month: cursor.month,
+            count: deviceMonthCounts[monthKey] ?? 0,
+          ),
+        );
+      }
+
+      result[deviceId] = List<_MonthlyUsagePoint>.unmodifiable(points);
+    }
+    return result;
+  }
+
   Map<String, dynamic>? _resolveLastUsedDevice({
     required DeviceProvider deviceProvider,
     required List<dynamic> history,
@@ -542,6 +644,21 @@ class _HomePageState extends State<HomePage> {
 
   String _normalizeHistoryDeviceName(String name) {
     return _normalizeUsageHistoryDeviceName(name);
+  }
+
+  String _monthKeyForDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}';
+  }
+
+  DateTime _minMonth(DateTime a, DateTime b) {
+    return a.isBefore(b) ? a : b;
+  }
+
+  bool _isBeforeMonth(DateTime a, DateTime b) {
+    if (a.year != b.year) {
+      return a.year < b.year;
+    }
+    return a.month < b.month;
   }
 
   Future<void> _handleDevicePowerTap(
@@ -1044,6 +1161,18 @@ class _ProfileAvatarButton extends StatelessWidget {
 }
 
 // 🌟 终极 GPU 视差重构：彻底接管滚动动画，告别穿模！
+class _MonthlyUsagePoint {
+  const _MonthlyUsagePoint({
+    required this.year,
+    required this.month,
+    required this.count,
+  });
+
+  final int year;
+  final int month;
+  final int count;
+}
+
 class _DeviceDeck extends StatefulWidget {
   const _DeviceDeck({
     required this.devices,
@@ -1053,6 +1182,7 @@ class _DeviceDeck extends StatefulWidget {
     required this.working,
     required this.loading,
     required this.usageCounts,
+    required this.monthlyUsageByDevice,
     required this.nameOf,
     required this.paddingTop,
     required this.onTapCard,
@@ -1069,6 +1199,7 @@ class _DeviceDeck extends StatefulWidget {
   final bool working;
   final bool loading;
   final Map<String, int> usageCounts;
+  final Map<String, List<_MonthlyUsagePoint>> monthlyUsageByDevice;
   final double paddingTop;
   final String Function(Map<String, dynamic>) nameOf;
   final ValueChanged<Map<String, dynamic>> onTapCard;
@@ -1160,14 +1291,14 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           baseTop += i * 45.0 + 10.0;
         } else {
           baseTop +=
-              expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0;
+              expandedIndex * 45.0 + 360.0 + (i - expandedIndex - 1) * 70.0;
         }
       }
       targetTops.add(baseTop);
 
       final bool isExpanded =
           widget.expandedId == widget.devices[i]['deviceInfId'].toString();
-      final double cardHeight = isExpanded ? 250.0 : 180.0;
+      final double cardHeight = isExpanded ? 330.0 : 180.0;
       if (baseTop + cardHeight > maxStackHeight) {
         maxStackHeight = baseTop + cardHeight;
       }
@@ -1208,14 +1339,14 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           baseTop += i * 45.0 + 10.0;
         } else {
           baseTop +=
-              expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0;
+              expandedIndex * 45.0 + 360.0 + (i - expandedIndex - 1) * 70.0;
         }
       }
       targetTops.add(baseTop);
 
       final bool isExpanded =
           widget.expandedId == widget.devices[i]['deviceInfId'].toString();
-      final double cardHeight = isExpanded ? 250.0 : 180.0;
+      final double cardHeight = isExpanded ? 330.0 : 180.0;
       if (baseTop + cardHeight > maxStackHeight) {
         maxStackHeight = baseTop + cardHeight;
       }
@@ -1283,6 +1414,9 @@ class _DeviceDeckState extends State<_DeviceDeck> {
                       palette: _paletteFor(index, device['billType'] == 2),
                       title: widget.nameOf(device),
                       count: widget.usageCounts[id] ?? 0,
+                      monthlyUsage:
+                          widget.monthlyUsageByDevice[id] ??
+                          const <_MonthlyUsagePoint>[],
                       selected: selected,
                       active: active,
                       loading:
@@ -1368,6 +1502,7 @@ class _DeckCard extends StatelessWidget {
     required this.palette,
     required this.title,
     required this.count,
+    required this.monthlyUsage,
     required this.selected,
     required this.active,
     required this.loading,
@@ -1382,6 +1517,7 @@ class _DeckCard extends StatelessWidget {
   final _CardPalette palette;
   final String title;
   final int count;
+  final List<_MonthlyUsagePoint> monthlyUsage;
   final bool selected;
   final bool active;
   final bool loading;
@@ -1399,7 +1535,7 @@ class _DeckCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
-        height: expanded ? 250 : 180,
+        height: expanded ? 330 : 180,
         decoration: BoxDecoration(
           gradient: palette.gradient,
           borderRadius: BorderRadius.circular(40),
@@ -1504,6 +1640,12 @@ class _DeckCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 14),
+                    _DeviceMonthlyUsageChart(
+                      points: monthlyUsage,
+                      foreground: palette.foreground,
+                      secondaryText: palette.secondaryText,
+                    ),
                     const Spacer(),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1539,6 +1681,155 @@ class _DeckCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DeviceMonthlyUsageChart extends StatelessWidget {
+  const _DeviceMonthlyUsageChart({
+    required this.points,
+    required this.foreground,
+    required this.secondaryText,
+  });
+
+  final List<_MonthlyUsagePoint> points;
+  final Color foreground;
+  final Color secondaryText;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final effectivePoints = points.isEmpty
+        ? List<_MonthlyUsagePoint>.generate(
+            6,
+            (index) => _MonthlyUsagePoint(
+              year: DateTime(now.year, now.month - index).year,
+              month: DateTime(now.year, now.month - index).month,
+              count: 0,
+            ),
+          )
+        : points;
+    final maxCount = effectivePoints.fold<int>(
+      1,
+      (current, point) => math.max(current, point.count),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '月度用水次数',
+          style: TextStyle(
+            color: secondaryText,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 88,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: List.generate(effectivePoints.length, (index) {
+                final point = effectivePoints[index];
+                final isCurrentMonth =
+                    point.year == now.year && point.month == now.month;
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: index == effectivePoints.length - 1 ? 0 : 10,
+                  ),
+                  child: _MonthlyUsageBar(
+                    point: point,
+                    maxCount: maxCount,
+                    activeColor: foreground,
+                    mutedColor: secondaryText,
+                    highlight: isCurrentMonth,
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthlyUsageBar extends StatelessWidget {
+  const _MonthlyUsageBar({
+    required this.point,
+    required this.maxCount,
+    required this.activeColor,
+    required this.mutedColor,
+    required this.highlight,
+  });
+
+  final _MonthlyUsagePoint point;
+  final int maxCount;
+  final Color activeColor;
+  final Color mutedColor;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
+    final barHeight = math.max(8.0, 44.0 * heightFactor);
+    final barColor = highlight
+        ? activeColor.withOpacity(0.94)
+        : activeColor.withOpacity(point.count > 0 ? 0.52 : 0.18);
+
+    return SizedBox(
+      width: 28,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          SizedBox(
+            height: 16,
+            child: Text(
+              point.count > 0 ? '${point.count}' : '',
+              maxLines: 1,
+              overflow: TextOverflow.fade,
+              style: TextStyle(
+                color: mutedColor.withOpacity(0.82),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            width: 28,
+            height: 48,
+            alignment: Alignment.bottomCenter,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              width: 18,
+              height: barHeight,
+              decoration: BoxDecoration(
+                color: barColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${point.month}月',
+            style: TextStyle(
+              color: mutedColor.withOpacity(highlight ? 0.98 : 0.82),
+              fontSize: 10,
+              fontWeight: highlight ? FontWeight.w800 : FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
