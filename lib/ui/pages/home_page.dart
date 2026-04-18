@@ -22,22 +22,122 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String? _expandedId;
   String? _historySyncKey;
+  UserProvider? _userProvider;
+  DeviceProvider? _deviceProvider;
+  List<Map<String, dynamic>>? _cachedSourceDevices;
+  List<Map<String, dynamic>>? _cachedDisplayDevices;
+  List<dynamic>? _cachedUsageHistory;
+  Map<String, int>? _cachedUsageCounts;
 
   static const Duration _switchMotionDuration = Duration(milliseconds: 320);
 
   @override
-  Widget build(BuildContext context) {
+  void initState() {
+    super.initState();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
       ),
     );
+  }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final nextUserProvider = context.read<UserProvider>();
+    if (!identical(_userProvider, nextUserProvider)) {
+      _userProvider?.removeListener(_handleSyncDependencyChanged);
+      _userProvider = nextUserProvider;
+      _userProvider?.addListener(_handleSyncDependencyChanged);
+    }
+
+    final nextDeviceProvider = context.read<DeviceProvider>();
+    if (!identical(_deviceProvider, nextDeviceProvider)) {
+      _deviceProvider?.removeListener(_handleSyncDependencyChanged);
+      _deviceProvider = nextDeviceProvider;
+      _deviceProvider?.addListener(_handleSyncDependencyChanged);
+    }
+
+    _handleSyncDependencyChanged();
+  }
+
+  @override
+  void dispose() {
+    _userProvider?.removeListener(_handleSyncDependencyChanged);
+    _deviceProvider?.removeListener(_handleSyncDependencyChanged);
+    super.dispose();
+  }
+
+  void _handleSyncDependencyChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    final userProvider = _userProvider;
+    final deviceProvider = _deviceProvider;
+    if (userProvider == null || deviceProvider == null) {
+      return;
+    }
+
+    _scheduleHistorySync(
+      userProvider: userProvider,
+      waterProvider: context.read<WaterProvider>(),
+      deviceProvider: deviceProvider,
+    );
+  }
+
+  List<Map<String, dynamic>> _getDisplayDevices(DeviceProvider deviceProvider) {
+    if (identical(_cachedSourceDevices, deviceProvider.deviceList) &&
+        _cachedDisplayDevices != null) {
+      return _cachedDisplayDevices!;
+    }
+
+    final displayDevices = List<Map<String, dynamic>>.from(
+      deviceProvider.deviceList,
+    );
+    while (displayDevices.length < 4) {
+      displayDevices.add({
+        'isAddCard': true,
+        'deviceInfId': 'add_${displayDevices.length}',
+        'deviceInfName': '娣诲姞璁惧',
+        'billType': -1,
+      });
+    }
+
+    _cachedSourceDevices = deviceProvider.deviceList;
+    _cachedDisplayDevices = List<Map<String, dynamic>>.unmodifiable(
+      displayDevices,
+    );
+    return _cachedDisplayDevices!;
+  }
+
+  Map<String, int> _getUsageCounts({
+    required DeviceProvider deviceProvider,
+    required List<dynamic> history,
+  }) {
+    if (identical(_cachedSourceDevices, deviceProvider.deviceList) &&
+        identical(_cachedUsageHistory, history) &&
+        _cachedUsageCounts != null) {
+      return _cachedUsageCounts!;
+    }
+
+    final usageCounts = _buildUsageCounts(
+      deviceProvider: deviceProvider,
+      history: history,
+    );
+    _cachedSourceDevices = deviceProvider.deviceList;
+    _cachedUsageHistory = history;
+    _cachedUsageCounts = Map<String, int>.unmodifiable(usageCounts);
+    return _cachedUsageCounts!;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Consumer3<UserProvider, WaterProvider, DeviceProvider>(
       builder: (context, userProvider, waterProvider, deviceProvider, child) {
-        final List<Map<String, dynamic>> displayDevices =
-            List<Map<String, dynamic>>.from(deviceProvider.deviceList);
+        final displayDevices = _getDisplayDevices(deviceProvider).toList();
         while (displayDevices.length < 4) {
           displayDevices.add({
             'isAddCard': true,
@@ -51,7 +151,7 @@ class _HomePageState extends State<HomePage> {
         final working = waterProvider.orderNum.isNotEmpty;
         final activeId = waterProvider.activeDeviceId;
         Map<String, dynamic>? activeDevice;
-        final usageCounts = _buildUsageCounts(
+        final usageCounts = _getUsageCounts(
           deviceProvider: deviceProvider,
           history: waterProvider.history,
         );
@@ -72,17 +172,13 @@ class _HomePageState extends State<HomePage> {
         }
         final dashboardDevice = working ? activeDevice : predictedDevice;
 
-        _scheduleHistorySync(
-          userProvider: userProvider,
-          waterProvider: waterProvider,
-          deviceProvider: deviceProvider,
-        );
-
         return Scaffold(
           backgroundColor: const Color(0xFF0E0E11),
           body: Stack(
             children: [
-              const Positioned.fill(child: _BackdropLayer()),
+              const Positioned.fill(
+                child: RepaintBoundary(child: _BackdropLayer()),
+              ),
 
               SafeArea(
                 bottom: false,
@@ -145,32 +241,34 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 42),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _DashboardCard(
-                        balance: userProvider.balance,
-                        working: working,
-                        runningTime: waterProvider.runningTime,
-                        activeDevicesCount: working ? 1 : 0,
-                        totalDevicesCount: deviceProvider.deviceList.length,
-                        activeDeviceName: currentActiveName,
-                        onStatusTap: working
-                            ? null
-                            : () => DialogUtils.showCascadingAddDeviceDialog(
-                                context,
-                              ),
-                        lastUsedDeviceName: predictedDevice == null
-                            ? '暂无可用设备'
-                            : _deviceName(deviceProvider, predictedDevice),
-                        onActionTap:
-                            dashboardDevice == null ||
-                                waterProvider.isRequesting
-                            ? null
-                            : () => _handleDevicePowerTap(
-                                context,
-                                dashboardDevice,
-                                userProvider,
-                                waterProvider,
-                                deviceProvider,
-                              ),
+                      child: RepaintBoundary(
+                        child: _DashboardCard(
+                          balance: userProvider.balance,
+                          working: working,
+                          runningTime: waterProvider.runningTime,
+                          activeDevicesCount: working ? 1 : 0,
+                          totalDevicesCount: deviceProvider.deviceList.length,
+                          activeDeviceName: currentActiveName,
+                          onStatusTap: working
+                              ? null
+                              : () => DialogUtils.showCascadingAddDeviceDialog(
+                                  context,
+                                ),
+                          lastUsedDeviceName: predictedDevice == null
+                              ? '暂无可用设备'
+                              : _deviceName(deviceProvider, predictedDevice),
+                          onActionTap:
+                              dashboardDevice == null ||
+                                  waterProvider.isRequesting
+                              ? null
+                              : () => _handleDevicePowerTap(
+                                  context,
+                                  dashboardDevice,
+                                  userProvider,
+                                  waterProvider,
+                                  deviceProvider,
+                                ),
+                        ),
                       ),
                     ),
 
@@ -986,6 +1084,23 @@ class _DeviceDeck extends StatefulWidget {
 class _DeviceDeckState extends State<_DeviceDeck> {
   // 绑定原生 ScrollView，用于读取当前偏移量
   final ScrollController _scrollController = ScrollController();
+  String? _layoutSignature;
+  int? _expandedIndex;
+  double _maxStackHeight = 0;
+  List<MapEntry<int, Map<String, dynamic>>> _orderedEntries = const [];
+  List<double> _targetTops = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureLayoutPlan();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeviceDeck oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _ensureLayoutPlan();
+  }
 
   @override
   void dispose() {
@@ -993,16 +1108,28 @@ class _DeviceDeckState extends State<_DeviceDeck> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (widget.devices.isEmpty) return const SizedBox.shrink();
+  void _ensureLayoutPlan() {
+    final signature = [
+      widget.expandedId ?? '',
+      widget.paddingTop.toStringAsFixed(1),
+      widget.devices
+          .map((device) => device['deviceInfId']?.toString() ?? '')
+          .join('|'),
+    ].join('::');
+
+    if (_layoutSignature == signature) {
+      return;
+    }
+    _layoutSignature = signature;
 
     int? expandedIndex;
     if (widget.expandedId != null) {
       expandedIndex = widget.devices.indexWhere(
         (d) => d['deviceInfId'].toString() == widget.expandedId,
       );
-      if (expandedIndex == -1) expandedIndex = null;
+      if (expandedIndex == -1) {
+        expandedIndex = null;
+      }
     }
 
     final ordered = List.generate(
@@ -1018,6 +1145,49 @@ class _DeviceDeckState extends State<_DeviceDeck> {
       }
       return ae ? 1 : -1;
     });
+
+    double maxStackHeight = _maxStackHeight;
+    final List<double> targetTops = List<double>.from(_targetTops);
+
+    for (int i = 0; i < 0; i++) {
+      double baseTop = widget.paddingTop;
+      if (expandedIndex == null) {
+        baseTop += i * 105.0;
+      } else {
+        if (i < expandedIndex) {
+          baseTop += i * 45.0;
+        } else if (i == expandedIndex) {
+          baseTop += i * 45.0 + 10.0;
+        } else {
+          baseTop +=
+              expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0;
+        }
+      }
+      targetTops.add(baseTop);
+
+      final bool isExpanded =
+          widget.expandedId == widget.devices[i]['deviceInfId'].toString();
+      final double cardHeight = isExpanded ? 250.0 : 180.0;
+      if (baseTop + cardHeight > maxStackHeight) {
+        maxStackHeight = baseTop + cardHeight;
+      }
+    }
+
+    _expandedIndex = expandedIndex;
+    _orderedEntries = List<MapEntry<int, Map<String, dynamic>>>.unmodifiable(
+      ordered,
+    );
+    _targetTops = List<double>.unmodifiable(targetTops);
+    _maxStackHeight = maxStackHeight;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.devices.isEmpty) return const SizedBox.shrink();
+    _ensureLayoutPlan();
+
+    final expandedIndex = _expandedIndex;
+    final ordered = _orderedEntries;
 
     // 🌟 阶梯参数配置
     const double minStackSpacing = 28.0; // 堆叠时漏出的标题圆角距离
@@ -1106,23 +1276,26 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           child: AnimatedScale(
             duration: const Duration(milliseconds: 380),
             scale: expanded ? 1.02 : 1,
-            child: isAddCard
-                ? _AddDeviceCard(onTap: () => widget.onTapCard(device))
-                : _DeckCard(
-                    palette: _paletteFor(index, device['billType'] == 2),
-                    title: widget.nameOf(device),
-                    count: widget.usageCounts[id] ?? 0,
-                    selected: selected,
-                    active: active,
-                    loading:
-                        widget.loading && (widget.working ? active : selected),
-                    expanded: expanded,
-                    onTap: () => widget.onTapCard(device),
-                    onTogglePower: () => widget.onTogglePower(device),
-                    onMove: () => widget.onMove(device),
-                    onRename: () => widget.onRename(device),
-                    onDelete: () => widget.onDelete(device),
-                  ),
+            child: RepaintBoundary(
+              child: isAddCard
+                  ? _AddDeviceCard(onTap: () => widget.onTapCard(device))
+                  : _DeckCard(
+                      palette: _paletteFor(index, device['billType'] == 2),
+                      title: widget.nameOf(device),
+                      count: widget.usageCounts[id] ?? 0,
+                      selected: selected,
+                      active: active,
+                      loading:
+                          widget.loading &&
+                          (widget.working ? active : selected),
+                      expanded: expanded,
+                      onTap: () => widget.onTapCard(device),
+                      onTogglePower: () => widget.onTogglePower(device),
+                      onMove: () => widget.onMove(device),
+                      onRename: () => widget.onRename(device),
+                      onDelete: () => widget.onDelete(device),
+                    ),
+            ),
           ),
         ),
       );
