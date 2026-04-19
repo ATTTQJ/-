@@ -1570,7 +1570,7 @@ class _DeckCard extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '$count',
+                                  '${count}次',
                                   style: TextStyle(
                                     color: palette.foreground,
                                     fontSize: 48, // 巨大的数字展现张力
@@ -1638,38 +1638,46 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    // 截取最近5个月的数据，保证平铺宽度完美舒适
-    final displayPoints = points.isEmpty
-        ? List<_MonthlyUsagePoint>.generate(
-            5,
-            (index) => _MonthlyUsagePoint(
-              year: DateTime(now.year, now.month - 4 + index).year,
-              month: DateTime(now.year, now.month - 4 + index).month,
-              count: 0,
-            ),
-          )
-        : (points.length > 5 ? points.sublist(points.length - 5) : points);
+    final displayPoints = points
+        .where((point) => point.count > 0)
+        .toList(growable: false);
+
+    if (displayPoints.isEmpty) {
+      return Center(
+        child: Text(
+          '暂无记录',
+          style: TextStyle(
+            color: secondaryText.withOpacity(0.9),
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
 
     final maxCount = displayPoints.fold<int>(
-      1,
+      0,
       (current, point) => math.max(current, point.count),
     );
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: displayPoints.map((point) {
-        final isCurrentMonth =
-            point.year == now.year && point.month == now.month;
-        return _MonthlyUsageBar(
-          point: point,
-          maxCount: maxCount,
-          activeColor: foreground,
-          mutedColor: secondaryText,
-          highlight: isCurrentMonth,
-        );
-      }).toList(),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(displayPoints.length, (index) {
+          final point = displayPoints[index];
+          return Padding(
+            padding: EdgeInsets.only(right: index == displayPoints.length - 1 ? 0 : 10),
+            child: _MonthlyUsageBar(
+              point: point,
+              maxCount: maxCount,
+              barColor: const Color(0xCC484848),
+              mutedColor: secondaryText,
+            ),
+          );
+        }),
+      ),
     );
   }
 }
@@ -1679,32 +1687,28 @@ class _MonthlyUsageBar extends StatelessWidget {
   const _MonthlyUsageBar({
     required this.point,
     required this.maxCount,
-    required this.activeColor,
+    required this.barColor,
     required this.mutedColor,
-    required this.highlight,
   });
 
   final _MonthlyUsagePoint point;
   final int maxCount;
-  final Color activeColor;
+  final Color barColor;
   final Color mutedColor;
-  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
+    const double chartHeight = 86;
     final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
-    // 限制最大高度，给顶部数字留出空间
-    final barHeight = math.max(12.0, 70.0 * heightFactor);
-    final barColor = highlight
-        ? activeColor.withOpacity(0.85) // 高亮当月
-        : activeColor.withOpacity(0.35); // 弱化历史月
+    final barHeight = point.count <= 0
+        ? 0.0
+        : math.max(6.0, chartHeight * heightFactor);
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        // 顶部悬浮数字
         Text(
-          point.count > 0 ? '${point.count}' : '0',
+          '${point.count}',
           style: TextStyle(
             color: mutedColor.withOpacity(0.9),
             fontSize: 12,
@@ -1713,15 +1717,35 @@ class _MonthlyUsageBar extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        // 纯粹加粗的药丸形状柱体
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 380),
-          curve: Curves.easeOutCubic,
-          width: 16, // 加粗！更有张力
-          height: barHeight,
-          decoration: BoxDecoration(
-            color: barColor,
-            borderRadius: BorderRadius.circular(10),
+        SizedBox(
+          height: chartHeight,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 380),
+              curve: Curves.easeOutCubic,
+              width: 16,
+              height: barHeight,
+              decoration: BoxDecoration(
+                color: barColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 16,
+          child: Center(
+            child: Text(
+              '${point.month}',
+              style: TextStyle(
+                color: mutedColor.withOpacity(0.8),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
           ),
         ),
       ],
