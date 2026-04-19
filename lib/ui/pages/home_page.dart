@@ -27,11 +27,8 @@ class _HomePageState extends State<HomePage> {
   DeviceProvider? _deviceProvider;
   List<Map<String, dynamic>>? _cachedSourceDevices;
   List<Map<String, dynamic>>? _cachedDisplayDevices;
-  List<dynamic>? _cachedUsageHistory;
-  Map<String, int>? _cachedUsageCounts;
-  List<Map<String, dynamic>>? _cachedMonthlySourceDevices;
-  List<WaterUsageHistoryEntry>? _cachedMonthlyUsageHistory;
-  Map<String, List<_MonthlyUsagePoint>>? _cachedMonthlyUsageByDevice;
+  List<WaterUsageHistoryEntry>? _cachedUsageHistory;
+  _UsageAggregation? _cachedUsageAggregation;
 
   static const Duration _switchMotionDuration = Duration(milliseconds: 320);
 
@@ -117,47 +114,24 @@ class _HomePageState extends State<HomePage> {
     return _cachedDisplayDevices!;
   }
 
-  Map<String, int> _getUsageCounts({
+  _UsageAggregation _getUsageAggregation({
     required DeviceProvider deviceProvider,
-    required List<dynamic> history,
+    required List<WaterUsageHistoryEntry> history,
   }) {
     if (identical(_cachedSourceDevices, deviceProvider.deviceList) &&
         identical(_cachedUsageHistory, history) &&
-        _cachedUsageCounts != null) {
-      return _cachedUsageCounts!;
+        _cachedUsageAggregation != null) {
+      return _cachedUsageAggregation!;
     }
 
-    final usageCounts = _buildUsageCounts(
+    final aggregation = _buildUsageAggregation(
       deviceProvider: deviceProvider,
       history: history,
     );
     _cachedSourceDevices = deviceProvider.deviceList;
     _cachedUsageHistory = history;
-    _cachedUsageCounts = Map<String, int>.unmodifiable(usageCounts);
-    return _cachedUsageCounts!;
-  }
-
-  Map<String, List<_MonthlyUsagePoint>> _getMonthlyUsageByDevice({
-    required DeviceProvider deviceProvider,
-    required List<WaterUsageHistoryEntry> history,
-  }) {
-    if (identical(_cachedMonthlySourceDevices, deviceProvider.deviceList) &&
-        identical(_cachedMonthlyUsageHistory, history) &&
-        _cachedMonthlyUsageByDevice != null) {
-      return _cachedMonthlyUsageByDevice!;
-    }
-
-    final monthlyUsageByDevice = _buildMonthlyUsageByDevice(
-      deviceProvider: deviceProvider,
-      history: history,
-    );
-    _cachedMonthlySourceDevices = deviceProvider.deviceList;
-    _cachedMonthlyUsageHistory = history;
-    _cachedMonthlyUsageByDevice =
-        Map<String, List<_MonthlyUsagePoint>>.unmodifiable(
-          monthlyUsageByDevice,
-        );
-    return _cachedMonthlyUsageByDevice!;
+    _cachedUsageAggregation = aggregation;
+    return _cachedUsageAggregation!;
   }
 
   @override
@@ -178,14 +152,12 @@ class _HomePageState extends State<HomePage> {
         final working = waterProvider.orderNum.isNotEmpty;
         final activeId = waterProvider.activeDeviceId;
         Map<String, dynamic>? activeDevice;
-        final usageCounts = _getUsageCounts(
+        final usageAggregation = _getUsageAggregation(
           deviceProvider: deviceProvider,
           history: waterProvider.history,
         );
-        final monthlyUsageByDevice = _getMonthlyUsageByDevice(
-          deviceProvider: deviceProvider,
-          history: waterProvider.history,
-        );
+        final usageCounts = usageAggregation.totalCounts;
+        final monthlyUsageByDevice = usageAggregation.monthlyUsageByDevice;
         final predictedDevice = _resolvePredictedDevice(
           deviceProvider: deviceProvider,
           usageCounts: usageCounts,
@@ -442,38 +414,11 @@ class _HomePageState extends State<HomePage> {
     return aliases;
   }
 
-  Map<String, int> _buildUsageCounts({
-    required DeviceProvider deviceProvider,
-    required List<dynamic> history,
-  }) {
-    final counts = <String, int>{};
-    for (final device in deviceProvider.deviceList) {
-      counts[device['deviceInfId'].toString()] = 0;
-    }
-
-    for (final entry in history) {
-      final directDeviceId = entry.deviceId?.trim() ?? '';
-      if (directDeviceId.isNotEmpty && counts.containsKey(directDeviceId)) {
-        counts[directDeviceId] = (counts[directDeviceId] ?? 0) + 1;
-        continue;
-      }
-
-      final matchedId = _resolveUsageHistoryDeviceId(
-        deviceProvider: deviceProvider,
-        entryName: entry.deviceName.toString(),
-      );
-      if (matchedId == null) {
-        continue;
-      }
-      counts[matchedId] = (counts[matchedId] ?? 0) + 1;
-    }
-    return counts;
-  }
-
-  Map<String, List<_MonthlyUsagePoint>> _buildMonthlyUsageByDevice({
+  _UsageAggregation _buildUsageAggregation({
     required DeviceProvider deviceProvider,
     required List<WaterUsageHistoryEntry> history,
   }) {
+    final totalCounts = <String, int>{};
     final monthlyCounts = <String, Map<String, int>>{};
     final earliestMonthByDevice = <String, DateTime>{};
     final now = DateTime.now();
@@ -482,22 +427,24 @@ class _HomePageState extends State<HomePage> {
 
     for (final device in deviceProvider.deviceList) {
       final deviceId = device['deviceInfId'].toString();
+      totalCounts[deviceId] = 0;
       monthlyCounts[deviceId] = <String, int>{};
     }
 
     for (final entry in history) {
       final directDeviceId = entry.deviceId?.trim() ?? '';
       final matchedId =
-          directDeviceId.isNotEmpty && monthlyCounts.containsKey(directDeviceId)
+          directDeviceId.isNotEmpty && totalCounts.containsKey(directDeviceId)
           ? directDeviceId
           : _resolveUsageHistoryDeviceId(
               deviceProvider: deviceProvider,
               entryName: entry.deviceName,
             );
-      if (matchedId == null || !monthlyCounts.containsKey(matchedId)) {
+      if (matchedId == null || !totalCounts.containsKey(matchedId)) {
         continue;
       }
 
+      totalCounts[matchedId] = (totalCounts[matchedId] ?? 0) + 1;
       final entryMonth = DateTime(entry.createdAt.year, entry.createdAt.month);
       final monthKey = _monthKeyForDate(entryMonth);
       final deviceMonthCounts = monthlyCounts[matchedId]!;
@@ -509,7 +456,7 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    final result = <String, List<_MonthlyUsagePoint>>{};
+    final monthlyUsageByDevice = <String, List<_MonthlyUsagePoint>>{};
     for (final device in deviceProvider.deviceList) {
       final deviceId = device['deviceInfId'].toString();
       final deviceMonthCounts =
@@ -521,9 +468,9 @@ class _HomePageState extends State<HomePage> {
       final points = <_MonthlyUsagePoint>[];
 
       for (
-        DateTime cursor = currentMonth;
-        !_isBeforeMonth(cursor, startMonth);
-        cursor = DateTime(cursor.year, cursor.month - 1)
+        DateTime cursor = startMonth;
+        !_isAfterMonth(cursor, currentMonth);
+        cursor = DateTime(cursor.year, cursor.month + 1)
       ) {
         final monthKey = _monthKeyForDate(cursor);
         points.add(
@@ -535,9 +482,16 @@ class _HomePageState extends State<HomePage> {
         );
       }
 
-      result[deviceId] = List<_MonthlyUsagePoint>.unmodifiable(points);
+      monthlyUsageByDevice[deviceId] = List<_MonthlyUsagePoint>.unmodifiable(
+        points,
+      );
     }
-    return result;
+    return _UsageAggregation(
+      totalCounts: Map<String, int>.unmodifiable(totalCounts),
+      monthlyUsageByDevice: Map<String, List<_MonthlyUsagePoint>>.unmodifiable(
+        monthlyUsageByDevice,
+      ),
+    );
   }
 
   Map<String, dynamic>? _resolveLastUsedDevice({
@@ -659,6 +613,13 @@ class _HomePageState extends State<HomePage> {
       return a.year < b.year;
     }
     return a.month < b.month;
+  }
+
+  bool _isAfterMonth(DateTime a, DateTime b) {
+    if (a.year != b.year) {
+      return a.year > b.year;
+    }
+    return a.month > b.month;
   }
 
   Future<void> _handleDevicePowerTap(
@@ -1173,6 +1134,16 @@ class _MonthlyUsagePoint {
   final int count;
 }
 
+class _UsageAggregation {
+  const _UsageAggregation({
+    required this.totalCounts,
+    required this.monthlyUsageByDevice,
+  });
+
+  final Map<String, int> totalCounts;
+  final Map<String, List<_MonthlyUsagePoint>> monthlyUsageByDevice;
+}
+
 class _DeviceDeck extends StatefulWidget {
   const _DeviceDeck({
     required this.devices,
@@ -1291,14 +1262,14 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           baseTop += i * 45.0 + 10.0;
         } else {
           baseTop +=
-              expandedIndex * 45.0 + 345.0 + (i - expandedIndex - 1) * 70.0;
+              expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0;
         }
       }
       targetTops.add(baseTop);
 
       final bool isExpanded =
           widget.expandedId == widget.devices[i]['deviceInfId'].toString();
-      final double cardHeight = isExpanded ? 315.0 : 180.0;
+      final double cardHeight = isExpanded ? 250.0 : 180.0;
       if (baseTop + cardHeight > maxStackHeight) {
         maxStackHeight = baseTop + cardHeight;
       }
@@ -1339,14 +1310,14 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           baseTop += i * 45.0 + 10.0;
         } else {
           baseTop +=
-              expandedIndex * 45.0 + 345.0 + (i - expandedIndex - 1) * 70.0;
+              expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0;
         }
       }
       targetTops.add(baseTop);
 
       final bool isExpanded =
           widget.expandedId == widget.devices[i]['deviceInfId'].toString();
-      final double cardHeight = isExpanded ? 315.0 : 180.0;
+      final double cardHeight = isExpanded ? 250.0 : 180.0;
       if (baseTop + cardHeight > maxStackHeight) {
         maxStackHeight = baseTop + cardHeight;
       }
@@ -1535,7 +1506,7 @@ class _DeckCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
-        height: expanded ? 330 : 180,
+        height: expanded ? 250 : 180,
         decoration: BoxDecoration(
           gradient: palette.gradient,
           borderRadius: BorderRadius.circular(40),
@@ -1607,46 +1578,18 @@ class _DeckCard extends StatelessWidget {
                     ],
                   ),
                   if (expanded) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '已使用',
-                      style: TextStyle(
-                        color: palette.secondaryText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '$count',
-                            style: TextStyle(
-                              color: palette.foreground,
-                              fontSize: 34,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                            ),
-                          ),
-                          TextSpan(
-                            text: ' 次',
-                            style: TextStyle(
-                              color: palette.secondaryText,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: Semantics(
+                        label: '已使用$count次',
+                        child: _DeviceMonthlyUsageChart(
+                          points: monthlyUsage,
+                          foreground: palette.foreground,
+                          secondaryText: palette.secondaryText,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _DeviceMonthlyUsageChart(
-                      points: monthlyUsage,
-                      foreground: palette.foreground,
-                      secondaryText: palette.secondaryText,
-                    ),
-                    const Spacer(),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1686,7 +1629,7 @@ class _DeckCard extends StatelessWidget {
   }
 }
 
-class _DeviceMonthlyUsageChart extends StatelessWidget {
+class _DeviceMonthlyUsageChart extends StatefulWidget {
   const _DeviceMonthlyUsageChart({
     required this.points,
     required this.foreground,
@@ -1698,57 +1641,127 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
   final Color secondaryText;
 
   @override
+  State<_DeviceMonthlyUsageChart> createState() =>
+      _DeviceMonthlyUsageChartState();
+}
+
+class _DeviceMonthlyUsageChartState extends State<_DeviceMonthlyUsageChart> {
+  final ScrollController _scrollController = ScrollController();
+  String? _scrollSignature;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleScrollToLatest();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeviceMonthlyUsageChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_samePoints(oldWidget.points, widget.points)) {
+      _scheduleScrollToLatest();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  bool _samePoints(
+    List<_MonthlyUsagePoint> previous,
+    List<_MonthlyUsagePoint> next,
+  ) {
+    if (identical(previous, next)) {
+      return true;
+    }
+    if (previous.length != next.length) {
+      return false;
+    }
+    for (int i = 0; i < previous.length; i++) {
+      if (previous[i].year != next[i].year ||
+          previous[i].month != next[i].month ||
+          previous[i].count != next[i].count) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _scheduleScrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      if (maxExtent <= 0) {
+        return;
+      }
+      _scrollController.jumpTo(maxExtent);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final effectivePoints = points.isEmpty
+    final effectivePoints = widget.points.isEmpty
         ? List<_MonthlyUsagePoint>.generate(
             6,
             (index) => _MonthlyUsagePoint(
-              year: DateTime(now.year, now.month - index).year,
-              month: DateTime(now.year, now.month - index).month,
+              year: DateTime(now.year, now.month - 5 + index).year,
+              month: DateTime(now.year, now.month - 5 + index).month,
               count: 0,
             ),
           )
-        : points;
+        : widget.points;
     final maxCount = effectivePoints.fold<int>(
       1,
       (current, point) => math.max(current, point.count),
     );
+    final scrollSignature = effectivePoints
+        .map((point) => '${point.year}-${point.month}-${point.count}')
+        .join('|');
+    if (_scrollSignature != scrollSignature) {
+      _scrollSignature = scrollSignature;
+      _scheduleScrollToLatest();
+    }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           '月度用水次数',
           style: TextStyle(
-            color: secondaryText,
-            fontSize: 12,
+            color: widget.secondaryText,
+            fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         SizedBox(
-          height: 106,
+          height: 94,
           child: LayoutBuilder(
             builder: (context, constraints) {
               const visibleCount = 6;
-              const gap = 10.0;
+              const gap = 8.0;
               final effectiveVisibleCount = math.min(
                 visibleCount,
                 effectivePoints.length,
               );
+              final viewportWidth = constraints.maxWidth;
               final barWidth =
-                  (constraints.maxWidth -
-                          gap * math.max(0, effectiveVisibleCount - 1)) /
-                      effectiveVisibleCount;
-              final contentWidth =
-                  effectivePoints.length <= visibleCount
-                  ? constraints.maxWidth
+                  (viewportWidth -
+                      gap * math.max(0, effectiveVisibleCount - 1)) /
+                  effectiveVisibleCount;
+              final contentWidth = effectivePoints.length <= visibleCount
+                  ? viewportWidth
                   : barWidth * effectivePoints.length +
                         gap * (effectivePoints.length - 1);
 
               return SingleChildScrollView(
+                controller: _scrollController,
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 child: SizedBox(
@@ -1766,8 +1779,8 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
                           point: point,
                           maxCount: maxCount,
                           width: barWidth,
-                          activeColor: foreground,
-                          mutedColor: secondaryText,
+                          activeColor: widget.foreground,
+                          mutedColor: widget.secondaryText,
                           highlight: isCurrentMonth,
                         ),
                       );
@@ -1803,7 +1816,7 @@ class _MonthlyUsageBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
-    final barHeight = math.max(10.0, 58.0 * heightFactor);
+    final barHeight = math.max(8.0, 48.0 * heightFactor);
     final barColor = highlight
         ? activeColor.withOpacity(0.94)
         : activeColor.withOpacity(point.count > 0 ? 0.52 : 0.18);
@@ -1815,7 +1828,7 @@ class _MonthlyUsageBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           SizedBox(
-            height: 18,
+            height: 16,
             child: Text(
               point.count > 0 ? '${point.count}' : '',
               maxLines: 1,
@@ -1827,10 +1840,10 @@ class _MonthlyUsageBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Container(
             width: width,
-            height: 62,
+            height: 50,
             alignment: Alignment.bottomCenter,
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.08),
@@ -1847,7 +1860,7 @@ class _MonthlyUsageBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Text(
             '${point.month}月',
             style: TextStyle(
