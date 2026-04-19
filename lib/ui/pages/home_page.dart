@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -188,7 +188,7 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   children: [
                     // ==========================================
-                    // 馃専 椤跺眰鍖哄煙锛氬畬鍏ㄩ『鎺掞紝鑷劧鎾戝紑楂樺害锛?
+                    // 🌟 顶层区域：完全顺排，自然撑开高度！
                     // ==========================================
                     const SizedBox(height: 7),
                     _TopButtons(
@@ -262,7 +262,7 @@ class _HomePageState extends State<HomePage> {
                               : _deviceName(deviceProvider, predictedDevice),
                           onActionTap:
                               dashboardDevice == null ||
-                                  waterProvider.isRequesting
+                                      waterProvider.isRequesting
                               ? null
                               : () => _handleDevicePowerTap(
                                   context,
@@ -276,7 +276,7 @@ class _HomePageState extends State<HomePage> {
                     ),
 
                     // ==========================================
-                    // 馃専 搴曞眰婊戝姩鍖哄煙锛欵xpanded 鍔ㄦ€侀湼鍗犲墿浣欑┖闂?
+                    // 🌟 底层滑动区域：Expanded 动态霸占剩余空间
                     // ==========================================
                     Expanded(
                       child: _DeviceDeck(
@@ -433,8 +433,8 @@ class _HomePageState extends State<HomePage> {
 
     for (final entry in history) {
       final directDeviceId = entry.deviceId?.trim() ?? '';
-      final matchedId =
-          directDeviceId.isNotEmpty && totalCounts.containsKey(directDeviceId)
+      final matchedId = directDeviceId.isNotEmpty &&
+              totalCounts.containsKey(directDeviceId)
           ? directDeviceId
           : _resolveUsageHistoryDeviceId(
               deviceProvider: deviceProvider,
@@ -482,15 +482,15 @@ class _HomePageState extends State<HomePage> {
         );
       }
 
-      monthlyUsageByDevice[deviceId] = List<_MonthlyUsagePoint>.unmodifiable(
-        points,
-      );
+      monthlyUsageByDevice[deviceId] =
+          List<_MonthlyUsagePoint>.unmodifiable(points);
     }
     return _UsageAggregation(
       totalCounts: Map<String, int>.unmodifiable(totalCounts),
-      monthlyUsageByDevice: Map<String, List<_MonthlyUsagePoint>>.unmodifiable(
-        monthlyUsageByDevice,
-      ),
+      monthlyUsageByDevice:
+          Map<String, List<_MonthlyUsagePoint>>.unmodifiable(
+            monthlyUsageByDevice,
+          ),
     );
   }
 
@@ -527,7 +527,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     final preferHotWater = _isDormHotWaterAvailable(DateTime.now());
-
     final preferredDevices = realDevices
         .where(
           (device) => preferHotWater
@@ -535,7 +534,6 @@ class _HomePageState extends State<HomePage> {
               : (int.tryParse((device['billType'] ?? '').toString()) ?? 1) != 2,
         )
         .toList(growable: false);
-
     final pool = preferredDevices.isNotEmpty ? preferredDevices : realDevices;
     pool.sort((a, b) {
       final aId = a['deviceInfId'].toString();
@@ -548,7 +546,6 @@ class _HomePageState extends State<HomePage> {
       }
       return realDevices.indexOf(a).compareTo(realDevices.indexOf(b));
     });
-
     return pool.first;
   }
 
@@ -743,7 +740,7 @@ class _HomePageState extends State<HomePage> {
                     }
                   },
                   child: const Text(
-                    '确认',
+                    '保存',
                     style: TextStyle(color: Colors.white),
                   ),
                 ),
@@ -1121,7 +1118,6 @@ class _ProfileAvatarButton extends StatelessWidget {
   }
 }
 
-// 馃専 缁堟瀬 GPU 瑙嗗樊閲嶆瀯锛氬交搴曟帴绠℃粴鍔ㄥ姩鐢伙紝鍛婂埆绌挎ā锛?
 class _MonthlyUsagePoint {
   const _MonthlyUsagePoint({
     required this.year,
@@ -1184,7 +1180,6 @@ class _DeviceDeck extends StatefulWidget {
 }
 
 class _DeviceDeckState extends State<_DeviceDeck> {
-  // 缁戝畾鍘熺敓 ScrollView锛岀敤浜庤鍙栧綋鍓嶅亸绉婚噺
   final ScrollController _scrollController = ScrollController();
   String? _layoutSignature;
   int? _expandedIndex;
@@ -1251,7 +1246,11 @@ class _DeviceDeckState extends State<_DeviceDeck> {
     double maxStackHeight = _maxStackHeight;
     final List<double> targetTops = List<double>.from(_targetTops);
 
-    for (int i = 0; i < 0; i++) {
+    // 重新计算时清空之前的tops
+    targetTops.clear();
+    maxStackHeight = 0;
+
+    for (int i = 0; i < widget.devices.length; i++) {
       double baseTop = widget.paddingTop;
       if (expandedIndex == null) {
         baseTop += i * 105.0;
@@ -1291,37 +1290,8 @@ class _DeviceDeckState extends State<_DeviceDeck> {
     final expandedIndex = _expandedIndex;
     final ordered = _orderedEntries;
 
-    // 馃専 闃舵鍙傛暟閰嶇疆
-    const double minStackSpacing = 28.0; // 鍫嗗彔鏃舵紡鍑虹殑鏍囬鍦嗚璺濈
-    const double stickyCeiling = 12.0; // 璺濈娣辫壊鍗＄墖搴曢儴鐨勬渶灏忕┖闅?
-
-    double maxStackHeight = 0;
-    final List<double> targetTops = [];
-
-    // 1. 棰勮绠楁墍鏈夊崱鐗囧湪鏈粦鍔ㄦ椂鐨勫熀纭€ Top ??
-    for (int i = 0; i < widget.devices.length; i++) {
-      double baseTop = widget.paddingTop;
-      if (expandedIndex == null) {
-        baseTop += i * 105.0;
-      } else {
-        if (i < expandedIndex) {
-          baseTop += i * 45.0;
-        } else if (i == expandedIndex) {
-          baseTop += i * 45.0 + 10.0;
-        } else {
-          baseTop +=
-              expandedIndex * 45.0 + 280.0 + (i - expandedIndex - 1) * 70.0;
-        }
-      }
-      targetTops.add(baseTop);
-
-      final bool isExpanded =
-          widget.expandedId == widget.devices[i]['deviceInfId'].toString();
-      final double cardHeight = isExpanded ? 250.0 : 180.0;
-      if (baseTop + cardHeight > maxStackHeight) {
-        maxStackHeight = baseTop + cardHeight;
-      }
-    }
+    const double minStackSpacing = 28.0; 
+    const double stickyCeiling = 12.0; 
 
     final stackChildren = ordered.map((entry) {
       final index = entry.key;
@@ -1333,13 +1303,11 @@ class _DeviceDeckState extends State<_DeviceDeck> {
       final selected = widget.selectedId == id;
       final active = widget.activeId == id;
 
-      final double targetBaseTop = targetTops[index];
-      // 璁＄畻杩欏紶鍗＄墖鐨勪笓灞炲惛椤剁嚎
+      final double targetBaseTop = _targetTops[index];
       final double minTopLimit = stickyCeiling + index * minStackSpacing;
 
       return Positioned(
         key: ValueKey('pos_$id'),
-        // Positioned top 鍐欐涓?0锛屽洜涓烘垜浠瀹屽叏鐢?GPU Transform 鏉ヤ綅绉?
         top: 0,
         left: 23,
         right: 23,
@@ -1349,18 +1317,13 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           duration: const Duration(milliseconds: 380),
           curve: Curves.easeOutCubic,
           builder: (context, animatedBaseTop, child) {
-            // 馃専 AnimatedBuilder 鐩戝惉 ScrollController
-            // 鍙鎵嬫寚鍦ㄥ姩锛岃繖閲屾瘡涓€甯ч兘浼氭瀬閫熻绠楀嚭鏂扮殑 translateY锛岃鍗＄墖鐪嬭捣鏉ュ惛椤讹紒
             return AnimatedBuilder(
               animation: _scrollController,
               builder: (context, scrollChild) {
-                // 璇诲彇鐪熷疄鐨勫師鐢熸粦鍔ㄨ窛绂?
                 double offset = _scrollController.hasClients
                     ? math.max(0.0, _scrollController.offset)
                     : 0.0;
 
-                // 馃専 GPU 娆洪獥绠楁硶鏍稿績锛?
-                // 濡傛灉 offset 瓒呰繃浜?(褰撳墠鍗＄墖鍩虹?? - 鍚搁《绾?锛屽氨鏂藉姞鍚戜笅琛ュ伩浣嶇Щ
                 double stickyOffset = math.max(
                   0.0,
                   offset - animatedBaseTop + minTopLimit,
@@ -1406,15 +1369,13 @@ class _DeviceDeckState extends State<_DeviceDeck> {
       );
     }).toList();
 
-    // 馃専 鍥炲綊鏈€绾鐨勫師鐢?SingleChildScrollView锛岀粷瀵逛笉鍗★紒
     return SingleChildScrollView(
       controller: _scrollController,
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 60),
-      // 鏀惧紑瑁佸壀锛屽洜涓哄惛椤剁畻娉曞凡缁忎繚璇佸崱鐗囩粷瀵逛笉鍙兘瓒婄晫锛?
       clipBehavior: Clip.none,
       child: SizedBox(
-        height: maxStackHeight,
+        height: _maxStackHeight,
         child: Stack(clipBehavior: Clip.none, children: stackChildren),
       ),
     );
@@ -1533,6 +1494,7 @@ class _DeckCard extends StatelessWidget {
                 painter: _CornerLinePainter(),
               ),
             ),
+
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 20, 22, 22),
               child: Column(
@@ -1576,32 +1538,53 @@ class _DeckCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  
+                  // 🌟 核心重构：1:1 左右分栏布局
                   if (expanded) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 16),
                     Expanded(
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
+                          // 左侧：1比1占比的纯粹进度条图表
                           Expanded(
+                            flex: 1,
                             child: _DeviceMonthlyUsageChart(
                               points: monthlyUsage,
                               foreground: palette.foreground,
                               secondaryText: palette.secondaryText,
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          SizedBox(
-                            width: 76,
-                            child: _UsageTotalSummary(
-                              count: count,
-                              foreground: palette.foreground,
-                              secondaryText: palette.secondaryText,
+                          // 右侧：1比1占比的巨大使用次数
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '已使用',
+                                  style: TextStyle(
+                                    color: palette.secondaryText,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$count',
+                                  style: TextStyle(
+                                    color: palette.foreground,
+                                    fontSize: 48, // 巨大的数字展现张力
+                                    fontWeight: FontWeight.w400,
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1641,51 +1624,8 @@ class _DeckCard extends StatelessWidget {
   }
 }
 
-class _UsageTotalSummary extends StatelessWidget {
-  const _UsageTotalSummary({
-    required this.count,
-    required this.foreground,
-    required this.secondaryText,
-  });
-
-  final int count;
-  final Color foreground;
-  final Color secondaryText;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '已使用',
-          style: TextStyle(
-            color: secondaryText,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '$count',
-            style: TextStyle(
-              color: foreground,
-              fontSize: 40,
-              fontWeight: FontWeight.w500,
-              height: 1,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DeviceMonthlyUsageChart extends StatefulWidget {
+// 🌟 完全剥离 ScrollView 的纯净图表容器
+class _DeviceMonthlyUsageChart extends StatelessWidget {
   const _DeviceMonthlyUsageChart({
     required this.points,
     required this.foreground,
@@ -1697,145 +1637,48 @@ class _DeviceMonthlyUsageChart extends StatefulWidget {
   final Color secondaryText;
 
   @override
-  State<_DeviceMonthlyUsageChart> createState() =>
-      _DeviceMonthlyUsageChartState();
-}
-
-class _DeviceMonthlyUsageChartState extends State<_DeviceMonthlyUsageChart> {
-  final ScrollController _scrollController = ScrollController();
-  String? _scrollSignature;
-
-  @override
-  void initState() {
-    super.initState();
-    _scheduleScrollToLatest();
-  }
-
-  @override
-  void didUpdateWidget(covariant _DeviceMonthlyUsageChart oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_samePoints(oldWidget.points, widget.points)) {
-      _scheduleScrollToLatest();
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  bool _samePoints(
-    List<_MonthlyUsagePoint> previous,
-    List<_MonthlyUsagePoint> next,
-  ) {
-    if (identical(previous, next)) {
-      return true;
-    }
-    if (previous.length != next.length) {
-      return false;
-    }
-    for (int i = 0; i < previous.length; i++) {
-      if (previous[i].year != next[i].year ||
-          previous[i].month != next[i].month ||
-          previous[i].count != next[i].count) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  void _scheduleScrollToLatest() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) {
-        return;
-      }
-      final maxExtent = _scrollController.position.maxScrollExtent;
-      if (maxExtent <= 0) {
-        return;
-      }
-      _scrollController.jumpTo(maxExtent);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final effectivePoints = widget.points.isEmpty
+    // 截取最近5个月的数据，保证平铺宽度完美舒适
+    final displayPoints = points.isEmpty
         ? List<_MonthlyUsagePoint>.generate(
-            4,
+            5,
             (index) => _MonthlyUsagePoint(
-              year: DateTime(now.year, now.month - 3 + index).year,
-              month: DateTime(now.year, now.month - 3 + index).month,
+              year: DateTime(now.year, now.month - 4 + index).year,
+              month: DateTime(now.year, now.month - 4 + index).month,
               count: 0,
             ),
           )
-        : widget.points;
-    final maxCount = effectivePoints.fold<int>(
+        : (points.length > 5 ? points.sublist(points.length - 5) : points);
+
+    final maxCount = displayPoints.fold<int>(
       1,
       (current, point) => math.max(current, point.count),
     );
-    final scrollSignature = effectivePoints
-        .map((point) => '${point.year}-${point.month}-${point.count}')
-        .join('|');
-    if (_scrollSignature != scrollSignature) {
-      _scrollSignature = scrollSignature;
-      _scheduleScrollToLatest();
-    }
 
-    return SizedBox(
-      height: 102,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const visibleCount = 4;
-          const gap = 8.0;
-          final viewportWidth = constraints.maxWidth;
-          final barWidth =
-              (viewportWidth - gap * (visibleCount - 1)) / visibleCount;
-          final contentWidth = effectivePoints.length <= visibleCount
-              ? viewportWidth
-              : barWidth * effectivePoints.length +
-                    gap * (effectivePoints.length - 1);
-
-          return SingleChildScrollView(
-            controller: _scrollController,
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: SizedBox(
-              width: contentWidth,
-              child: Row(
-                children: List.generate(effectivePoints.length, (index) {
-                  final point = effectivePoints[index];
-                  final isCurrentMonth =
-                      point.year == now.year && point.month == now.month;
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      right: index == effectivePoints.length - 1 ? 0 : gap,
-                    ),
-                    child: _MonthlyUsageBar(
-                      point: point,
-                      maxCount: maxCount,
-                      width: barWidth,
-                      activeColor: widget.foreground,
-                      mutedColor: widget.secondaryText,
-                      highlight: isCurrentMonth,
-                    ),
-                  );
-                }),
-              ),
-            ),
-          );
-        },
-      ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: displayPoints.map((point) {
+        final isCurrentMonth =
+            point.year == now.year && point.month == now.month;
+        return _MonthlyUsageBar(
+          point: point,
+          maxCount: maxCount,
+          activeColor: foreground,
+          mutedColor: secondaryText,
+          highlight: isCurrentMonth,
+        );
+      }).toList(),
     );
   }
 }
 
+// 🌟 纯净的进度条柱状体，上方带数字
 class _MonthlyUsageBar extends StatelessWidget {
   const _MonthlyUsageBar({
     required this.point,
     required this.maxCount,
-    required this.width,
     required this.activeColor,
     required this.mutedColor,
     required this.highlight,
@@ -1843,7 +1686,6 @@ class _MonthlyUsageBar extends StatelessWidget {
 
   final _MonthlyUsagePoint point;
   final int maxCount;
-  final double width;
   final Color activeColor;
   final Color mutedColor;
   final bool highlight;
@@ -1851,67 +1693,38 @@ class _MonthlyUsageBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
-    final barHeight = math.max(12.0, 60.0 * heightFactor);
+    // 限制最大高度，给顶部数字留出空间
+    final barHeight = math.max(12.0, 70.0 * heightFactor);
     final barColor = highlight
-        ? activeColor.withOpacity(0.94)
-        : activeColor.withOpacity(point.count > 0 ? 0.52 : 0.18);
-    final innerBarWidth = math.min(18.0, math.max(10.0, width * 0.38));
+        ? activeColor.withOpacity(0.85) // 高亮当月
+        : activeColor.withOpacity(0.35); // 弱化历史月
 
-    return SizedBox(
-      width: width,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          SizedBox(
-            width: width,
-            height: 18,
-            child: Text(
-              '${point.count}',
-              maxLines: 1,
-              overflow: TextOverflow.fade,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: mutedColor.withOpacity(0.82),
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        // 顶部悬浮数字
+        Text(
+          point.count > 0 ? '${point.count}' : '0',
+          style: TextStyle(
+            color: mutedColor.withOpacity(0.9),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
-          const SizedBox(height: 4),
-          Container(
-            width: width,
-            height: 62,
-            alignment: Alignment.bottomCenter,
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              width: innerBarWidth,
-              height: barHeight,
-              decoration: BoxDecoration(
-                color: barColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
+        ),
+        const SizedBox(height: 6),
+        // 纯粹加粗的药丸形状柱体
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 380),
+          curve: Curves.easeOutCubic,
+          width: 16, // 加粗！更有张力
+          height: barHeight,
+          decoration: BoxDecoration(
+            color: barColor,
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: width,
-            child: Text(
-              '${point.month}',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: mutedColor.withOpacity(highlight ? 0.98 : 0.82),
-                fontSize: 9,
-                fontWeight: highlight ? FontWeight.w800 : FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
