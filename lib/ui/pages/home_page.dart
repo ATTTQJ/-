@@ -102,7 +102,7 @@ class _HomePageState extends State<HomePage> {
       displayDevices.add({
         'isAddCard': true,
         'deviceInfId': 'add_${displayDevices.length}',
-        'deviceInfName': '娣诲姞璁惧',
+        'deviceInfName': '濞ｈ濮炵拋鎯ь槵',
         'billType': -1,
       });
     }
@@ -143,7 +143,7 @@ class _HomePageState extends State<HomePage> {
           displayDevices.add({
             'isAddCard': true,
             'deviceInfId': 'add_${displayDevices.length}',
-            'deviceInfName': '添加设备',
+            'deviceInfName': '娣诲姞璁惧',
             'billType': -1,
           });
         }
@@ -163,7 +163,7 @@ class _HomePageState extends State<HomePage> {
           usageCounts: usageCounts,
         );
 
-        String currentActiveName = '设备';
+        String currentActiveName = '璁惧';
         if (working && activeId.isNotEmpty) {
           for (final d in deviceProvider.deviceList) {
             if (d['deviceInfId']?.toString() == activeId) {
@@ -188,7 +188,7 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   children: [
                     // ==========================================
-                    // 🌟 顶层区域：完全顺排，自然撑开高度！
+                    // 馃専 椤跺眰鍖哄煙锛氬畬鍏ㄩ『鎺掞紝鑷劧鎾戝紑楂樺害锛?
                     // ==========================================
                     const SizedBox(height: 7),
                     _TopButtons(
@@ -258,7 +258,7 @@ class _HomePageState extends State<HomePage> {
                                   context,
                                 ),
                           lastUsedDeviceName: predictedDevice == null
-                              ? '暂无可用设备'
+                              ? '鏆傛棤鍙敤璁惧'
                               : _deviceName(deviceProvider, predictedDevice),
                           onActionTap:
                               dashboardDevice == null ||
@@ -276,7 +276,7 @@ class _HomePageState extends State<HomePage> {
                     ),
 
                     // ==========================================
-                    // 🌟 底层滑动区域：Expanded 动态霸占剩余空间
+                    // 馃専 搴曞眰婊戝姩鍖哄煙锛欵xpanded 鍔ㄦ€侀湼鍗犲墿浣欑┖闂?
                     // ==========================================
                     Expanded(
                       child: _DeviceDeck(
@@ -376,7 +376,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _deviceName(DeviceProvider provider, Map<String, dynamic> device) {
-    if (device['isAddCard'] == true) return '添加设备';
+    if (device['isAddCard'] == true) return '娣诲姞璁惧';
 
     final id = device['deviceInfId'].toString();
     final remark = provider.customRemarks[id];
@@ -685,7 +685,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '移动设备',
+            '绉诲姩璁惧',
             style: TextStyle(
               color: DialogUtils.titleColor,
               fontSize: 18,
@@ -702,7 +702,7 @@ class _HomePageState extends State<HomePage> {
             controller: controller,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              hintText: '位置',
+              hintText: '浣嶇疆',
               filled: true,
               fillColor: DialogUtils.surfaceBackgroundColor,
               border: OutlineInputBorder(
@@ -717,7 +717,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('取消'),
+                  child: const Text('鍙栨秷'),
                 ),
               ),
               Expanded(
@@ -731,7 +731,7 @@ class _HomePageState extends State<HomePage> {
                   onPressed: () async {
                     final parsed = int.tryParse(controller.text.trim());
                     if (parsed == null || parsed < 1 || parsed > maxPosition) {
-                      ToastService.show('位置无效');
+                      ToastService.show('浣嶇疆鏃犳晥');
                       return;
                     }
                     await deviceProvider.moveDeviceToPosition(
@@ -743,7 +743,7 @@ class _HomePageState extends State<HomePage> {
                     }
                   },
                   child: const Text(
-                    '保存',
+                    '淇濆瓨',
                     style: TextStyle(color: Colors.white),
                   ),
                 ),
@@ -816,7 +816,7 @@ class _DashboardCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '¥$balance',
+                    '楼$balance',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -1121,7 +1121,7 @@ class _ProfileAvatarButton extends StatelessWidget {
   }
 }
 
-// 🌟 终极 GPU 视差重构：彻底接管滚动动画，告别穿模！
+// 馃専 缁堟瀬 GPU 瑙嗗樊閲嶆瀯锛氬交搴曟帴绠℃粴鍔ㄥ姩鐢伙紝鍛婂埆绌挎ā锛?
 class _MonthlyUsagePoint {
   const _MonthlyUsagePoint({
     required this.year,
@@ -1184,7 +1184,7 @@ class _DeviceDeck extends StatefulWidget {
 }
 
 class _DeviceDeckState extends State<_DeviceDeck> {
-  // 绑定原生 ScrollView，用于读取当前偏移量
+  // 缁戝畾鍘熺敓 ScrollView锛岀敤浜庤鍙栧綋鍓嶅亸绉婚噺
   final ScrollController _scrollController = ScrollController();
   String? _layoutSignature;
   int? _expandedIndex;
@@ -1291,14 +1291,14 @@ class _DeviceDeckState extends State<_DeviceDeck> {
     final expandedIndex = _expandedIndex;
     final ordered = _orderedEntries;
 
-    // 🌟 阶梯参数配置
-    const double minStackSpacing = 28.0; // 堆叠时漏出的标题圆角距离
-    const double stickyCeiling = 12.0; // 距离深色卡片底部的最小空隙
+    // 馃専 闃舵鍙傛暟閰嶇疆
+    const double minStackSpacing = 28.0; // 鍫嗗彔鏃舵紡鍑虹殑鏍囬鍦嗚璺濈
+    const double stickyCeiling = 12.0; // 璺濈娣辫壊鍗＄墖搴曢儴鐨勬渶灏忕┖闅?
 
     double maxStackHeight = 0;
     final List<double> targetTops = [];
 
-    // 1. 预计算所有卡片在未滑动时的基础 Top 位置
+    // 1. 棰勮绠楁墍鏈夊崱鐗囧湪鏈粦鍔ㄦ椂鐨勫熀纭€ Top 浣嶇疆
     for (int i = 0; i < widget.devices.length; i++) {
       double baseTop = widget.paddingTop;
       if (expandedIndex == null) {
@@ -1334,12 +1334,12 @@ class _DeviceDeckState extends State<_DeviceDeck> {
       final active = widget.activeId == id;
 
       final double targetBaseTop = targetTops[index];
-      // 计算这张卡片的专属吸顶线
+      // 璁＄畻杩欏紶鍗＄墖鐨勪笓灞炲惛椤剁嚎
       final double minTopLimit = stickyCeiling + index * minStackSpacing;
 
       return Positioned(
         key: ValueKey('pos_$id'),
-        // Positioned top 写死为 0，因为我们要完全用 GPU Transform 来位移
+        // Positioned top 鍐欐涓?0锛屽洜涓烘垜浠瀹屽叏鐢?GPU Transform 鏉ヤ綅绉?
         top: 0,
         left: 23,
         right: 23,
@@ -1349,18 +1349,18 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           duration: const Duration(milliseconds: 380),
           curve: Curves.easeOutCubic,
           builder: (context, animatedBaseTop, child) {
-            // 🌟 AnimatedBuilder 监听 ScrollController
-            // 只要手指在动，这里每一帧都会极速计算出新的 translateY，让卡片看起来吸顶！
+            // 馃専 AnimatedBuilder 鐩戝惉 ScrollController
+            // 鍙鎵嬫寚鍦ㄥ姩锛岃繖閲屾瘡涓€甯ч兘浼氭瀬閫熻绠楀嚭鏂扮殑 translateY锛岃鍗＄墖鐪嬭捣鏉ュ惛椤讹紒
             return AnimatedBuilder(
               animation: _scrollController,
               builder: (context, scrollChild) {
-                // 读取真实的原生滑动距离
+                // 璇诲彇鐪熷疄鐨勫師鐢熸粦鍔ㄨ窛绂?
                 double offset = _scrollController.hasClients
                     ? math.max(0.0, _scrollController.offset)
                     : 0.0;
 
-                // 🌟 GPU 欺骗算法核心：
-                // 如果 offset 超过了 (当前卡片基础位置 - 吸顶线)，就施加向下补偿位移
+                // 馃専 GPU 娆洪獥绠楁硶鏍稿績锛?
+                // 濡傛灉 offset 瓒呰繃浜?(褰撳墠鍗＄墖鍩虹浣嶇疆 - 鍚搁《绾?锛屽氨鏂藉姞鍚戜笅琛ュ伩浣嶇Щ
                 double stickyOffset = math.max(
                   0.0,
                   offset - animatedBaseTop + minTopLimit,
@@ -1406,12 +1406,12 @@ class _DeviceDeckState extends State<_DeviceDeck> {
       );
     }).toList();
 
-    // 🌟 回归最纯正的原生 SingleChildScrollView，绝对不卡！
+    // 馃専 鍥炲綊鏈€绾鐨勫師鐢?SingleChildScrollView锛岀粷瀵逛笉鍗★紒
     return SingleChildScrollView(
       controller: _scrollController,
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 60),
-      // 放开裁剪，因为吸顶算法已经保证卡片绝对不可能越界！
+      // 鏀惧紑瑁佸壀锛屽洜涓哄惛椤剁畻娉曞凡缁忎繚璇佸崱鐗囩粷瀵逛笉鍙兘瓒婄晫锛?
       clipBehavior: Clip.none,
       child: SizedBox(
         height: maxStackHeight,
@@ -1533,7 +1533,6 @@ class _DeckCard extends StatelessWidget {
                 painter: _CornerLinePainter(),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 20, 22, 22),
               child: Column(
@@ -1578,18 +1577,31 @@ class _DeckCard extends StatelessWidget {
                     ],
                   ),
                   if (expanded) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Expanded(
-                      child: Semantics(
-                        label: '已使用$count次',
-                        child: _DeviceMonthlyUsageChart(
-                          points: monthlyUsage,
-                          foreground: palette.foreground,
-                          secondaryText: palette.secondaryText,
-                        ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: _DeviceMonthlyUsageChart(
+                              points: monthlyUsage,
+                              foreground: palette.foreground,
+                              secondaryText: palette.secondaryText,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          SizedBox(
+                            width: 76,
+                            child: _UsageTotalSummary(
+                              count: count,
+                              foreground: palette.foreground,
+                              secondaryText: palette.secondaryText,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1625,6 +1637,50 @@ class _DeckCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _UsageTotalSummary extends StatelessWidget {
+  const _UsageTotalSummary({
+    required this.count,
+    required this.foreground,
+    required this.secondaryText,
+  });
+
+  final int count;
+  final Color foreground;
+  final Color secondaryText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '已使用',
+          style: TextStyle(
+            color: secondaryText,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            '$count',
+            style: TextStyle(
+              color: foreground,
+              fontSize: 40,
+              fontWeight: FontWeight.w500,
+              height: 1,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1707,10 +1763,10 @@ class _DeviceMonthlyUsageChartState extends State<_DeviceMonthlyUsageChart> {
     final now = DateTime.now();
     final effectivePoints = widget.points.isEmpty
         ? List<_MonthlyUsagePoint>.generate(
-            7,
+            4,
             (index) => _MonthlyUsagePoint(
-              year: DateTime(now.year, now.month - 6 + index).year,
-              month: DateTime(now.year, now.month - 6 + index).month,
+              year: DateTime(now.year, now.month - 3 + index).year,
+              month: DateTime(now.year, now.month - 3 + index).month,
               count: 0,
             ),
           )
@@ -1727,64 +1783,50 @@ class _DeviceMonthlyUsageChartState extends State<_DeviceMonthlyUsageChart> {
       _scheduleScrollToLatest();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        SizedBox(
-          height: 108,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final visibleCount = math.min(
-                effectivePoints.length >= 7 ? 7 : 5,
-                effectivePoints.length,
-              );
-              const gap = 6.0;
-              final effectiveVisibleCount = math.min(
-                visibleCount,
-                effectivePoints.length,
-              );
-              final viewportWidth = constraints.maxWidth;
-              final barWidth =
-                  (viewportWidth -
-                      gap * math.max(0, effectiveVisibleCount - 1)) /
-                  effectiveVisibleCount;
-              final contentWidth = effectivePoints.length <= visibleCount
-                  ? viewportWidth
-                  : barWidth * effectivePoints.length +
-                        gap * (effectivePoints.length - 1);
+    return SizedBox(
+      height: 102,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const visibleCount = 4;
+          const gap = 8.0;
+          final viewportWidth = constraints.maxWidth;
+          final barWidth =
+              (viewportWidth - gap * (visibleCount - 1)) / visibleCount;
+          final contentWidth = effectivePoints.length <= visibleCount
+              ? viewportWidth
+              : barWidth * effectivePoints.length +
+                    gap * (effectivePoints.length - 1);
 
-              return SingleChildScrollView(
-                controller: _scrollController,
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: SizedBox(
-                  width: contentWidth,
-                  child: Row(
-                    children: List.generate(effectivePoints.length, (index) {
-                      final point = effectivePoints[index];
-                      final isCurrentMonth =
-                          point.year == now.year && point.month == now.month;
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          right: index == effectivePoints.length - 1 ? 0 : gap,
-                        ),
-                        child: _MonthlyUsageBar(
-                          point: point,
-                          maxCount: maxCount,
-                          width: barWidth,
-                          activeColor: widget.foreground,
-                          mutedColor: widget.secondaryText,
-                          highlight: isCurrentMonth,
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+          return SingleChildScrollView(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: SizedBox(
+              width: contentWidth,
+              child: Row(
+                children: List.generate(effectivePoints.length, (index) {
+                  final point = effectivePoints[index];
+                  final isCurrentMonth =
+                      point.year == now.year && point.month == now.month;
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      right: index == effectivePoints.length - 1 ? 0 : gap,
+                    ),
+                    child: _MonthlyUsageBar(
+                      point: point,
+                      maxCount: maxCount,
+                      width: barWidth,
+                      activeColor: widget.foreground,
+                      mutedColor: widget.secondaryText,
+                      highlight: isCurrentMonth,
+                    ),
+                  );
+                }),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -1809,11 +1851,11 @@ class _MonthlyUsageBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
-    final barHeight = math.max(10.0, 64.0 * heightFactor);
+    final barHeight = math.max(12.0, 60.0 * heightFactor);
     final barColor = highlight
         ? activeColor.withOpacity(0.94)
         : activeColor.withOpacity(point.count > 0 ? 0.52 : 0.18);
-    final innerBarWidth = math.min(14.0, math.max(8.0, width * 0.32));
+    final innerBarWidth = math.min(18.0, math.max(10.0, width * 0.38));
 
     return SizedBox(
       width: width,
@@ -1821,9 +1863,10 @@ class _MonthlyUsageBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           SizedBox(
+            width: width,
             height: 18,
             child: Text(
-              point.count > 0 ? '${point.count}' : '',
+              '${point.count}',
               maxLines: 1,
               overflow: TextOverflow.fade,
               textAlign: TextAlign.center,
@@ -1837,7 +1880,7 @@ class _MonthlyUsageBar extends StatelessWidget {
           const SizedBox(height: 4),
           Container(
             width: width,
-            height: 68,
+            height: 62,
             alignment: Alignment.bottomCenter,
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.05),
@@ -1855,12 +1898,16 @@ class _MonthlyUsageBar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            '${point.month}月',
-            style: TextStyle(
-              color: mutedColor.withOpacity(highlight ? 0.98 : 0.82),
-              fontSize: 9,
-              fontWeight: highlight ? FontWeight.w800 : FontWeight.w600,
+          SizedBox(
+            width: width,
+            child: Text(
+              '${point.month}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: mutedColor.withOpacity(highlight ? 0.98 : 0.82),
+                fontSize: 9,
+                fontWeight: highlight ? FontWeight.w800 : FontWeight.w600,
+              ),
             ),
           ),
         ],
