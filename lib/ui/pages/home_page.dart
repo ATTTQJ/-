@@ -1707,10 +1707,10 @@ class _DeviceMonthlyUsageChartState extends State<_DeviceMonthlyUsageChart> {
     final now = DateTime.now();
     final effectivePoints = widget.points.isEmpty
         ? List<_MonthlyUsagePoint>.generate(
-            6,
+            7,
             (index) => _MonthlyUsagePoint(
-              year: DateTime(now.year, now.month - 5 + index).year,
-              month: DateTime(now.year, now.month - 5 + index).month,
+              year: DateTime(now.year, now.month - 6 + index).year,
+              month: DateTime(now.year, now.month - 6 + index).month,
               count: 0,
             ),
           )
@@ -1730,22 +1730,15 @@ class _DeviceMonthlyUsageChartState extends State<_DeviceMonthlyUsageChart> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          '月度用水次数',
-          style: TextStyle(
-            color: widget.secondaryText,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-          ),
-        ),
-        const SizedBox(height: 4),
         SizedBox(
-          height: 94,
+          height: 108,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              const visibleCount = 6;
-              const gap = 8.0;
+              final visibleCount = math.min(
+                effectivePoints.length >= 7 ? 7 : 5,
+                effectivePoints.length,
+              );
+              const gap = 6.0;
               final effectiveVisibleCount = math.min(
                 visibleCount,
                 effectivePoints.length,
@@ -1816,11 +1809,11 @@ class _MonthlyUsageBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
-    final barHeight = math.max(8.0, 48.0 * heightFactor);
+    final barHeight = math.max(10.0, 64.0 * heightFactor);
     final barColor = highlight
         ? activeColor.withOpacity(0.94)
         : activeColor.withOpacity(point.count > 0 ? 0.52 : 0.18);
-    final innerBarWidth = math.min(22.0, math.max(14.0, width * 0.56));
+    final innerBarWidth = math.min(14.0, math.max(8.0, width * 0.32));
 
     return SizedBox(
       width: width,
@@ -1828,26 +1821,27 @@ class _MonthlyUsageBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           SizedBox(
-            height: 16,
+            height: 18,
             child: Text(
               point.count > 0 ? '${point.count}' : '',
               maxLines: 1,
               overflow: TextOverflow.fade,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: mutedColor.withOpacity(0.82),
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           Container(
             width: width,
-            height: 50,
+            height: 68,
             alignment: Alignment.bottomCenter,
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
+              color: Colors.black.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 320),
@@ -1856,16 +1850,16 @@ class _MonthlyUsageBar extends StatelessWidget {
               height: barHeight,
               decoration: BoxDecoration(
                 color: barColor,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 6),
           Text(
             '${point.month}月',
             style: TextStyle(
               color: mutedColor.withOpacity(highlight ? 0.98 : 0.82),
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: highlight ? FontWeight.w800 : FontWeight.w600,
             ),
           ),
