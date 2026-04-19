@@ -1291,14 +1291,14 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           baseTop += i * 45.0 + 10.0;
         } else {
           baseTop +=
-              expandedIndex * 45.0 + 360.0 + (i - expandedIndex - 1) * 70.0;
+              expandedIndex * 45.0 + 345.0 + (i - expandedIndex - 1) * 70.0;
         }
       }
       targetTops.add(baseTop);
 
       final bool isExpanded =
           widget.expandedId == widget.devices[i]['deviceInfId'].toString();
-      final double cardHeight = isExpanded ? 330.0 : 180.0;
+      final double cardHeight = isExpanded ? 315.0 : 180.0;
       if (baseTop + cardHeight > maxStackHeight) {
         maxStackHeight = baseTop + cardHeight;
       }
@@ -1339,14 +1339,14 @@ class _DeviceDeckState extends State<_DeviceDeck> {
           baseTop += i * 45.0 + 10.0;
         } else {
           baseTop +=
-              expandedIndex * 45.0 + 360.0 + (i - expandedIndex - 1) * 70.0;
+              expandedIndex * 45.0 + 345.0 + (i - expandedIndex - 1) * 70.0;
         }
       }
       targetTops.add(baseTop);
 
       final bool isExpanded =
           widget.expandedId == widget.devices[i]['deviceInfId'].toString();
-      final double cardHeight = isExpanded ? 330.0 : 180.0;
+      final double cardHeight = isExpanded ? 315.0 : 180.0;
       if (baseTop + cardHeight > maxStackHeight) {
         maxStackHeight = baseTop + cardHeight;
       }
@@ -1607,16 +1607,16 @@ class _DeckCard extends StatelessWidget {
                     ],
                   ),
                   if (expanded) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     Text(
                       '已使用',
                       style: TextStyle(
                         color: palette.secondaryText,
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     RichText(
                       text: TextSpan(
                         children: [
@@ -1624,7 +1624,7 @@ class _DeckCard extends StatelessWidget {
                             text: '$count',
                             style: TextStyle(
                               color: palette.foreground,
-                              fontSize: 44,
+                              fontSize: 34,
                               fontWeight: FontWeight.w900,
                               height: 1,
                             ),
@@ -1633,14 +1633,14 @@ class _DeckCard extends StatelessWidget {
                             text: ' 次',
                             style: TextStyle(
                               color: palette.secondaryText,
-                              fontSize: 18,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 8),
                     _DeviceMonthlyUsageChart(
                       points: monthlyUsage,
                       foreground: palette.foreground,
@@ -1727,31 +1727,55 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
             letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         SizedBox(
-          height: 88,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              children: List.generate(effectivePoints.length, (index) {
-                final point = effectivePoints[index];
-                final isCurrentMonth =
-                    point.year == now.year && point.month == now.month;
-                return Padding(
-                  padding: EdgeInsets.only(
-                    right: index == effectivePoints.length - 1 ? 0 : 10,
+          height: 106,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const visibleCount = 6;
+              const gap = 10.0;
+              final effectiveVisibleCount = math.min(
+                visibleCount,
+                effectivePoints.length,
+              );
+              final barWidth =
+                  (constraints.maxWidth -
+                          gap * math.max(0, effectiveVisibleCount - 1)) /
+                      effectiveVisibleCount;
+              final contentWidth =
+                  effectivePoints.length <= visibleCount
+                  ? constraints.maxWidth
+                  : barWidth * effectivePoints.length +
+                        gap * (effectivePoints.length - 1);
+
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: SizedBox(
+                  width: contentWidth,
+                  child: Row(
+                    children: List.generate(effectivePoints.length, (index) {
+                      final point = effectivePoints[index];
+                      final isCurrentMonth =
+                          point.year == now.year && point.month == now.month;
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          right: index == effectivePoints.length - 1 ? 0 : gap,
+                        ),
+                        child: _MonthlyUsageBar(
+                          point: point,
+                          maxCount: maxCount,
+                          width: barWidth,
+                          activeColor: foreground,
+                          mutedColor: secondaryText,
+                          highlight: isCurrentMonth,
+                        ),
+                      );
+                    }),
                   ),
-                  child: _MonthlyUsageBar(
-                    point: point,
-                    maxCount: maxCount,
-                    activeColor: foreground,
-                    mutedColor: secondaryText,
-                    highlight: isCurrentMonth,
-                  ),
-                );
-              }),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -1763,6 +1787,7 @@ class _MonthlyUsageBar extends StatelessWidget {
   const _MonthlyUsageBar({
     required this.point,
     required this.maxCount,
+    required this.width,
     required this.activeColor,
     required this.mutedColor,
     required this.highlight,
@@ -1770,6 +1795,7 @@ class _MonthlyUsageBar extends StatelessWidget {
 
   final _MonthlyUsagePoint point;
   final int maxCount;
+  final double width;
   final Color activeColor;
   final Color mutedColor;
   final bool highlight;
@@ -1777,18 +1803,19 @@ class _MonthlyUsageBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
-    final barHeight = math.max(8.0, 44.0 * heightFactor);
+    final barHeight = math.max(10.0, 58.0 * heightFactor);
     final barColor = highlight
         ? activeColor.withOpacity(0.94)
         : activeColor.withOpacity(point.count > 0 ? 0.52 : 0.18);
+    final innerBarWidth = math.min(22.0, math.max(14.0, width * 0.56));
 
     return SizedBox(
-      width: 28,
+      width: width,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           SizedBox(
-            height: 16,
+            height: 18,
             child: Text(
               point.count > 0 ? '${point.count}' : '',
               maxLines: 1,
@@ -1802,8 +1829,8 @@ class _MonthlyUsageBar extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Container(
-            width: 28,
-            height: 48,
+            width: width,
+            height: 62,
             alignment: Alignment.bottomCenter,
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.08),
@@ -1812,7 +1839,7 @@ class _MonthlyUsageBar extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
-              width: 18,
+              width: innerBarWidth,
               height: barHeight,
               decoration: BoxDecoration(
                 color: barColor,
