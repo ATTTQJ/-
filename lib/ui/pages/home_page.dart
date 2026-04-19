@@ -102,7 +102,7 @@ class _HomePageState extends State<HomePage> {
       displayDevices.add({
         'isAddCard': true,
         'deviceInfId': 'add_${displayDevices.length}',
-        'deviceInfName': '濞ｈ濮炵拋鎯ь槵',
+        'deviceInfName': '添加设备',
         'billType': -1,
       });
     }
@@ -143,7 +143,7 @@ class _HomePageState extends State<HomePage> {
           displayDevices.add({
             'isAddCard': true,
             'deviceInfId': 'add_${displayDevices.length}',
-            'deviceInfName': '娣诲姞璁惧',
+            'deviceInfName': '添加设备',
             'billType': -1,
           });
         }
@@ -163,7 +163,7 @@ class _HomePageState extends State<HomePage> {
           usageCounts: usageCounts,
         );
 
-        String currentActiveName = '璁惧';
+        String currentActiveName = '设备';
         if (working && activeId.isNotEmpty) {
           for (final d in deviceProvider.deviceList) {
             if (d['deviceInfId']?.toString() == activeId) {
@@ -258,7 +258,7 @@ class _HomePageState extends State<HomePage> {
                                   context,
                                 ),
                           lastUsedDeviceName: predictedDevice == null
-                              ? '鏆傛棤鍙敤璁惧'
+                              ? '暂无可用设备'
                               : _deviceName(deviceProvider, predictedDevice),
                           onActionTap:
                               dashboardDevice == null ||
@@ -376,7 +376,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _deviceName(DeviceProvider provider, Map<String, dynamic> device) {
-    if (device['isAddCard'] == true) return '娣诲姞璁惧';
+    if (device['isAddCard'] == true) return '添加设备';
 
     final id = device['deviceInfId'].toString();
     final remark = provider.customRemarks[id];
@@ -685,7 +685,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '绉诲姩璁惧',
+            '移动设备',
             style: TextStyle(
               color: DialogUtils.titleColor,
               fontSize: 18,
@@ -702,7 +702,7 @@ class _HomePageState extends State<HomePage> {
             controller: controller,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              hintText: '浣嶇疆',
+              hintText: '位置',
               filled: true,
               fillColor: DialogUtils.surfaceBackgroundColor,
               border: OutlineInputBorder(
@@ -717,7 +717,7 @@ class _HomePageState extends State<HomePage> {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('鍙栨秷'),
+                  child: const Text('取消'),
                 ),
               ),
               Expanded(
@@ -731,7 +731,7 @@ class _HomePageState extends State<HomePage> {
                   onPressed: () async {
                     final parsed = int.tryParse(controller.text.trim());
                     if (parsed == null || parsed < 1 || parsed > maxPosition) {
-                      ToastService.show('浣嶇疆鏃犳晥');
+                      ToastService.show('位置无效');
                       return;
                     }
                     await deviceProvider.moveDeviceToPosition(
@@ -743,7 +743,7 @@ class _HomePageState extends State<HomePage> {
                     }
                   },
                   child: const Text(
-                    '淇濆瓨',
+                    '确认',
                     style: TextStyle(color: Colors.white),
                   ),
                 ),
@@ -816,7 +816,7 @@ class _DashboardCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '楼$balance',
+                    '¥$balance',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -1298,7 +1298,7 @@ class _DeviceDeckState extends State<_DeviceDeck> {
     double maxStackHeight = 0;
     final List<double> targetTops = [];
 
-    // 1. 棰勮绠楁墍鏈夊崱鐗囧湪鏈粦鍔ㄦ椂鐨勫熀纭€ Top 浣嶇疆
+    // 1. 棰勮绠楁墍鏈夊崱鐗囧湪鏈粦鍔ㄦ椂鐨勫熀纭€ Top ??
     for (int i = 0; i < widget.devices.length; i++) {
       double baseTop = widget.paddingTop;
       if (expandedIndex == null) {
@@ -1360,7 +1360,7 @@ class _DeviceDeckState extends State<_DeviceDeck> {
                     : 0.0;
 
                 // 馃専 GPU 娆洪獥绠楁硶鏍稿績锛?
-                // 濡傛灉 offset 瓒呰繃浜?(褰撳墠鍗＄墖鍩虹浣嶇疆 - 鍚搁《绾?锛屽氨鏂藉姞鍚戜笅琛ュ伩浣嶇Щ
+                // 濡傛灉 offset 瓒呰繃浜?(褰撳墠鍗＄墖鍩虹?? - 鍚搁《绾?锛屽氨鏂藉姞鍚戜笅琛ュ伩浣嶇Щ
                 double stickyOffset = math.max(
                   0.0,
                   offset - animatedBaseTop + minTopLimit,
