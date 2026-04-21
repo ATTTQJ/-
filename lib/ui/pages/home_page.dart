@@ -1557,28 +1557,35 @@ class _DeckCard extends StatelessWidget {
                           // 右侧：1比1占比的巨大使用次数
                           Expanded(
                             flex: 1,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '已使用',
-                                  style: TextStyle(
-                                    color: palette.secondaryText,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 10),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '已使用',
+                                      style: TextStyle(
+                                        color: palette.secondaryText,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${count}次',
+                                      style: TextStyle(
+                                        color: palette.foreground,
+                                        fontSize: 48, // 巨大的数字展现张力
+                                        fontWeight: FontWeight.w400,
+                                        height: 1.0,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${count}次',
-                                  style: TextStyle(
-                                    color: palette.foreground,
-                                    fontSize: 48, // 巨大的数字展现张力
-                                    fontWeight: FontWeight.w400,
-                                    height: 1.0,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         ],
@@ -1660,23 +1667,28 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
       (current, point) => math.max(current, point.count),
     );
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(displayPoints.length, (index) {
-          final point = displayPoints[index];
-          return Padding(
-            padding: EdgeInsets.only(right: index == displayPoints.length - 1 ? 0 : 10),
-            child: _MonthlyUsageBar(
-              point: point,
-              maxCount: maxCount,
-              barColor: const Color(0xCC484848),
-              mutedColor: secondaryText,
-            ),
-          );
-        }),
+    return Padding(
+      padding: const EdgeInsets.only(left: 0, top: 0, right: 4, bottom: 8),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: List.generate(displayPoints.length, (index) {
+            final point = displayPoints[index];
+            return Padding(
+              padding: EdgeInsets.only(
+                right: index == displayPoints.length - 1 ? 0 : 10,
+              ),
+              child: _MonthlyUsageBar(
+                point: point,
+                maxCount: maxCount,
+                barColor: const Color(0xCC484848),
+                mutedColor: secondaryText,
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -1698,39 +1710,51 @@ class _MonthlyUsageBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double chartHeight = 86;
+    const double barAreaHeight = 92;
+    const double countLabelHeight = 18;
     final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
     final barHeight = point.count <= 0
         ? 0.0
-        : math.max(6.0, chartHeight * heightFactor);
+        : math.max(6.0, barAreaHeight * heightFactor);
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Text(
-          '${point.count}',
-          style: TextStyle(
-            color: mutedColor.withOpacity(0.9),
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-        const SizedBox(height: 6),
         SizedBox(
-          height: chartHeight,
-          child: Align(
+          height: barAreaHeight + countLabelHeight + 6,
+          width: 26,
+          child: Stack(
             alignment: Alignment.bottomCenter,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 380),
-              curve: Curves.easeOutCubic,
-              width: 16,
-              height: barHeight,
-              decoration: BoxDecoration(
-                color: barColor,
-                borderRadius: BorderRadius.circular(10),
+            clipBehavior: Clip.none,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 380),
+                curve: Curves.easeOutCubic,
+                width: 16,
+                height: barHeight,
+                decoration: BoxDecoration(
+                  color: barColor,
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
-            ),
+              Positioned(
+                bottom: barHeight + 6,
+                child: SizedBox(
+                  width: 26,
+                  height: countLabelHeight,
+                  child: Text(
+                    '${point.count}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: mutedColor.withOpacity(0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
