@@ -1668,7 +1668,7 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.only(left: 0, top: 0, right: 4, bottom: 8),
+      padding: const EdgeInsets.only(left: 0, top: 0, right: 9, bottom: 14),
       child: Align(
         alignment: Alignment.centerRight,
         child: Row(
@@ -1678,7 +1678,7 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
             final point = displayPoints[index];
             return Padding(
               padding: EdgeInsets.only(
-                right: index == displayPoints.length - 1 ? 0 : 10,
+                right: index == displayPoints.length - 1 ? 0 : 7,
               ),
               child: _MonthlyUsageBar(
                 point: point,
