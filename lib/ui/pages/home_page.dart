@@ -1541,7 +1541,7 @@ class _DeckCard extends StatelessWidget {
                   
                   // 🌟 核心重构：1:1 左右分栏布局
                   if (expanded) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Expanded(
                       child: Row(
                         children: [
@@ -1574,11 +1574,22 @@ class _DeckCard extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      '${count}次',
+                                    Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          TextSpan(text: '$count'),
+                                          const TextSpan(
+                                            text: '次',
+                                            style: TextStyle(
+                                              fontSize: 34,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                       style: TextStyle(
                                         color: palette.foreground,
-                                        fontSize: 48, // 巨大的数字展现张力
+                                        fontSize: 48,
                                         fontWeight: FontWeight.w400,
                                         height: 1.0,
                                       ),
@@ -1591,7 +1602,7 @@ class _DeckCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1668,7 +1679,7 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.only(left: 0, top: 0, right: 9, bottom: 14),
+      padding: const EdgeInsets.only(left: 0, top: 0, right: 9, bottom: 6),
       child: Align(
         alignment: Alignment.centerRight,
         child: Row(
@@ -1710,8 +1721,8 @@ class _MonthlyUsageBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double barAreaHeight = 92;
-    const double countLabelHeight = 18;
+    const double barAreaHeight = 64;
+    const double countLabelHeight = 16;
     final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
     final barHeight = point.count <= 0
         ? 0.0
@@ -1721,7 +1732,7 @@ class _MonthlyUsageBar extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         SizedBox(
-          height: barAreaHeight + countLabelHeight + 6,
+          height: barAreaHeight + countLabelHeight + 4,
           width: 26,
           child: Stack(
             alignment: Alignment.bottomCenter,
@@ -1738,7 +1749,7 @@ class _MonthlyUsageBar extends StatelessWidget {
                 ),
               ),
               Positioned(
-                bottom: barHeight + 6,
+                bottom: barHeight + 4,
                 child: SizedBox(
                   width: 26,
                   height: countLabelHeight,
@@ -1757,9 +1768,9 @@ class _MonthlyUsageBar extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         SizedBox(
-          height: 16,
+          height: 14,
           child: Center(
             child: Text(
               '${point.month}',
