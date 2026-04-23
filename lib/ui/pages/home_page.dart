@@ -1656,9 +1656,12 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayPoints = points
+    final usedPoints = points
         .where((point) => point.count > 0)
         .toList(growable: false);
+    final displayPoints = usedPoints.length > 4
+        ? usedPoints.sublist(usedPoints.length - 4)
+        : usedPoints;
 
     if (displayPoints.isEmpty) {
       return Center(
@@ -1679,7 +1682,7 @@ class _DeviceMonthlyUsageChart extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.only(left: 0, top: 0, right: 9, bottom: 6),
+      padding: const EdgeInsets.only(left: 0, top: 0, right: 13, bottom: 10),
       child: Align(
         alignment: Alignment.centerRight,
         child: Row(
