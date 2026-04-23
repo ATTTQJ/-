@@ -152,6 +152,79 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>?> sendRegisterCode(
+    String tel, {
+    int retry = 1,
+    bool muteToast = false,
+  }) async {
+    final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final timestamp = '${nowSeconds}000';
+    final params = <String, String>{
+      'tel': tel,
+      'AndroidVersionName': 'V2.9.2',
+      'AndroidVersionCode': '92',
+      'dateTime': timestamp,
+    };
+    final sortedKeys = params.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final raw =
+        sortedKeys.map((key) => '$key=${params[key]}').join('&') +
+        '&$timestamp&$_realSalt&292';
+    final sign = sha256.convert(utf8.encode(raw)).toString();
+    final body =
+        'tel=${Uri.encodeComponent(tel)}&'
+        'AndroidVersionName=V2.9.2&'
+        'AndroidVersionCode=92&'
+        'sign=$sign&'
+        'dateTime=$timestamp';
+
+    return _postRawForm(
+      path: 'user/sendRegisterMsg',
+      body: body,
+      retry: retry,
+      muteToast: muteToast,
+      resetTransport: true,
+      closeTransportAfterRequest: true,
+    );
+  }
+
+  static Future<Map<String, dynamic>?> loginWithSmsCode({
+    required String tel,
+    required String code,
+    int retry = 1,
+    bool muteToast = false,
+  }) async {
+    final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final timestamp = '${nowSeconds}000';
+    final extra = <String, String>{'tel': tel, 'code': code, 'type': '5'};
+    final sortedKeys = extra.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final raw =
+        'AndroidVersionCode=92&'
+        'AndroidVersionName=V2.9.2&'
+        'dateTime=$timestamp&'
+        '${sortedKeys.map((key) => '$key=${extra[key]}').join('&')}'
+        '&$timestamp&$_realSalt&292';
+    final sign = sha256.convert(utf8.encode(raw)).toString();
+    final body =
+        'tel=${Uri.encodeComponent(tel)}&'
+        'code=${Uri.encodeComponent(code)}&'
+        'type=5&'
+        'AndroidVersionName=V2.9.2&'
+        'AndroidVersionCode=92&'
+        'sign=$sign&'
+        'dateTime=$timestamp';
+
+    return _postRawForm(
+      path: 'user/register',
+      body: body,
+      retry: retry,
+      muteToast: muteToast,
+      resetTransport: true,
+      closeTransportAfterRequest: true,
+    );
+  }
+
   static Future<List<Map<String, dynamic>>?> fetchBillHistoryMonth({
     required String token,
     required String userId,
@@ -347,6 +420,93 @@ class ApiService {
 
   static bool _isSuccessCode(Object? code) {
     return code == 0 || code == '0' || code == 200 || code == '200';
+  }
+
+  static Future<Map<String, dynamic>?> _postRawForm({
+    required String path,
+    required String body,
+    int retry = 1,
+    bool muteToast = false,
+    bool resetTransport = false,
+    bool closeTransportAfterRequest = false,
+  }) async {
+    ClientTransportConnection? transport;
+    try {
+      if (resetTransport) {
+        _sharedTransport = null;
+      }
+      transport = await _getTransport();
+      final bodyBytes = utf8.encode(body);
+      final stream = transport.makeRequest([
+        Header.ascii(':method', 'POST'),
+        Header.ascii(':authority', _domain),
+        Header.ascii(':path', '/ue/app/$path'),
+        Header.ascii(':scheme', 'https'),
+        Header.ascii('content-type', 'application/x-www-form-urlencoded'),
+        Header.ascii('content-length', bodyBytes.length.toString()),
+        Header.ascii('user-agent', 'okhttp/4.9.0'),
+        Header.ascii('accept-encoding', 'gzip'),
+      ], endStream: false);
+
+      stream.sendData(bodyBytes, endStream: true);
+
+      final responseBytes = <int>[];
+      final responseHeaders = <String, String>{};
+      await for (final message in stream.incomingMessages) {
+        if (message is HeadersStreamMessage) {
+          for (final header in message.headers) {
+            responseHeaders[utf8.decode(header.name).toLowerCase()] = utf8
+                .decode(header.value);
+          }
+        } else if (message is DataStreamMessage) {
+          responseBytes.addAll(message.bytes);
+        }
+      }
+
+      final decodedBody = responseHeaders['content-encoding'] == 'gzip'
+          ? utf8.decode(gzip.decode(responseBytes))
+          : utf8.decode(responseBytes);
+      final response = jsonDecode(decodedBody);
+
+      if (!muteToast && !_isSuccessCode(response['code'])) {
+        ToastService.show(
+          response['msg']?.toString() ?? '\u8bf7\u6c42\u5931\u8d25',
+        );
+      }
+
+      if (closeTransportAfterRequest) {
+        await transport.finish();
+        if (identical(_sharedTransport, transport)) {
+          _sharedTransport = null;
+        }
+      }
+
+      if (response is Map<String, dynamic>) {
+        return response;
+      }
+      if (response is Map) {
+        return Map<String, dynamic>.from(response);
+      }
+      return null;
+    } catch (_) {
+      _sharedTransport = null;
+      if (retry > 0) {
+        return _postRawForm(
+          path: path,
+          body: body,
+          retry: retry - 1,
+          muteToast: muteToast,
+          resetTransport: true,
+          closeTransportAfterRequest: closeTransportAfterRequest,
+        );
+      }
+      if (!muteToast) {
+        ToastService.show(
+          '\u7f51\u7edc\u8fde\u63a5\u5f02\u5e38\uff0c\u8bf7\u91cd\u8bd5',
+        );
+      }
+      return null;
+    }
   }
 
   static Future<Map<String, dynamic>?> _uploadUserAvatarOnce({

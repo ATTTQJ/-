@@ -60,23 +60,30 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> sendCode(String tel) async {
-    if (tel.length != 11) return;
+  Future<bool> sendCode(String tel) async {
+    if (tel.length != 11) return false;
     setRequesting(true);
-    await ApiService.post("user/sendRegisterMsg", {
-      "tel": tel,
-    }, muteToast: false);
+    final res = await ApiService.sendRegisterCode(tel, muteToast: false);
     setRequesting(false);
+    final ok =
+        res != null &&
+        (res["code"] == 0 ||
+            res["code"] == "0" ||
+            res["code"] == 200 ||
+            res["code"] == "200");
+    if (ok) {
+      ToastService.show('验证码已发送');
+    }
+    return ok;
   }
 
   Future<bool> login(String tel, String code) async {
     if (tel.isEmpty || code.isEmpty) return false;
     setRequesting(true);
-    final res = await ApiService.post("user/register", {
-      "tel": tel,
-      "code": code,
-      "type": "5",
-    });
+    final res = await ApiService.loginWithSmsCode(
+      tel: tel,
+      code: code,
+    );
     setRequesting(false);
 
     if (res != null && (res["code"] == 0 || res["code"] == "0")) {

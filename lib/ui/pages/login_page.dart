@@ -39,11 +39,13 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    await userP.sendCode(tel);
+    final ok = await userP.sendCode(tel);
     if (!mounted) {
       return;
     }
-    _startCountdown();
+    if (ok) {
+      _startCountdown();
+    }
   }
 
   void _startCountdown() {
