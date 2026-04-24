@@ -1593,48 +1593,62 @@ class _DeckCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  
-                  // 🌟 核心重构：1:1 左右分栏布局
-                  if (expanded) ...[
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: _DeviceUsageStats(
-                        points: monthlyUsage,
-                        totalCount: count,
-                        foreground: palette.foreground,
-                        secondaryText: palette.secondaryText,
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: IgnorePointer(
+                      ignoring: !expanded,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOutCubic,
+                        opacity: expanded ? 1 : 0,
+                        child: RepaintBoundary(
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: _DeviceUsageStats(
+                                  points: monthlyUsage,
+                                  totalCount: count,
+                                  foreground: palette.foreground,
+                                  secondaryText: palette.secondaryText,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _CardActionButton(
+                                    icon: Icons.swap_vert_rounded,
+                                    label: '位置',
+                                    color: palette.foreground,
+                                    bgColor: Colors.black.withOpacity(0.06),
+                                    onTap: onMove,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _CardActionButton(
+                                    icon: Icons.edit_rounded,
+                                    label: '重命名',
+                                    color: palette.foreground,
+                                    bgColor: Colors.black.withOpacity(0.06),
+                                    onTap: onRename,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _CardActionButton(
+                                    icon: Icons.delete_outline_rounded,
+                                    label: '删除',
+                                    color: const Color(0xFFE53935),
+                                    bgColor: const Color(
+                                      0xFFE53935,
+                                    ).withOpacity(0.12),
+                                    onTap: onDelete,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _CardActionButton(
-                          icon: Icons.swap_vert_rounded,
-                          label: '位置',
-                          color: palette.foreground,
-                          bgColor: Colors.black.withOpacity(0.06),
-                          onTap: onMove,
-                        ),
-                        const SizedBox(width: 8),
-                        _CardActionButton(
-                          icon: Icons.edit_rounded,
-                          label: '重命名',
-                          color: palette.foreground,
-                          bgColor: Colors.black.withOpacity(0.06),
-                          onTap: onRename,
-                        ),
-                        const SizedBox(width: 8),
-                        _CardActionButton(
-                          icon: Icons.delete_outline_rounded,
-                          label: '删除',
-                          color: const Color(0xFFE53935),
-                          bgColor: const Color(0xFFE53935).withOpacity(0.12),
-                          onTap: onDelete,
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ],
               ),
             ),
