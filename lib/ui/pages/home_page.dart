@@ -1541,68 +1541,16 @@ class _DeckCard extends StatelessWidget {
                   
                   // 🌟 核心重构：1:1 左右分栏布局
                   if (expanded) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Expanded(
-                      child: Row(
-                        children: [
-                          // 左侧：1比1占比的纯粹进度条图表
-                          Expanded(
-                            flex: 1,
-                            child: _DeviceMonthlyUsageChart(
-                              points: monthlyUsage,
-                              foreground: palette.foreground,
-                              secondaryText: palette.secondaryText,
-                            ),
-                          ),
-                          // 右侧：1比1占比的巨大使用次数
-                          Expanded(
-                            flex: 1,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 10),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '已使用',
-                                      style: TextStyle(
-                                        color: palette.secondaryText,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text.rich(
-                                      TextSpan(
-                                        children: [
-                                          TextSpan(text: '$count'),
-                                          const TextSpan(
-                                            text: '次',
-                                            style: TextStyle(
-                                              fontSize: 34,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      style: TextStyle(
-                                        color: palette.foreground,
-                                        fontSize: 48,
-                                        fontWeight: FontWeight.w400,
-                                        height: 1.0,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: _DeviceUsageStats(
+                        points: monthlyUsage,
+                        totalCount: count,
+                        foreground: palette.foreground,
+                        secondaryText: palette.secondaryText,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1642,151 +1590,160 @@ class _DeckCard extends StatelessWidget {
   }
 }
 
-// 🌟 完全剥离 ScrollView 的纯净图表容器
-class _DeviceMonthlyUsageChart extends StatelessWidget {
-  const _DeviceMonthlyUsageChart({
+class _DeviceUsageStats extends StatelessWidget {
+  const _DeviceUsageStats({
     required this.points,
+    required this.totalCount,
     required this.foreground,
     required this.secondaryText,
   });
 
   final List<_MonthlyUsagePoint> points;
+  final int totalCount;
   final Color foreground;
   final Color secondaryText;
 
   @override
   Widget build(BuildContext context) {
-    final usedPoints = points
-        .where((point) => point.count > 0)
-        .toList(growable: false);
-    final displayPoints = usedPoints.length > 4
-        ? usedPoints.sublist(usedPoints.length - 4)
-        : usedPoints;
+    final displayPoints = _recentUsedMonths(points);
 
-    if (displayPoints.isEmpty) {
-      return Center(
-        child: Text(
-          '暂无记录',
-          style: TextStyle(
-            color: secondaryText.withOpacity(0.9),
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-    }
-
-    final maxCount = displayPoints.fold<int>(
-      0,
-      (current, point) => math.max(current, point.count),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 0, top: 0, right: 13, bottom: 10),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: List.generate(displayPoints.length, (index) {
-            final point = displayPoints[index];
-            return Padding(
-              padding: EdgeInsets.only(
-                right: index == displayPoints.length - 1 ? 0 : 7,
-              ),
-              child: _MonthlyUsageBar(
-                point: point,
-                maxCount: maxCount,
-                barColor: const Color(0xCC484848),
-                mutedColor: secondaryText,
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-}
-
-// 🌟 纯净的进度条柱状体，上方带数字
-class _MonthlyUsageBar extends StatelessWidget {
-  const _MonthlyUsageBar({
-    required this.point,
-    required this.maxCount,
-    required this.barColor,
-    required this.mutedColor,
-  });
-
-  final _MonthlyUsagePoint point;
-  final int maxCount;
-  final Color barColor;
-  final Color mutedColor;
-
-  @override
-  Widget build(BuildContext context) {
-    const double barAreaHeight = 64;
-    const double countLabelHeight = 16;
-    final heightFactor = maxCount <= 0 ? 0.0 : point.count / maxCount;
-    final barHeight = point.count <= 0
-        ? 0.0
-        : math.max(6.0, barAreaHeight * heightFactor);
-
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          height: barAreaHeight + countLabelHeight + 4,
-          width: 26,
-          child: Stack(
-            alignment: Alignment.bottomCenter,
-            clipBehavior: Clip.none,
+          width: 150,
+          child: displayPoints.isEmpty
+              ? Text(
+                  '暂无记录',
+                  style: TextStyle(
+                    color: secondaryText.withOpacity(0.9),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+              : Wrap(
+                  spacing: 6,
+                  runSpacing: 5,
+                  children: displayPoints
+                      .map(
+                        (point) => _MonthUsagePill(
+                          point: point,
+                          foreground: foreground,
+                          secondaryText: secondaryText,
+                        ),
+                      )
+                      .toList(),
+                ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          width: 1,
+          height: 54,
+          color: Colors.black.withOpacity(0.08),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 380),
-                curve: Curves.easeOutCubic,
-                width: 16,
-                height: barHeight,
-                decoration: BoxDecoration(
-                  color: barColor,
-                  borderRadius: BorderRadius.circular(10),
+              Text(
+                '已使用',
+                style: TextStyle(
+                  color: secondaryText,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              Positioned(
-                bottom: barHeight + 4,
-                child: SizedBox(
-                  width: 26,
-                  height: countLabelHeight,
-                  child: Text(
-                    '${point.count}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: mutedColor.withOpacity(0.9),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+              const SizedBox(height: 2),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: '$totalCount'),
+                    TextSpan(
+                      text: ' 次',
+                      style: TextStyle(
+                        color: secondaryText.withOpacity(0.75),
+                        fontSize: 23,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+                maxLines: 1,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: 52,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 4),
-        SizedBox(
-          height: 14,
-          child: Center(
-            child: Text(
-              '${point.month}',
-              style: TextStyle(
-                color: mutedColor.withOpacity(0.8),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+      ],
+    );
+  }
+
+  List<_MonthlyUsagePoint> _recentUsedMonths(List<_MonthlyUsagePoint> source) {
+    final usedPoints = source
+        .where((point) => point.count > 0)
+        .toList(growable: false);
+    return usedPoints.length > 4
+        ? usedPoints.sublist(usedPoints.length - 4)
+        : usedPoints;
+  }
+}
+
+class _MonthUsagePill extends StatelessWidget {
+  const _MonthUsagePill({
+    required this.point,
+    required this.foreground,
+    required this.secondaryText,
+  });
+
+  final _MonthlyUsagePoint point;
+  final Color foreground;
+  final Color secondaryText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${point.month}月',
+            style: TextStyle(
+              color: secondaryText.withOpacity(0.62),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              height: 1.0,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            '${point.count}次',
+            style: TextStyle(
+              color: foreground,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              height: 1.0,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
