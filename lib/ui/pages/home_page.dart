@@ -117,6 +117,8 @@ class _HomePageState extends State<HomePage> {
   _UsageAggregation _getUsageAggregation({
     required DeviceProvider deviceProvider,
     required List<WaterUsageHistoryEntry> history,
+    required Map<String, int> providerUsageCounts,
+    required Map<String, Map<String, int>> providerMonthlyUsageCounts,
   }) {
     if (identical(_cachedSourceDevices, deviceProvider.deviceList) &&
         identical(_cachedUsageHistory, history) &&
@@ -127,6 +129,8 @@ class _HomePageState extends State<HomePage> {
     final aggregation = _buildUsageAggregation(
       deviceProvider: deviceProvider,
       history: history,
+      providerUsageCounts: providerUsageCounts,
+      providerMonthlyUsageCounts: providerMonthlyUsageCounts,
     );
     _cachedSourceDevices = deviceProvider.deviceList;
     _cachedUsageHistory = history;
@@ -155,6 +159,8 @@ class _HomePageState extends State<HomePage> {
         final usageAggregation = _getUsageAggregation(
           deviceProvider: deviceProvider,
           history: waterProvider.history,
+          providerUsageCounts: waterProvider.deviceUsageCounts,
+          providerMonthlyUsageCounts: waterProvider.deviceMonthlyUsageCounts,
         );
         final usageCounts = usageAggregation.totalCounts;
         final monthlyUsageByDevice = usageAggregation.monthlyUsageByDevice;
@@ -417,6 +423,8 @@ class _HomePageState extends State<HomePage> {
   _UsageAggregation _buildUsageAggregation({
     required DeviceProvider deviceProvider,
     required List<WaterUsageHistoryEntry> history,
+    required Map<String, int> providerUsageCounts,
+    required Map<String, Map<String, int>> providerMonthlyUsageCounts,
   }) {
     final totalCounts = <String, int>{};
     final monthlyCounts = <String, Map<String, int>>{};
@@ -453,6 +461,40 @@ class _HomePageState extends State<HomePage> {
       final earliestMonth = earliestMonthByDevice[matchedId];
       if (earliestMonth == null || entryMonth.isBefore(earliestMonth)) {
         earliestMonthByDevice[matchedId] = entryMonth;
+      }
+    }
+
+    for (final usageEntry in providerUsageCounts.entries) {
+      final deviceId = usageEntry.key.trim();
+      if (!totalCounts.containsKey(deviceId)) {
+        continue;
+      }
+      totalCounts[deviceId] = math.max(
+        totalCounts[deviceId] ?? 0,
+        usageEntry.value,
+      );
+    }
+
+    for (final deviceEntry in providerMonthlyUsageCounts.entries) {
+      final deviceId = deviceEntry.key.trim();
+      final deviceMonthCounts = monthlyCounts[deviceId];
+      if (deviceMonthCounts == null) {
+        continue;
+      }
+
+      for (final monthEntry in deviceEntry.value.entries) {
+        final monthDate = _monthDateFromKey(monthEntry.key);
+        if (monthDate == null || _isAfterMonth(monthDate, currentMonth)) {
+          continue;
+        }
+        deviceMonthCounts[monthEntry.key] = math.max(
+          deviceMonthCounts[monthEntry.key] ?? 0,
+          monthEntry.value,
+        );
+        final earliestMonth = earliestMonthByDevice[deviceId];
+        if (earliestMonth == null || monthDate.isBefore(earliestMonth)) {
+          earliestMonthByDevice[deviceId] = monthDate;
+        }
       }
     }
 
@@ -599,6 +641,19 @@ class _HomePageState extends State<HomePage> {
 
   String _monthKeyForDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}';
+  }
+
+  DateTime? _monthDateFromKey(String monthKey) {
+    final parts = monthKey.split('-');
+    if (parts.length != 2) {
+      return null;
+    }
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    if (year == null || month == null || month < 1 || month > 12) {
+      return null;
+    }
+    return DateTime(year, month);
   }
 
   DateTime _minMonth(DateTime a, DateTime b) {

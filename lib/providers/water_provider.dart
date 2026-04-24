@@ -19,9 +19,9 @@ class WaterProvider extends ChangeNotifier {
     'com.fakeuy.water/siri',
   );
 
-  static const int _historySchemaVersion = 4;
+  static const int _historySchemaVersion = 5;
   static const int _historyBackfillMaxMonths = 48;
-  static const int _historyBackfillEmptyStopCount = 6;
+  static const int _historyBackfillEmptyStopCount = _historyBackfillMaxMonths;
   static const String _historyHiveBoxName = 'water_history_box';
   static const String _localSessionHiveKey = 'local_usage_sessions_v1';
 
@@ -50,6 +50,7 @@ class WaterProvider extends ChangeNotifier {
   final Map<String, WaterUsageHistoryEntry> _durationPatches = {};
   final Map<String, String> _historyPatchLinks = {};
   final Map<String, int> _deviceUsageCounts = {};
+  final Map<String, Map<String, int>> _deviceMonthlyUsageCounts = {};
   final Set<String> _countedUsageOrderNums = <String>{};
   List<WaterUsageHistoryEntry> _localDurationRecords = [];
   final Set<String> _syncedHistoryMonths = <String>{};
@@ -94,6 +95,15 @@ class WaterProvider extends ChangeNotifier {
   bool get hasLoadedLocalState => _hasLoadedLocalState;
 
   Map<String, int> get deviceUsageCounts => Map.unmodifiable(_deviceUsageCounts);
+
+  Map<String, Map<String, int>> get deviceMonthlyUsageCounts => Map.unmodifiable(
+    _deviceMonthlyUsageCounts.map(
+      (deviceId, monthCounts) => MapEntry(
+        deviceId,
+        Map<String, int>.unmodifiable(monthCounts),
+      ),
+    ),
+  );
 
   List<WaterUsageHistoryEntry> get localDurationRecords =>
       List.unmodifiable(_localDurationRecords);
@@ -185,6 +195,11 @@ class WaterProvider extends ChangeNotifier {
     if (orderNum.isNotEmpty && savedStartTime > 0) {
       startTime = DateTime.fromMillisecondsSinceEpoch(savedStartTime);
       _startRunningTimer();
+      _incrementUsageCount(
+        activeDeviceId,
+        orderNum,
+        createdAt: startTime,
+      );
     } else {
       startTime = null;
       runningTime = '00:00';
@@ -351,6 +366,11 @@ class WaterProvider extends ChangeNotifier {
           await prefs.setString('water_initial_balance', currentBalance.trim());
         }
 
+        _incrementUsageCount(
+          targetDeviceId,
+          orderNum,
+          createdAt: startTime,
+        );
         _startRunningTimer();
         ToastService.show('\u8bbe\u5907\u5df2\u5f00\u542f\uff0c\u51fa\u6c34\u4e2d...');
         return true;
@@ -628,6 +648,7 @@ class WaterProvider extends ChangeNotifier {
     _durationPatches.clear();
     _historyPatchLinks.clear();
     _deviceUsageCounts.clear();
+    _deviceMonthlyUsageCounts.clear();
     _countedUsageOrderNums.clear();
     _localDurationRecords.clear();
     _syncedHistoryMonths.clear();
@@ -772,10 +793,17 @@ class WaterProvider extends ChangeNotifier {
     _countedUsageOrderNums.add(usageKey);
     _deviceUsageCounts[resolvedDeviceId] =
         (_deviceUsageCounts[resolvedDeviceId] ?? 0) + 1;
+    final monthKey = _monthKeyForDate(createdAt ?? DateTime.now());
+    final monthCounts = _deviceMonthlyUsageCounts.putIfAbsent(
+      resolvedDeviceId,
+      () => <String, int>{},
+    );
+    monthCounts[monthKey] = (monthCounts[monthKey] ?? 0) + 1;
   }
 
   void _refreshDeviceUsageCounts() {
     _deviceUsageCounts.clear();
+    _deviceMonthlyUsageCounts.clear();
     _countedUsageOrderNums.clear();
 
     _reconcileUsageCountsFromEntries(_localDurationRecords);
