@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/toast_service.dart';
 import '../models/water_usage_history_entry.dart';
 import '../services/api_service.dart';
+import '../services/live_activity_service.dart';
 
 typedef BalanceUpdateCallback = Future<void> Function(String balance);
 
@@ -37,6 +38,7 @@ class WaterProvider extends ChangeNotifier {
   static const String _historyPatchLinksKey = 'water_history_patch_links';
   static const String _deviceUsageStatsKey = 'water_device_usage_stats';
   static const String _countedUsageOrderNumsKey = 'water_counted_usage_order_nums';
+  static const String _activeDeviceNameKey = 'water_activeDeviceName';
 
   String orderNum = '';
   String tableName = '';
@@ -122,6 +124,7 @@ class WaterProvider extends ChangeNotifier {
     tableName = prefs.getString('water_tableName') ?? '';
     mac = prefs.getString('water_mac') ?? '';
     activeDeviceId = prefs.getString('water_activeDeviceId') ?? '';
+    final activeDeviceName = prefs.getString(_activeDeviceNameKey) ?? '';
 
     _monthlyServerHistoryCache
       ..clear()
@@ -200,12 +203,23 @@ class WaterProvider extends ChangeNotifier {
         orderNum,
         createdAt: startTime,
       );
+      unawaited(
+        LiveActivityService.startWater(
+          deviceId: activeDeviceId,
+          deviceName: activeDeviceName.trim().isEmpty
+              ? '\u5f53\u524d\u8bbe\u5907'
+              : activeDeviceName.trim(),
+          orderNum: orderNum,
+          startTime: startTime!,
+        ),
+      );
     } else {
       startTime = null;
       runningTime = '00:00';
       timer?.cancel();
       timer = null;
       activeDeviceId = '';
+      unawaited(LiveActivityService.endWater(orderNum: '', elapsedSeconds: 0));
     }
 
     _hasLoadedLocalState = true;
@@ -352,12 +366,14 @@ class WaterProvider extends ChangeNotifier {
         tableName = res['data']['tableName']?.toString() ?? '';
         mac = res['data']['mac']?.toString() ?? '';
         activeDeviceId = targetDeviceId;
+        final activeDeviceName = _liveActivityDeviceName(device);
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('water_orderNum', orderNum);
         await prefs.setString('water_tableName', tableName);
         await prefs.setString('water_mac', mac);
         await prefs.setString('water_activeDeviceId', activeDeviceId);
+        await prefs.setString(_activeDeviceNameKey, activeDeviceName);
         await prefs.setInt(
           'water_start_time',
           startTime!.millisecondsSinceEpoch,
@@ -370,6 +386,14 @@ class WaterProvider extends ChangeNotifier {
           targetDeviceId,
           orderNum,
           createdAt: startTime,
+        );
+        unawaited(
+          LiveActivityService.startWater(
+            deviceId: targetDeviceId,
+            deviceName: activeDeviceName,
+            orderNum: orderNum,
+            startTime: startTime!,
+          ),
         );
         _startRunningTimer();
         ToastService.show('\u8bbe\u5907\u5df2\u5f00\u542f\uff0c\u51fa\u6c34\u4e2d...');
@@ -427,6 +451,7 @@ class WaterProvider extends ChangeNotifier {
         await prefs.remove('water_start_time');
         await prefs.remove('water_initial_balance');
         await prefs.remove('water_activeDeviceId');
+        await prefs.remove(_activeDeviceNameKey);
 
         orderNum = '';
         tableName = '';
@@ -450,6 +475,13 @@ class WaterProvider extends ChangeNotifier {
         final safeDeviceName = currentDeviceName.trim().isEmpty
             ? '\u672a\u547d\u540d\u8bbe\u5907'
             : currentDeviceName.trim();
+
+        unawaited(
+          LiveActivityService.endWater(
+            orderNum: currentOrderNum,
+            elapsedSeconds: durationSeconds,
+          ),
+        );
 
         ToastService.show(
           '\u5df2\u5173\u6c34\n\u6263\u8d39\u91d1\u989d\uff1a\u00a5${amount.toStringAsFixed(2)}\n\u7528\u6c34\u65f6\u957f\uff1a${_formatDuration(durationSeconds)}',
@@ -1384,6 +1416,27 @@ class WaterProvider extends ChangeNotifier {
 
   String _stripDevicePrefix(String value) {
     return value.replaceFirst(RegExp(r'^[12]-'), '');
+  }
+
+  String _liveActivityDeviceName(Map<String, dynamic> device) {
+    const candidateKeys = [
+      'displayName',
+      'customRemark',
+      'remark',
+      'deviceRemark',
+      'deviceInfName',
+      'deviceName',
+      'name',
+    ];
+
+    for (final key in candidateKeys) {
+      final value = device[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) {
+        return _stripDevicePrefix(value);
+      }
+    }
+
+    return '\u5f53\u524d\u8bbe\u5907';
   }
 
   Future<String?> _syncBalance(String token, String userId) async {
