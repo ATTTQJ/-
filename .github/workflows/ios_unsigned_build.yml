@@ -63,6 +63,7 @@ jobs:
         env:
           COCOAPODS_PARALLEL_CODE_SIGN: false
         run: |
+          set +e
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
@@ -80,7 +81,27 @@ jobs:
             PROVISIONING_PROFILE= \
             CODE_SIGN_ENTITLEMENTS= \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build
+            build > xcodebuild.log 2>&1
+          status=$?
+
+          if [ "$status" -ne 0 ]; then
+            echo "::error::xcodebuild failed with exit code $status"
+            echo "---- xcodebuild errors/warnings ----"
+            grep -nEi "error:|warning:|fatal error:|BUILD FAILED|SwiftCompile|CompileSwift|PhaseScriptExecution|CodeSign|Provisioning|Signing" xcodebuild.log | tail -n 160 || true
+            echo "---- last 220 lines ----"
+            tail -n 220 xcodebuild.log
+            exit "$status"
+          fi
+
+          echo "xcodebuild succeeded. Warning summary:"
+          grep -nEi "warning:" xcodebuild.log | tail -n 80 || true
+
+      - name: Upload xcodebuild log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
 
       - name: Package unsigned IPA
         run: |
