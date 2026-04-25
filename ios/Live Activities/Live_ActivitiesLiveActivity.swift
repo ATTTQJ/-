@@ -35,14 +35,15 @@ struct Live_ActivitiesLiveActivity: Widget {
                     Spacer()
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
             .activityBackgroundTint(Color(red: 0.08, green: 0.09, blue: 0.13))
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Label("用水中", systemImage: "drop.fill")
+                        Label("Running", systemImage: "drop.fill")
                             .font(.headline.weight(.semibold))
                             .foregroundStyle(Color.cyan)
                         Text(context.attributes.deviceName)
@@ -64,7 +65,7 @@ struct Live_ActivitiesLiveActivity: Widget {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("订单 \(context.attributes.orderNum)")
+                        Text(orderTail(context.attributes.orderNum))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -72,16 +73,31 @@ struct Live_ActivitiesLiveActivity: Widget {
                 }
             } compactLeading: {
                 Image(systemName: "drop.fill")
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(Color.cyan)
+                    .frame(width: 34, height: 28, alignment: .center)
             } compactTrailing: {
                 WaterLiveTimerText(state: context.state)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .frame(width: 54, height: 28, alignment: .trailing)
             } minimal: {
                 Image(systemName: "drop.fill")
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.cyan)
             }
             .keylineTint(Color.cyan)
         }
+    }
+
+    private func orderTail(_ orderNum: String) -> String {
+        let trimmed = orderNum.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return ""
+        }
+        return "Order \(String(trimmed.suffix(5)))"
     }
 }
 
