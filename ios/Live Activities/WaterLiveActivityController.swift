@@ -65,16 +65,19 @@ enum WaterLiveActivityController {
         )
 
         for activity in activities {
+            await update(activity: activity, state: state)
+        }
+
+        try? await Task.sleep(nanoseconds: 15_000_000_000)
+
+        for activity in activities {
             if #available(iOS 16.2, *) {
                 await activity.end(
                     ActivityContent(state: state, staleDate: nil),
-                    dismissalPolicy: .after(Date().addingTimeInterval(15))
+                    dismissalPolicy: .immediate
                 )
             } else {
-                await activity.end(
-                    using: state,
-                    dismissalPolicy: .after(Date().addingTimeInterval(15))
-                )
+                await activity.end(using: state, dismissalPolicy: .immediate)
             }
         }
     }

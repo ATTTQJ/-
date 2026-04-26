@@ -12,16 +12,8 @@ struct Live_ActivitiesLiveActivity: Widget {
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) {
-                    WaterIslandHeader(context: context)
-                }
-
-                DynamicIslandExpandedRegion(.trailing) {
-                    WaterIslandTrailingAction(context: context)
-                }
-
                 DynamicIslandExpandedRegion(.bottom) {
-                    WaterIslandBottom(context: context)
+                    WaterIslandExpandedContent(context: context)
                 }
             } compactLeading: {
                 WaterCompactIcon(context: context)
@@ -53,10 +45,12 @@ private struct WaterLockScreenView: View {
                 Text(context.state.statusText)
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
+
                 Text(context.attributes.deviceName)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.66))
                     .lineLimit(1)
+                    .truncationMode(.tail)
 
                 if context.state.isRunning {
                     WaterLiveTimerText(state: context.state)
@@ -83,73 +77,86 @@ private struct WaterLockScreenView: View {
     }
 }
 
-private struct WaterIslandHeader: View {
+private struct WaterIslandExpandedContent: View {
     let context: ActivityViewContext<WaterLiveActivityAttributes>
 
     var body: some View {
-        HStack(spacing: 11) {
-            WaterStatusIcon(context: context, size: 42)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                WaterStatusIcon(context: context, size: 38)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(context.state.statusText)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                Text(context.attributes.deviceName)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-        }
-        .frame(maxWidth: 210, alignment: .leading)
-    }
-}
-
-private struct WaterIslandTrailingAction: View {
-    let context: ActivityViewContext<WaterLiveActivityAttributes>
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            Spacer(minLength: 0)
-            if context.state.isRunning {
-                WaterStopButton()
-            } else {
-                WaterAmountText(state: context.state)
-            }
-        }
-        .frame(maxHeight: .infinity, alignment: .bottomTrailing)
-        .padding(.bottom, 2)
-    }
-}
-
-private struct WaterIslandBottom: View {
-    let context: ActivityViewContext<WaterLiveActivityAttributes>
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            Image(systemName: context.state.isRunning ? "timer" : "checkmark.circle.fill")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.68))
-
-            VStack(alignment: .leading, spacing: 3) {
-                if context.state.isRunning {
-                    WaterLiveTimerText(state: context.state)
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .monospacedDigit()
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(context.state.statusText)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+
+                    Text(context.attributes.deviceName)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.66))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack(alignment: .bottom, spacing: 12) {
+                if context.state.isRunning {
+                    WaterElapsedBlock(state: context.state)
                 } else {
-                    WaterAmountText(state: context.state)
-                    Text("用水 \(formatDuration(context.state.elapsedSeconds))")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.58))
+                    WaterFinishedBlock(state: context.state)
+                }
+
+                Spacer(minLength: 8)
+
+                if context.state.isRunning {
+                    WaterStopButton()
+                        .padding(.bottom, 2)
                 }
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(.top, 4)
+        .padding(.top, 2)
+    }
+}
+
+private struct WaterElapsedBlock: View {
+    let state: WaterLiveActivityAttributes.ContentState
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("已使用")
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.62))
+
+            WaterLiveTimerText(state: state)
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+        .lineLimit(1)
+    }
+}
+
+private struct WaterFinishedBlock: View {
+    let state: WaterLiveActivityAttributes.ContentState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("扣费")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.62))
+
+                WaterAmountText(state: state)
+            }
+
+            Text("用水 \(formatDuration(state.elapsedSeconds))")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.62))
+                .lineLimit(1)
+        }
     }
 }
 
@@ -171,7 +178,7 @@ private struct WaterStopButton: View {
                 Text("结束")
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, 20)
                     .padding(.vertical, 9)
                     .background(
                         Capsule()
@@ -204,7 +211,7 @@ private struct WaterAmountText: View {
 
     var body: some View {
         Text(state.amountText.isEmpty ? "已完成" : state.amountText)
-            .font(.system(size: state.amountText.isEmpty ? 17 : 28, weight: .bold, design: .rounded))
+            .font(.system(size: state.amountText.isEmpty ? 17 : 30, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
             .lineLimit(1)
             .minimumScaleFactor(0.78)
