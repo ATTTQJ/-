@@ -143,6 +143,7 @@ import UIKit
             statusText: "正在用水",
             startedAt: startedAt,
             elapsedSeconds: elapsedSeconds,
+            amountText: "",
             isRunning: true
         )
 
@@ -173,6 +174,10 @@ import UIKit
             statusText: stringValue(arguments["statusText"], fallback: "正在用水"),
             startedAt: startedAt,
             elapsedSeconds: intValue(arguments["elapsedSeconds"]),
+            amountText: stringValue(
+                arguments["amountText"],
+                fallback: activity.contentState.amountText
+            ),
             isRunning: boolValue(arguments["isRunning"], fallback: true)
         )
 
@@ -196,21 +201,26 @@ import UIKit
             ? Activity<WaterLiveActivityAttributes>.activities
             : targetActivities
         let elapsedSeconds = intValue(arguments["elapsedSeconds"])
+        let amountText = stringValue(arguments["amountText"])
 
         for activity in activities {
             let state = WaterLiveActivityAttributes.ContentState(
                 statusText: "已关水",
                 startedAt: activity.contentState.startedAt,
                 elapsedSeconds: elapsedSeconds,
+                amountText: amountText,
                 isRunning: false
             )
             if #available(iOS 16.2, *) {
                 await activity.end(
                     ActivityContent(state: state, staleDate: nil),
-                    dismissalPolicy: .immediate
+                    dismissalPolicy: .after(Date().addingTimeInterval(12))
                 )
             } else {
-                await activity.end(using: state, dismissalPolicy: .immediate)
+                await activity.end(
+                    using: state,
+                    dismissalPolicy: .after(Date().addingTimeInterval(12))
+                )
             }
         }
 

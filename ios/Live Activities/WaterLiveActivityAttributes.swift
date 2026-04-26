@@ -7,6 +7,7 @@ struct WaterLiveActivityAttributes: ActivityAttributes {
         var statusText: String
         var startedAt: Date
         var elapsedSeconds: Int
+        var amountText: String
         var isRunning: Bool
     }
 

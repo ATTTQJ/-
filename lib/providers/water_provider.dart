@@ -480,6 +480,7 @@ class WaterProvider extends ChangeNotifier {
           LiveActivityService.endWater(
             orderNum: currentOrderNum,
             elapsedSeconds: durationSeconds,
+            amountText: '¥${amount.toStringAsFixed(2)}',
           ),
         );
 

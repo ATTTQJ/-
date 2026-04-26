@@ -6,75 +6,26 @@ import SwiftUI
 struct Live_ActivitiesLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WaterLiveActivityAttributes.self) { context in
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: "drop.fill")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(Color.cyan)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(context.state.statusText)
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Text(context.attributes.deviceName)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.72))
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-                }
-
-                HStack(spacing: 8) {
-                    Image(systemName: "timer")
-                        .foregroundStyle(.white.opacity(0.72))
-                    WaterLiveTimerText(state: context.state)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                    Spacer()
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+            WaterLockScreenView(context: context)
             .activityBackgroundTint(Color(red: 0.08, green: 0.09, blue: 0.13))
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label("Running", systemImage: "drop.fill")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(Color.cyan)
-                        Text(context.attributes.deviceName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    WaterIslandHeader(context: context)
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
-                    WaterLiveTimerText(state: context.state)
-                        .font(.title3.weight(.bold))
-                        .monospacedDigit()
+                    WaterIslandTrailingAction(context: context)
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        Text(context.state.statusText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(orderTail(context.attributes.orderNum))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    WaterIslandBottom(context: context)
                 }
             } compactLeading: {
-                Image(systemName: "drop.fill")
+                Image(systemName: context.state.isRunning ? "drop.fill" : "checkmark.circle.fill")
                     .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(Color.cyan)
+                    .foregroundStyle(context.state.isRunning ? Color.cyan : Color.green)
                     .frame(width: 34, height: 28, alignment: .center)
             } compactTrailing: {
                 WaterLiveTimerText(state: context.state)
@@ -84,20 +35,149 @@ struct Live_ActivitiesLiveActivity: Widget {
                     .minimumScaleFactor(0.82)
                     .frame(width: 54, height: 28, alignment: .trailing)
             } minimal: {
-                Image(systemName: "drop.fill")
+                Image(systemName: context.state.isRunning ? "drop.fill" : "checkmark.circle.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.cyan)
+                    .foregroundStyle(context.state.isRunning ? Color.cyan : Color.green)
             }
-            .keylineTint(Color.cyan)
+            .keylineTint(context.state.isRunning ? Color.cyan : Color.green)
         }
     }
+}
 
-    private func orderTail(_ orderNum: String) -> String {
-        let trimmed = orderNum.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return ""
+private struct WaterLockScreenView: View {
+    let context: ActivityViewContext<WaterLiveActivityAttributes>
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            WaterStatusIcon(isRunning: context.state.isRunning, size: 42)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(context.state.isRunning ? "用水中" : "已关水")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                Text(context.attributes.deviceName)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.68))
+                    .lineLimit(1)
+                WaterLiveTimerText(state: context.state)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+            }
+
+            Spacer(minLength: 8)
+
+            if !context.state.isRunning {
+                WaterAmountText(state: context.state)
+            }
         }
-        return "Order \(String(trimmed.suffix(5)))"
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+}
+
+private struct WaterIslandHeader: View {
+    let context: ActivityViewContext<WaterLiveActivityAttributes>
+
+    var body: some View {
+        HStack(spacing: 10) {
+            WaterStatusIcon(isRunning: context.state.isRunning, size: 40)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(context.state.isRunning ? "用水中" : "已关水")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(context.attributes.deviceName)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+        }
+        .frame(maxWidth: 190, alignment: .leading)
+    }
+}
+
+private struct WaterIslandTrailingAction: View {
+    let context: ActivityViewContext<WaterLiveActivityAttributes>
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            if context.state.isRunning {
+                Spacer(minLength: 22)
+                Link(destination: URL(string: "waterapp://stop")!) {
+                    Text("结束")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(
+                            Capsule()
+                                .fill(Color(red: 0.56, green: 0.16, blue: 0.14))
+                        )
+                }
+            } else {
+                WaterAmountText(state: context.state)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .bottomTrailing)
+    }
+}
+
+private struct WaterIslandBottom: View {
+    let context: ActivityViewContext<WaterLiveActivityAttributes>
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            Image(systemName: context.state.isRunning ? "timer" : "checkmark.circle.fill")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.68))
+
+            VStack(alignment: .leading, spacing: 3) {
+                WaterLiveTimerText(state: context.state)
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+
+                if !context.state.isRunning {
+                    Text("用水 \(formatDuration(context.state.elapsedSeconds))")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.58))
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 6)
+    }
+}
+
+private struct WaterStatusIcon: View {
+    let isRunning: Bool
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill((isRunning ? Color.cyan : Color.green).opacity(0.18))
+            Image(systemName: isRunning ? "drop.fill" : "checkmark")
+                .font(.system(size: size * 0.48, weight: .bold))
+                .foregroundStyle(isRunning ? Color.cyan : Color.green)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+private struct WaterAmountText: View {
+    let state: WaterLiveActivityAttributes.ContentState
+
+    var body: some View {
+        Text(state.amountText.isEmpty ? "已完成" : state.amountText)
+            .font(.system(size: state.amountText.isEmpty ? 17 : 24, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
     }
 }
 
@@ -118,4 +198,14 @@ private struct WaterLiveTimerText: View {
         let remainingSeconds = safeSeconds % 60
         return "\(minutes):\(String(format: "%02d", remainingSeconds))"
     }
+}
+
+private func formatDuration(_ seconds: Int) -> String {
+    let safeSeconds = max(0, seconds)
+    let minutes = safeSeconds / 60
+    let remainingSeconds = safeSeconds % 60
+    if minutes <= 0 {
+        return "\(remainingSeconds)秒"
+    }
+    return "\(minutes)分\(remainingSeconds)秒"
 }

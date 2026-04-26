@@ -47,12 +47,14 @@ class LiveActivityService {
   static Future<void> endWater({
     required String orderNum,
     required int elapsedSeconds,
+    String amountText = '',
   }) async {
     await _invoke(
       'endWater',
       {
         'orderNum': orderNum,
         'elapsedSeconds': elapsedSeconds,
+        'amountText': amountText,
       },
     );
   }
