@@ -92,7 +92,9 @@ class WaterUsageHistoryEntry {
       durationSeconds: clearDuration
           ? null
           : (durationSeconds ?? this.durationSeconds),
-      durationLabel: clearDuration ? null : (durationLabel ?? this.durationLabel),
+      durationLabel: clearDuration
+          ? null
+          : (durationLabel ?? this.durationLabel),
       legacyText: legacyText ?? this.legacyText,
     );
   }
@@ -104,7 +106,9 @@ class WaterUsageHistoryEntry {
         return WaterUsageHistoryEntry.fromJson(decoded);
       }
       if (decoded is Map) {
-        return WaterUsageHistoryEntry.fromJson(Map<String, dynamic>.from(decoded));
+        return WaterUsageHistoryEntry.fromJson(
+          Map<String, dynamic>.from(decoded),
+        );
       }
     } catch (_) {
       // Keep backward compatibility with legacy plain-text cache.
@@ -127,7 +131,14 @@ class WaterUsageHistoryEntry {
           _parseAmount(json['amount']) ??
           _parseAmount(json['expAmountStr']) ??
           0,
-      orderNum: json['orderNum']?.toString() ?? json['id']?.toString() ?? '',
+      orderNum: _firstNonEmpty([
+        json['orderNum'],
+        json['orderNo'],
+        json['orderNumber'],
+        json['orderId'],
+        json['orderSn'],
+        json['id'],
+      ]),
       deviceId: json['deviceId']?.toString(),
       isLocalOnly: json['isLocalOnly'] == true,
       durationSeconds: _parseDurationSeconds(
@@ -160,20 +171,25 @@ class WaterUsageHistoryEntry {
           _parseServerDateTime(json['payTypeStr'] ?? json['createTime']) ??
           DateTime.now(),
       deviceName: _buildServerDeviceName(
-        time: (json['time'] ?? json['deviceName'] ?? json['deviceInfName'] ?? '')
-            .toString(),
+        time:
+            (json['time'] ?? json['deviceName'] ?? json['deviceInfName'] ?? '')
+                .toString(),
         title: (json['title'] ?? '').toString(),
       ),
       amount:
           _parseAmount(
-            json['expAmountStr']
-                ?.toString()
-                .replaceAll('\u5143', '')
-                .trim(),
+            json['expAmountStr']?.toString().replaceAll('\u5143', '').trim(),
           ) ??
           _parseAmount(json['expAmount']) ??
           0,
-      orderNum: json['orderNum']?.toString() ?? json['id']?.toString() ?? '',
+      orderNum: _firstNonEmpty([
+        json['orderNum'],
+        json['orderNo'],
+        json['orderNumber'],
+        json['orderId'],
+        json['orderSn'],
+        json['id'],
+      ]),
       deviceId:
           json['deviceInfId']?.toString() ??
           json['commonlyDeviceId']?.toString() ??
@@ -192,6 +208,16 @@ class WaterUsageHistoryEntry {
 
     final normalized = raw.toString().replaceAll(RegExp(r'[^0-9.\-]'), '');
     return double.tryParse(normalized);
+  }
+
+  static String _firstNonEmpty(Iterable<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
   }
 
   static int? _parseDurationSeconds(Object? raw) {
@@ -257,9 +283,9 @@ class WaterUsageHistoryEntry {
 
     final year = DateTime.now().year;
     try {
-      return DateFormat('yyyy-MM-dd HH:mm').parseStrict(
-        '$year-${match.group(1)!}',
-      );
+      return DateFormat(
+        'yyyy-MM-dd HH:mm',
+      ).parseStrict('$year-${match.group(1)!}');
     } catch (_) {
       return null;
     }
@@ -328,9 +354,7 @@ class WaterUsageHistoryEntry {
     final content = bracketMatch.group(1)!.trim();
     final withoutDuration = content
         .replaceAll(
-          RegExp(
-            r'\u7528\u65f6[:\uff1a]?\s*\d+(?::|\u5206)\d+(?:\u79d2)?',
-          ),
+          RegExp(r'\u7528\u65f6[:\uff1a]?\s*\d+(?::|\u5206)\d+(?:\u79d2)?'),
           '',
         )
         .trim();

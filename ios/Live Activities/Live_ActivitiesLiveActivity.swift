@@ -143,20 +143,24 @@ private struct WaterFinishedBlock: View {
     let state: WaterLiveActivityAttributes.ContentState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("扣费")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.62))
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("用水时长")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.58))
 
-                WaterAmountText(state: state)
+                Text(formatDuration(state.elapsedSeconds))
+                    .font(.system(size: 25, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("用水 \(formatDuration(state.elapsedSeconds))")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.62))
-                .lineLimit(1)
+            WaterAmountPill(state: state)
         }
+        .padding(.horizontal, 4)
+        .padding(.top, 2)
     }
 }
 
@@ -215,6 +219,30 @@ private struct WaterAmountText: View {
             .foregroundStyle(.white)
             .lineLimit(1)
             .minimumScaleFactor(0.78)
+    }
+}
+
+private struct WaterAmountPill: View {
+    let state: WaterLiveActivityAttributes.ContentState
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 5) {
+            Text("扣费")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.56))
+
+            Text(state.amountText.isEmpty ? "¥0.00" : state.amountText)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.78, green: 1.0, blue: 0.96))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule()
+                        .fill(Color(red: 0.13, green: 0.84, blue: 0.78).opacity(0.18))
+                )
+        }
     }
 }
 

@@ -812,11 +812,8 @@ class WaterProvider extends ChangeNotifier {
           continue;
         }
 
-        final diffSeconds = candidate.createdAt
-            .difference(localEntry.createdAt)
-            .inSeconds
-            .abs();
-        if (diffSeconds <= 3 * 24 * 60 * 60) {
+        final diffSeconds = _historyTimeDistanceSeconds(candidate, localEntry);
+        if (diffSeconds <= 90 * 60) {
           return index;
         }
       }
@@ -831,11 +828,8 @@ class WaterProvider extends ChangeNotifier {
         continue;
       }
 
-      final diffSeconds = candidate.minutePrecisionTime
-          .difference(localEntry.minutePrecisionTime)
-          .inSeconds
-          .abs();
-      if (diffSeconds > 12 * 60 * 60) {
+      final diffSeconds = _historyTimeDistanceSeconds(candidate, localEntry);
+      if (diffSeconds > 90 * 60) {
         continue;
       }
       return index;
@@ -1592,7 +1586,6 @@ class WaterProvider extends ChangeNotifier {
     String? bestPatchKey;
     double? bestScore;
     final targetAmount = target.amount;
-    final targetMinute = target.minutePrecisionTime;
 
     for (final entry in _durationPatches.entries) {
       final patchKey = entry.key;
@@ -1608,11 +1601,8 @@ class WaterProvider extends ChangeNotifier {
         continue;
       }
 
-      final diffSeconds = candidate.minutePrecisionTime
-          .difference(targetMinute)
-          .inSeconds
-          .abs();
-      if (diffSeconds > 12 * 60 * 60) {
+      final diffSeconds = _historyTimeDistanceSeconds(candidate, target);
+      if (diffSeconds > 90 * 60) {
         continue;
       }
 
@@ -1652,11 +1642,8 @@ class WaterProvider extends ChangeNotifier {
         continue;
       }
 
-      final diffSeconds = candidate.createdAt
-          .difference(target.createdAt)
-          .inSeconds
-          .abs();
-      if (diffSeconds > 3 * 24 * 60 * 60) {
+      final diffSeconds = _historyTimeDistanceSeconds(candidate, target);
+      if (diffSeconds > 90 * 60) {
         continue;
       }
 
@@ -1669,6 +1656,45 @@ class WaterProvider extends ChangeNotifier {
     }
 
     return bestPatchKey;
+  }
+
+  int _historyTimeDistanceSeconds(
+    WaterUsageHistoryEntry left,
+    WaterUsageHistoryEntry right,
+  ) {
+    final leftTimes = _historyCandidateTimes(left);
+    final rightTimes = _historyCandidateTimes(right);
+    var best = 1 << 62;
+
+    for (final leftTime in leftTimes) {
+      for (final rightTime in rightTimes) {
+        final diff = leftTime.difference(rightTime).inSeconds.abs();
+        if (diff < best) {
+          best = diff;
+        }
+      }
+    }
+
+    return best;
+  }
+
+  List<DateTime> _historyCandidateTimes(WaterUsageHistoryEntry entry) {
+    final times = <DateTime>[entry.createdAt, entry.minutePrecisionTime];
+    final durationSeconds = entry.durationSeconds;
+    if (durationSeconds != null && durationSeconds > 0) {
+      final endedAt = entry.createdAt.add(Duration(seconds: durationSeconds));
+      times.add(endedAt);
+      times.add(
+        DateTime(
+          endedAt.year,
+          endedAt.month,
+          endedAt.day,
+          endedAt.hour,
+          endedAt.minute,
+        ),
+      );
+    }
+    return times;
   }
 
   String? _durationLabelForMerge(WaterUsageHistoryEntry entry) {
