@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import '../services/shortcut_context_service.dart';
 
 class DeviceProvider extends ChangeNotifier {
   List<Map<String, dynamic>> deviceList = [];
@@ -30,9 +31,10 @@ class DeviceProvider extends ChangeNotifier {
           selectedDeviceId = deviceList[0]["deviceInfId"].toString();
         }
         notifyListeners();
+        await syncShortcutDeviceCatalog();
       } catch (e) {}
     }
-    
+
     if (token.isNotEmpty) {
       await refreshDeviceListFromNet(token, userId);
     }
@@ -59,6 +61,7 @@ class DeviceProvider extends ChangeNotifier {
     final item = deviceList.removeAt(currentIndex);
     deviceList.insert(boundedIndex, item);
     await _persistDeviceList();
+    await syncShortcutDeviceCatalog();
     notifyListeners();
   }
 
@@ -77,63 +80,95 @@ class DeviceProvider extends ChangeNotifier {
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('device_remarks', jsonEncode(customRemarks));
+    await syncShortcutDeviceCatalog();
     notifyListeners();
   }
 
   Future<void> refreshDeviceListFromNet(String token, String userId) async {
-    final res = await ApiService.post("device/findDeviceCommonlyByUserId", {}, token: token, userId: userId, muteToast: true);
+    final res = await ApiService.post(
+      "device/findDeviceCommonlyByUserId",
+      {},
+      token: token,
+      userId: userId,
+      muteToast: true,
+    );
     if (res != null && (res["code"] == 0 || res["code"] == "0")) {
       var rawData = res["data"];
-      List<dynamic> list = (rawData is List) ? rawData : (rawData is Map ? (rawData["listDeviceCommonly"] ?? rawData["listData"] ?? rawData["list"] ?? []) : []);
+      List<dynamic> list = (rawData is List)
+          ? rawData
+          : (rawData is Map
+                ? (rawData["listDeviceCommonly"] ??
+                      rawData["listData"] ??
+                      rawData["list"] ??
+                      [])
+                : []);
       List<Map<String, dynamic>> processedList = [];
-      
+
       for (var item in list) {
         if (item is Map) {
           String id = (item["deviceInfId"] ?? "").toString();
           String name = (item["deviceName"] ?? "未知设备").toString();
-          String commonlyId = (item["id"] ?? item["commonlyId"] ?? "").toString();
-          int bType = int.tryParse((item["deviceWayId"] ?? item["billType"] ?? 2).toString()) ?? 2;
+          String commonlyId = (item["id"] ?? item["commonlyId"] ?? "")
+              .toString();
+          int bType =
+              int.tryParse(
+                (item["deviceWayId"] ?? item["billType"] ?? 2).toString(),
+              ) ??
+              2;
           if (id.isNotEmpty) {
             processedList.add({
               "deviceInfId": id,
               "deviceInfName": name,
               "billType": bType,
-              "commonlyId": commonlyId
+              "commonlyId": commonlyId,
             });
           }
         }
       }
-      
+
       processedList.sort((a, b) {
         int typeA = a["billType"] as int;
         int typeB = b["billType"] as int;
         if (typeA != typeB) return typeB.compareTo(typeA);
-        return a["deviceInfName"].toString().compareTo(b["deviceInfName"].toString());
+        return a["deviceInfName"].toString().compareTo(
+          b["deviceInfName"].toString(),
+        );
       });
-      
+
       deviceList = processedList;
-      if (deviceList.isNotEmpty && !deviceList.any((d) => d["deviceInfId"].toString() == selectedDeviceId)) {
-         selectedDeviceId = deviceList[0]["deviceInfId"].toString();
+      if (deviceList.isNotEmpty &&
+          !deviceList.any(
+            (d) => d["deviceInfId"].toString() == selectedDeviceId,
+          )) {
+        selectedDeviceId = deviceList[0]["deviceInfId"].toString();
       } else if (deviceList.isEmpty) {
-         selectedDeviceId = "";
+        selectedDeviceId = "";
       }
-      
+
       notifyListeners();
       await _persistDeviceList();
+      await syncShortcutDeviceCatalog();
     }
   }
 
-  Future<bool> deleteDevice(String commonlyId, String token, String userId) async {
+  Future<bool> deleteDevice(
+    String commonlyId,
+    String token,
+    String userId,
+  ) async {
     isRequesting = true;
     notifyListeners();
-    var res = await ApiService.post("device/operationDeviceCommonly", {
-      "commonlyId": commonlyId,
-      "type": "2"
-    }, token: token, userId: userId);
+    var res = await ApiService.post(
+      "device/operationDeviceCommonly",
+      {"commonlyId": commonlyId, "type": "2"},
+      token: token,
+      userId: userId,
+    );
     isRequesting = false;
     notifyListeners();
 
-    if (res != null && (res["code"] == 0 || res["code"] == "0" || res["code"] == 200)) {
+    if (res != null &&
+        (res["code"] == 0 || res["code"] == "0" || res["code"] == 200)) {
       await refreshDeviceListFromNet(token, userId);
       return true;
     }
@@ -143,5 +178,16 @@ class DeviceProvider extends ChangeNotifier {
   Future<void> _persistDeviceList() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('saved_device_list', jsonEncode(deviceList));
+  }
+
+  Future<void> syncShortcutDeviceCatalog() async {
+    await ShortcutContextService.syncDeviceCatalog(
+      devices: deviceList,
+      customRemarks: customRemarks,
+    );
+  }
+
+  Future<void> setShortcutDefaultDevice(String deviceId) async {
+    await ShortcutContextService.setDefaultDevice(deviceId);
   }
 }

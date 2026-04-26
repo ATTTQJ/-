@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -268,7 +268,7 @@ class _HomePageState extends State<HomePage> {
                               : _deviceName(deviceProvider, predictedDevice),
                           onActionTap:
                               dashboardDevice == null ||
-                                      waterProvider.isRequesting
+                                  waterProvider.isRequesting
                               ? null
                               : () => _handleDevicePowerTap(
                                   context,
@@ -441,8 +441,8 @@ class _HomePageState extends State<HomePage> {
 
     for (final entry in history) {
       final directDeviceId = entry.deviceId?.trim() ?? '';
-      final matchedId = directDeviceId.isNotEmpty &&
-              totalCounts.containsKey(directDeviceId)
+      final matchedId =
+          directDeviceId.isNotEmpty && totalCounts.containsKey(directDeviceId)
           ? directDeviceId
           : _resolveUsageHistoryDeviceId(
               deviceProvider: deviceProvider,
@@ -524,37 +524,16 @@ class _HomePageState extends State<HomePage> {
         );
       }
 
-      monthlyUsageByDevice[deviceId] =
-          List<_MonthlyUsagePoint>.unmodifiable(points);
+      monthlyUsageByDevice[deviceId] = List<_MonthlyUsagePoint>.unmodifiable(
+        points,
+      );
     }
     return _UsageAggregation(
       totalCounts: Map<String, int>.unmodifiable(totalCounts),
-      monthlyUsageByDevice:
-          Map<String, List<_MonthlyUsagePoint>>.unmodifiable(
-            monthlyUsageByDevice,
-          ),
+      monthlyUsageByDevice: Map<String, List<_MonthlyUsagePoint>>.unmodifiable(
+        monthlyUsageByDevice,
+      ),
     );
-  }
-
-  Map<String, dynamic>? _resolveLastUsedDevice({
-    required DeviceProvider deviceProvider,
-    required List<dynamic> history,
-  }) {
-    if (history.isEmpty || deviceProvider.deviceList.isEmpty) {
-      return null;
-    }
-
-    final matchedId = _resolveUsageHistoryDeviceId(
-      deviceProvider: deviceProvider,
-      entryName: history.first.deviceName.toString(),
-    );
-    for (final device in deviceProvider.deviceList) {
-      if (device['deviceInfId']?.toString() == matchedId) {
-        return device;
-      }
-    }
-
-    return deviceProvider.deviceList.first;
   }
 
   Map<String, dynamic>? _resolvePredictedDevice({
@@ -635,10 +614,6 @@ class _HomePageState extends State<HomePage> {
         .replaceAll('adddevice', '');
   }
 
-  String _normalizeHistoryDeviceName(String name) {
-    return _normalizeUsageHistoryDeviceName(name);
-  }
-
   String _monthKeyForDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}';
   }
@@ -658,13 +633,6 @@ class _HomePageState extends State<HomePage> {
 
   DateTime _minMonth(DateTime a, DateTime b) {
     return a.isBefore(b) ? a : b;
-  }
-
-  bool _isBeforeMonth(DateTime a, DateTime b) {
-    if (a.year != b.year) {
-      return a.year < b.year;
-    }
-    return a.month < b.month;
   }
 
   bool _isAfterMonth(DateTime a, DateTime b) {
@@ -764,6 +732,27 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: () async {
+                await deviceProvider.setShortcutDefaultDevice(
+                  device['deviceInfId'].toString(),
+                );
+                ToastService.show('已设为快捷指令默认设备');
+              },
+              icon: const Icon(
+                Icons.bolt_rounded,
+                color: DialogUtils.primaryColor,
+                size: 18,
+              ),
+              label: const Text(
+                '设为快捷指令默认设备',
+                style: TextStyle(color: DialogUtils.primaryColor),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -1237,7 +1226,6 @@ class _DeviceDeck extends StatefulWidget {
 class _DeviceDeckState extends State<_DeviceDeck> {
   final ScrollController _scrollController = ScrollController();
   String? _layoutSignature;
-  int? _expandedIndex;
   double _maxStackHeight = 0;
   List<MapEntry<int, Map<String, dynamic>>> _orderedEntries = const [];
   List<double> _targetTops = const [];
@@ -1329,7 +1317,6 @@ class _DeviceDeckState extends State<_DeviceDeck> {
       }
     }
 
-    _expandedIndex = expandedIndex;
     _orderedEntries = List<MapEntry<int, Map<String, dynamic>>>.unmodifiable(
       ordered,
     );
@@ -1342,11 +1329,10 @@ class _DeviceDeckState extends State<_DeviceDeck> {
     if (widget.devices.isEmpty) return const SizedBox.shrink();
     _ensureLayoutPlan();
 
-    final expandedIndex = _expandedIndex;
     final ordered = _orderedEntries;
 
-    const double minStackSpacing = 28.0; 
-    const double stickyCeiling = 12.0; 
+    const double minStackSpacing = 28.0;
+    const double stickyCeiling = 12.0;
 
     final stackChildren = ordered.map((entry) {
       final index = entry.key;
@@ -1705,11 +1691,7 @@ class _DeviceUsageStats extends StatelessWidget {
                 ),
         ),
         const SizedBox(width: 12),
-        Container(
-          width: 1,
-          height: 54,
-          color: Colors.black.withOpacity(0.08),
-        ),
+        Container(width: 1, height: 54, color: Colors.black.withOpacity(0.08)),
         const SizedBox(width: 14),
         Expanded(
           child: Column(

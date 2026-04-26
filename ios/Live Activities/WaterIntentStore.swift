@@ -55,28 +55,30 @@ enum WaterIntentStore {
         }
 
         let currentDefault = defaults.string(forKey: Key.defaultDeviceId) ?? ""
-        let hasCurrentDefault = devices.contains { $0.id == currentDefault }
-        if !devices.isEmpty && (currentDefault.isEmpty || !hasCurrentDefault) {
-            defaults.set(devices[0].id, forKey: Key.defaultDeviceId)
-        }
         if devices.isEmpty {
             defaults.removeObject(forKey: Key.defaultDeviceId)
+        } else if currentDefault.isEmpty {
+            defaults.set(devices[0].id, forKey: Key.defaultDeviceId)
         }
         defaults.synchronize()
     }
 
     static func setDefaultDevice(id: String) {
-        defaults.set(id, forKey: Key.defaultDeviceId)
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return
+        }
+        defaults.set(trimmed, forKey: Key.defaultDeviceId)
         defaults.synchronize()
     }
 
     static func defaultDevice() -> WaterIntentDevice? {
         let devices = deviceCatalog()
         let defaultId = defaults.string(forKey: Key.defaultDeviceId) ?? ""
-        if let device = devices.first(where: { $0.id == defaultId }) {
-            return device
+        if defaultId.isEmpty {
+            return devices.first
         }
-        return devices.first
+        return devices.first { $0.id == defaultId }
     }
 
     static func deviceCatalog() -> [WaterIntentDevice] {
@@ -87,6 +89,13 @@ enum WaterIntentStore {
         return devices
     }
 
+    static func clearDeviceCatalog() {
+        let defaults = defaults
+        defaults.removeObject(forKey: Key.catalog)
+        defaults.removeObject(forKey: Key.defaultDeviceId)
+        defaults.synchronize()
+    }
+
     static func saveSession(_ session: WaterIntentSession) {
         let defaults = defaults
         defaults.set(session.orderNum, forKey: Key.orderNum)
@@ -95,7 +104,7 @@ enum WaterIntentStore {
         defaults.set(session.deviceId, forKey: Key.deviceId)
         defaults.set(session.deviceName, forKey: Key.deviceName)
         defaults.set(session.isHotWater, forKey: Key.isHotWater)
-        defaults.set(session.startedAtMs, forKey: Key.startedAtMs)
+        defaults.set(NSNumber(value: session.startedAtMs), forKey: Key.startedAtMs)
         defaults.set(session.initialBalance, forKey: Key.initialBalance)
         defaults.set(session.isRunning, forKey: Key.isRunning)
         defaults.synchronize()
@@ -114,7 +123,7 @@ enum WaterIntentStore {
             deviceId: defaults.string(forKey: Key.deviceId) ?? "",
             deviceName: defaults.string(forKey: Key.deviceName) ?? "当前设备",
             isHotWater: defaults.bool(forKey: Key.isHotWater),
-            startedAtMs: Int64(defaults.double(forKey: Key.startedAtMs)),
+            startedAtMs: int64(forKey: Key.startedAtMs),
             initialBalance: defaults.string(forKey: Key.initialBalance) ?? "",
             isRunning: true
         )
@@ -132,5 +141,12 @@ enum WaterIntentStore {
         defaults.removeObject(forKey: Key.initialBalance)
         defaults.removeObject(forKey: Key.isRunning)
         defaults.synchronize()
+    }
+
+    private static func int64(forKey key: String) -> Int64 {
+        if let number = defaults.object(forKey: key) as? NSNumber {
+            return number.int64Value
+        }
+        return Int64(defaults.double(forKey: key))
     }
 }

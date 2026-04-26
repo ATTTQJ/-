@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/toast_service.dart';
 import '../services/api_service.dart';
+import '../services/shortcut_context_service.dart';
 
 class UserProvider extends ChangeNotifier {
   final ImagePicker _imagePicker = ImagePicker();
@@ -52,6 +53,7 @@ class UserProvider extends ChangeNotifier {
     if (token.isNotEmpty) {
       await silentTokenGuard();
       await fetchUserInfo();
+      await syncShortcutAuthContext();
     }
   }
 
@@ -80,10 +82,7 @@ class UserProvider extends ChangeNotifier {
   Future<bool> login(String tel, String code) async {
     if (tel.isEmpty || code.isEmpty) return false;
     setRequesting(true);
-    final res = await ApiService.loginWithSmsCode(
-      tel: tel,
-      code: code,
-    );
+    final res = await ApiService.loginWithSmsCode(tel: tel, code: code);
     setRequesting(false);
 
     if (res != null && (res["code"] == 0 || res["code"] == "0")) {
@@ -97,6 +96,7 @@ class UserProvider extends ChangeNotifier {
       notifyListeners();
       await silentTokenGuard();
       await fetchUserInfo();
+      await syncShortcutAuthContext();
       return true;
     }
     return false;
@@ -117,6 +117,7 @@ class UserProvider extends ChangeNotifier {
         await prefs.setString("balance", balance);
         checkLowBalance();
         notifyListeners();
+        await syncShortcutAuthContext();
         if (showSuccessToast) {
           ToastService.show('\u4f59\u989d\u5df2\u5237\u65b0');
         }
@@ -238,6 +239,18 @@ class UserProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString("balance", balance);
     notifyListeners();
+    await syncShortcutAuthContext();
+  }
+
+  Future<void> syncShortcutAuthContext() async {
+    if (token.trim().isEmpty || userId.trim().isEmpty) {
+      return;
+    }
+    await ShortcutContextService.syncAuthContext(
+      token: token,
+      userId: userId,
+      balance: balance,
+    );
   }
 
   void checkLowBalance() {
@@ -250,6 +263,7 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await ShortcutContextService.clearShortcutContext();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     token = "";

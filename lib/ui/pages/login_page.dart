@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/toast_service.dart';
+import '../../providers/device_provider.dart';
 import '../../providers/user_provider.dart';
 
 class LoginPage extends StatefulWidget {
@@ -86,16 +87,24 @@ class _LoginPageState extends State<LoginPage> {
 
     final ok = await userP.login(tel, code);
     if (ok) {
+      if (mounted) {
+        await context.read<DeviceProvider>().loadFromLocal(
+          userP.token,
+          userP.userId,
+        );
+      }
       ToastService.show('欢迎回来');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ));
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+    );
 
     final userP = context.watch<UserProvider>();
 
@@ -107,7 +116,10 @@ class _LoginPageState extends State<LoginPage> {
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Container(
@@ -191,15 +203,16 @@ class _LoginPageState extends State<LoginPage> {
                                   backgroundColor: _isCountingDown
                                       ? Colors.white.withOpacity(0.06)
                                       : const Color(0xFF232634),
-                                  disabledBackgroundColor:
-                                      Colors.white.withOpacity(0.06),
+                                  disabledBackgroundColor: Colors.white
+                                      .withOpacity(0.06),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(18),
                                     side: BorderSide(
                                       color: _isCountingDown
                                           ? Colors.white.withOpacity(0.06)
-                                          : const Color(0xFF32D7D2)
-                                              .withOpacity(0.32),
+                                          : const Color(
+                                              0xFF32D7D2,
+                                            ).withOpacity(0.32),
                                     ),
                                   ),
                                 ),
@@ -207,8 +220,8 @@ class _LoginPageState extends State<LoginPage> {
                                   userP.isRequesting
                                       ? '发送中...'
                                       : _isCountingDown
-                                          ? '${_secondsLeft}s'
-                                          : '发送验证码',
+                                      ? '${_secondsLeft}s'
+                                      : '发送验证码',
                                   style: TextStyle(
                                     color: _isCountingDown
                                         ? Colors.white54
@@ -232,8 +245,9 @@ class _LoginPageState extends State<LoginPage> {
                             style: ElevatedButton.styleFrom(
                               elevation: 0,
                               backgroundColor: const Color(0xFF7A58FF),
-                              disabledBackgroundColor:
-                                  const Color(0xFF7A58FF).withOpacity(0.45),
+                              disabledBackgroundColor: const Color(
+                                0xFF7A58FF,
+                              ).withOpacity(0.45),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
@@ -299,18 +313,17 @@ class _LoginField extends StatelessWidget {
         ),
         filled: true,
         fillColor: Colors.white.withOpacity(0.06),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 18,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(
-            color: Colors.white.withOpacity(0.08),
-          ),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(
-            color: Color(0xFF32D7D2),
-          ),
+          borderSide: const BorderSide(color: Color(0xFF32D7D2)),
         ),
       ),
     );

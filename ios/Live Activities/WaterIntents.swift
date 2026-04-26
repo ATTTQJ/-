@@ -19,9 +19,7 @@ struct StartWaterIntent: LiveActivityIntent {
 
         let session = try await WaterApiClient(auth: auth).startWater(device: device)
         WaterIntentStore.saveSession(session)
-        if #available(iOS 16.1, *) {
-            try await WaterLiveActivityController.start(session: session)
-        }
+        try await WaterLiveActivityController.start(session: session)
         return .result(value: "start", dialog: "已开始用水")
     }
 }
@@ -43,9 +41,7 @@ struct StopWaterIntent: LiveActivityIntent {
 
         let settlement = try await WaterApiClient(auth: auth).stopWater(session: session)
         WaterIntentStore.clearSession()
-        if #available(iOS 16.1, *) {
-            await WaterLiveActivityController.finish(session: session, settlement: settlement)
-        }
+        await WaterLiveActivityController.finish(session: session, settlement: settlement)
         return .result(value: "stop", dialog: "已关水")
     }
 }

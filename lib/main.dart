@@ -46,11 +46,10 @@ class WaterApp extends StatefulWidget {
   State<WaterApp> createState() => _WaterAppState();
 }
 
-class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
+class _WaterAppState extends State<WaterApp> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initApp();
     });
@@ -93,49 +92,6 @@ class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
         ),
       );
     }
-
-    await _consumePendingAction();
-  }
-
-  Future<void> _consumePendingAction() async {
-    final userProvider = context.read<UserProvider>();
-    if (userProvider.token.isEmpty || userProvider.userId.isEmpty) {
-      return;
-    }
-
-    final deviceProvider = context.read<DeviceProvider>();
-    final waterProvider = context.read<WaterProvider>();
-
-    await waterProvider.checkPendingAction(
-      deviceProvider.selectDevice,
-      deviceProvider.deviceList,
-      deviceProvider.customRemarks,
-      token: userProvider.token,
-      userId: userProvider.userId,
-      selectedDeviceId: deviceProvider.selectedDeviceId,
-      currentBalance: userProvider.balance,
-      onBalanceUpdated: userProvider.setBalance,
-    );
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) {
-      return;
-    }
-
-    Future<void>.delayed(const Duration(milliseconds: 500), () async {
-      if (!mounted) {
-        return;
-      }
-      await _consumePendingAction();
-    });
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
   }
 
   @override

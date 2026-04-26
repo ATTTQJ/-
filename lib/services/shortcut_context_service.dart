@@ -42,9 +42,7 @@ class ShortcutContextService {
         .where((device) => (device['id'] as String).isNotEmpty)
         .toList(growable: false);
 
-    await _invoke('syncDeviceCatalog', {
-      'devicesJson': jsonEncode(payload),
-    });
+    await _invoke('syncDeviceCatalog', {'devicesJson': jsonEncode(payload)});
   }
 
   static Future<void> setDefaultDevice(String deviceId) async {

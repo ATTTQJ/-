@@ -35,9 +35,9 @@ struct Live_ActivitiesLiveActivity: Widget {
             } minimal: {
                 Image(systemName: context.state.isRunning ? waterIconName(context) : "checkmark.circle.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(context.state.isRunning ? accentColor(context) : .green)
+                    .foregroundStyle(context.state.isRunning ? waterAccentColor(context) : Color.green)
             }
-            .keylineTint(context.state.isRunning ? accentColor(context) : .green)
+            .keylineTint(context.state.isRunning ? waterAccentColor(context) : Color.green)
         }
     }
 }
@@ -159,7 +159,7 @@ private struct WaterCompactIcon: View {
     var body: some View {
         Image(systemName: context.state.isRunning ? waterIconName(context) : "checkmark.circle.fill")
             .font(.system(size: 20, weight: .semibold))
-            .foregroundStyle(context.state.isRunning ? accentColor(context) : .green)
+            .foregroundStyle(context.state.isRunning ? waterAccentColor(context) : Color.green)
             .frame(width: 28, height: 28, alignment: .center)
     }
 }
@@ -190,10 +190,10 @@ private struct WaterStatusIcon: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill((context.state.isRunning ? accentColor(context) : .green).opacity(0.18))
+                .fill((context.state.isRunning ? waterAccentColor(context) : Color.green).opacity(0.18))
             Image(systemName: context.state.isRunning ? waterIconName(context) : "checkmark")
                 .font(.system(size: size * 0.48, weight: .bold))
-                .foregroundStyle(context.state.isRunning ? accentColor(context) : .green)
+                .foregroundStyle(context.state.isRunning ? waterAccentColor(context) : Color.green)
         }
         .frame(width: size, height: size)
     }
@@ -227,7 +227,7 @@ private func waterIconName(_ context: ActivityViewContext<WaterLiveActivityAttri
     context.attributes.isHotWater ? "flame.fill" : "drop.fill"
 }
 
-private func accentColor(_ context: ActivityViewContext<WaterLiveActivityAttributes>) -> Color {
+private func waterAccentColor(_ context: ActivityViewContext<WaterLiveActivityAttributes>) -> Color {
     context.attributes.isHotWater ? Color(red: 1.0, green: 0.48, blue: 0.18) : .cyan
 }
 

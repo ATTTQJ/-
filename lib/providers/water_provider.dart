@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,10 +14,6 @@ typedef BalanceUpdateCallback = Future<void> Function(String balance);
 
 class WaterProvider extends ChangeNotifier {
   WaterProvider();
-
-  static const MethodChannel _siriChannel = MethodChannel(
-    'com.fakeuy.water/siri',
-  );
 
   static const int _historySchemaVersion = 5;
   static const int _historyBackfillMaxMonths = 48;
@@ -33,12 +28,16 @@ class WaterProvider extends ChangeNotifier {
   static const String _historySelectedMonthKey = 'water_history_selected_month';
   static const String _historySyncedMonthsKey = 'water_history_synced_months';
   static const String _localDurationStorageKey = 'water_local_duration_records';
-  static const String _durationPatchStorageKey = 'water_history_duration_patches';
-  static const String _durationPatchEntriesKey = 'water_history_duration_patch_entries';
+  static const String _durationPatchStorageKey =
+      'water_history_duration_patches';
+  static const String _durationPatchEntriesKey =
+      'water_history_duration_patch_entries';
   static const String _historyPatchLinksKey = 'water_history_patch_links';
   static const String _deviceUsageStatsKey = 'water_device_usage_stats';
-  static const String _countedUsageOrderNumsKey = 'water_counted_usage_order_nums';
+  static const String _countedUsageOrderNumsKey =
+      'water_counted_usage_order_nums';
   static const String _activeDeviceNameKey = 'water_activeDeviceName';
+  static const String _activeBillTypeKey = 'water_activeBillType';
 
   String orderNum = '';
   String tableName = '';
@@ -48,7 +47,8 @@ class WaterProvider extends ChangeNotifier {
   bool isHistoryLoading = false;
   bool isHistoryBackfilling = false;
 
-  final Map<String, List<WaterUsageHistoryEntry>> _monthlyServerHistoryCache = {};
+  final Map<String, List<WaterUsageHistoryEntry>> _monthlyServerHistoryCache =
+      {};
   final Map<String, WaterUsageHistoryEntry> _durationPatches = {};
   final Map<String, String> _historyPatchLinks = {};
   final Map<String, int> _deviceUsageCounts = {};
@@ -64,18 +64,15 @@ class WaterProvider extends ChangeNotifier {
   Timer? timer;
   String runningTime = '00:00';
 
-  bool _isHandlingPendingAction = false;
+  List<WaterUsageHistoryEntry> get history =>
+      List.unmodifiable(_buildUsageHistory());
 
-  List<WaterUsageHistoryEntry> get history => List.unmodifiable(
-    _buildUsageHistory(),
-  );
+  List<WaterUsageHistoryEntry> get displayHistory =>
+      List.unmodifiable(buildDisplayHistoryForMonth(selectedHistoryMonthKey));
 
-  List<WaterUsageHistoryEntry> get displayHistory => List.unmodifiable(
-    buildDisplayHistoryForMonth(selectedHistoryMonthKey),
-  );
-
-  String get selectedHistoryMonthKey =>
-      _selectedHistoryMonthKey.isEmpty ? _currentMonthKey() : _selectedHistoryMonthKey;
+  String get selectedHistoryMonthKey => _selectedHistoryMonthKey.isEmpty
+      ? _currentMonthKey()
+      : _selectedHistoryMonthKey;
 
   int get selectedHistoryYear => _monthDate(selectedHistoryMonthKey).year;
 
@@ -96,16 +93,16 @@ class WaterProvider extends ChangeNotifier {
   bool get needsHistoryBackfill => _needsHistoryBackfill;
   bool get hasLoadedLocalState => _hasLoadedLocalState;
 
-  Map<String, int> get deviceUsageCounts => Map.unmodifiable(_deviceUsageCounts);
+  Map<String, int> get deviceUsageCounts =>
+      Map.unmodifiable(_deviceUsageCounts);
 
-  Map<String, Map<String, int>> get deviceMonthlyUsageCounts => Map.unmodifiable(
-    _deviceMonthlyUsageCounts.map(
-      (deviceId, monthCounts) => MapEntry(
-        deviceId,
-        Map<String, int>.unmodifiable(monthCounts),
-      ),
-    ),
-  );
+  Map<String, Map<String, int>> get deviceMonthlyUsageCounts =>
+      Map.unmodifiable(
+        _deviceMonthlyUsageCounts.map(
+          (deviceId, monthCounts) =>
+              MapEntry(deviceId, Map<String, int>.unmodifiable(monthCounts)),
+        ),
+      );
 
   List<WaterUsageHistoryEntry> get localDurationRecords =>
       List.unmodifiable(_localDurationRecords);
@@ -125,16 +122,24 @@ class WaterProvider extends ChangeNotifier {
     mac = prefs.getString('water_mac') ?? '';
     activeDeviceId = prefs.getString('water_activeDeviceId') ?? '';
     final activeDeviceName = prefs.getString(_activeDeviceNameKey) ?? '';
+    final activeBillType = prefs.getInt(_activeBillTypeKey) ?? 0;
+    final initialBalance = prefs.getString('water_initial_balance') ?? '';
 
     _monthlyServerHistoryCache
       ..clear()
-      ..addAll(_decodeMonthlyHistoryCache(prefs.getString(_historyMonthCacheKey)));
+      ..addAll(
+        _decodeMonthlyHistoryCache(prefs.getString(_historyMonthCacheKey)),
+      );
     _durationPatches
       ..clear()
-      ..addAll(_decodeHiveDurationPatches(historyBox.get(_localSessionHiveKey)));
+      ..addAll(
+        _decodeHiveDurationPatches(historyBox.get(_localSessionHiveKey)),
+      );
     if (_durationPatches.isEmpty) {
       _durationPatches.addAll(
-        _decodeDurationPatchEntries(prefs.getStringList(_durationPatchEntriesKey)),
+        _decodeDurationPatchEntries(
+          prefs.getStringList(_durationPatchEntriesKey),
+        ),
       );
     }
     if (_durationPatches.isEmpty) {
@@ -145,10 +150,8 @@ class WaterProvider extends ChangeNotifier {
     _historyPatchLinks
       ..clear()
       ..addAll(_decodeStringMap(prefs.getString(_historyPatchLinksKey)));
-    _deviceUsageCounts
-      ..clear();
-    _countedUsageOrderNums
-      ..clear();
+    _deviceUsageCounts..clear();
+    _countedUsageOrderNums..clear();
     _rebuildLocalDurationRecordsFromPatches();
     final legacyLocalDurationRecords = _decodeHistoryEntries(
       prefs.getStringList(_localDurationStorageKey),
@@ -198,11 +201,7 @@ class WaterProvider extends ChangeNotifier {
     if (orderNum.isNotEmpty && savedStartTime > 0) {
       startTime = DateTime.fromMillisecondsSinceEpoch(savedStartTime);
       _startRunningTimer();
-      _incrementUsageCount(
-        activeDeviceId,
-        orderNum,
-        createdAt: startTime,
-      );
+      _incrementUsageCount(activeDeviceId, orderNum, createdAt: startTime);
       unawaited(
         LiveActivityService.startWater(
           deviceId: activeDeviceId,
@@ -211,6 +210,10 @@ class WaterProvider extends ChangeNotifier {
               : activeDeviceName.trim(),
           orderNum: orderNum,
           startTime: startTime!,
+          billType: activeBillType,
+          tableName: tableName,
+          mac: mac,
+          initialBalance: initialBalance,
         ),
       );
     } else {
@@ -224,92 +227,6 @@ class WaterProvider extends ChangeNotifier {
 
     _hasLoadedLocalState = true;
     notifyListeners();
-  }
-
-  Future<void> checkPendingAction(
-    ValueChanged<String> onSelectDevice,
-    List<Map<String, dynamic>> deviceList,
-    Map<String, String> customRemarks, {
-    String token = '',
-    String userId = '',
-    String selectedDeviceId = '',
-    String currentBalance = '',
-    BalanceUpdateCallback? onBalanceUpdated,
-  }) async {
-    if (_isHandlingPendingAction) {
-      return;
-    }
-
-    _isHandlingPendingAction = true;
-    try {
-      final res = await _siriChannel.invokeMapMethod<String, dynamic>(
-        'getPendingAction',
-      );
-      if (res == null) {
-        return;
-      }
-
-      final action = (res['action'] ?? '').toString().trim().toLowerCase();
-      final targetName = (res['device'] ?? '').toString().trim();
-      if (action.isEmpty) {
-        return;
-      }
-
-      final readyDeviceList = await _waitForDeviceList(deviceList);
-      if (action == 'start') {
-        final targetDevice = _resolveTargetDevice(
-          deviceList: readyDeviceList,
-          customRemarks: customRemarks,
-          targetName: targetName,
-          selectedDeviceId: selectedDeviceId,
-        );
-        if (targetDevice == null) {
-          ToastService.show('\u672a\u627e\u5230\u5339\u914d\u8bbe\u5907');
-          return;
-        }
-
-        final targetDeviceId = targetDevice['deviceInfId']?.toString() ?? '';
-        if (targetDeviceId.isNotEmpty) {
-          onSelectDevice(targetDeviceId);
-        }
-
-        if (token.isNotEmpty && userId.isNotEmpty && orderNum.isEmpty) {
-          await startWater(
-            token,
-            userId,
-            targetDevice,
-            currentBalance: currentBalance,
-          );
-        }
-        return;
-      }
-
-      if (action == 'stop') {
-        if (token.isEmpty || userId.isEmpty || orderNum.isEmpty) {
-          return;
-        }
-
-        final currentDeviceName = _buildCurrentDeviceName(
-          deviceList: readyDeviceList,
-          customRemarks: customRemarks,
-          selectedDeviceId: selectedDeviceId,
-        );
-        await stopWater(
-          token,
-          userId,
-          currentDeviceName,
-          currentBalance: currentBalance,
-          onBalanceUpdated: onBalanceUpdated,
-        );
-      }
-    } on MissingPluginException catch (error) {
-      debugPrint('Siri channel is not ready yet: $error');
-    } catch (error, stackTrace) {
-      debugPrint('Failed to consume pending Siri action: $error');
-      debugPrintStack(stackTrace: stackTrace);
-    } finally {
-      _isHandlingPendingAction = false;
-    }
   }
 
   Future<bool> startWater(
@@ -375,6 +292,10 @@ class WaterProvider extends ChangeNotifier {
         await prefs.setString('water_activeDeviceId', activeDeviceId);
         await prefs.setString(_activeDeviceNameKey, activeDeviceName);
         await prefs.setInt(
+          _activeBillTypeKey,
+          int.tryParse(targetBillType) ?? 0,
+        );
+        await prefs.setInt(
           'water_start_time',
           startTime!.millisecondsSinceEpoch,
         );
@@ -382,21 +303,23 @@ class WaterProvider extends ChangeNotifier {
           await prefs.setString('water_initial_balance', currentBalance.trim());
         }
 
-        _incrementUsageCount(
-          targetDeviceId,
-          orderNum,
-          createdAt: startTime,
-        );
+        _incrementUsageCount(targetDeviceId, orderNum, createdAt: startTime);
         unawaited(
           LiveActivityService.startWater(
             deviceId: targetDeviceId,
             deviceName: activeDeviceName,
             orderNum: orderNum,
             startTime: startTime!,
+            billType: int.tryParse(targetBillType) ?? 0,
+            tableName: tableName,
+            mac: mac,
+            initialBalance: currentBalance.trim(),
           ),
         );
         _startRunningTimer();
-        ToastService.show('\u8bbe\u5907\u5df2\u5f00\u542f\uff0c\u51fa\u6c34\u4e2d...');
+        ToastService.show(
+          '\u8bbe\u5907\u5df2\u5f00\u542f\uff0c\u51fa\u6c34\u4e2d...',
+        );
         return true;
       }
     } finally {
@@ -452,6 +375,7 @@ class WaterProvider extends ChangeNotifier {
         await prefs.remove('water_initial_balance');
         await prefs.remove('water_activeDeviceId');
         await prefs.remove(_activeDeviceNameKey);
+        await prefs.remove(_activeBillTypeKey);
 
         orderNum = '';
         tableName = '';
@@ -494,7 +418,9 @@ class WaterProvider extends ChangeNotifier {
             createdAt: currentStartTime ?? DateTime.now(),
             deviceName: safeDeviceName,
             amount: amount,
-            deviceId: currentActiveDeviceId.isEmpty ? null : currentActiveDeviceId,
+            deviceId: currentActiveDeviceId.isEmpty
+                ? null
+                : currentActiveDeviceId,
             isLocalOnly: true,
             durationSeconds: durationSeconds,
             orderNum: currentOrderNum,
@@ -554,10 +480,11 @@ class WaterProvider extends ChangeNotifier {
       }
 
       final monthKey = _monthKey(year, month);
-      final monthEntries = serverItems
-          .map(WaterUsageHistoryEntry.fromServerBill)
-          .toList(growable: false)
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final monthEntries =
+          serverItems
+              .map(WaterUsageHistoryEntry.fromServerBill)
+              .toList(growable: false)
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       _mergeServerEntriesWithLocalDurations(
         serverEntries: monthEntries,
@@ -616,10 +543,12 @@ class WaterProvider extends ChangeNotifier {
       var cursor = DateTime(now.year, now.month - 1);
       var emptyMonthStreak = 0;
 
-      for (var step = 0;
-          step < _historyBackfillMaxMonths &&
-              emptyMonthStreak < _historyBackfillEmptyStopCount;
-          step++) {
+      for (
+        var step = 0;
+        step < _historyBackfillMaxMonths &&
+            emptyMonthStreak < _historyBackfillEmptyStopCount;
+        step++
+      ) {
         final monthKey = _monthKey(cursor.year, cursor.month);
         final hasCachedMonth =
             _syncedHistoryMonths.contains(monthKey) &&
@@ -643,10 +572,11 @@ class WaterProvider extends ChangeNotifier {
             return;
           }
 
-          final monthEntries = serverItems
-              .map(WaterUsageHistoryEntry.fromServerBill)
-              .toList(growable: false)
-            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final monthEntries =
+              serverItems
+                  .map(WaterUsageHistoryEntry.fromServerBill)
+                  .toList(growable: false)
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           _mergeServerEntriesWithLocalDurations(
             serverEntries: monthEntries,
             rememberLinks: true,
@@ -712,8 +642,9 @@ class WaterProvider extends ChangeNotifier {
   }
 
   List<WaterUsageHistoryEntry> buildDisplayHistoryForMonth(String monthKey) {
-    final resolvedMonthKey =
-        monthKey.trim().isEmpty ? selectedHistoryMonthKey : monthKey.trim();
+    final resolvedMonthKey = monthKey.trim().isEmpty
+        ? selectedHistoryMonthKey
+        : monthKey.trim();
     final serverEntries =
         _monthlyServerHistoryCache[resolvedMonthKey] ??
         const <WaterUsageHistoryEntry>[];
@@ -916,7 +847,9 @@ class WaterProvider extends ChangeNotifier {
         }
       }
 
-      final beforeLocal = List<WaterUsageHistoryEntry>.from(_localDurationRecords);
+      final beforeLocal = List<WaterUsageHistoryEntry>.from(
+        _localDurationRecords,
+      );
       _ingestDurationRecords(migratedDurationRecords);
       if (!_historyListsEqual(beforeLocal, _localDurationRecords)) {
         changed = true;
@@ -993,9 +926,7 @@ class WaterProvider extends ChangeNotifier {
     await resolvedPrefs.remove(_localDurationStorageKey);
   }
 
-  Future<void> _persistSelectedHistoryMonth({
-    SharedPreferences? prefs,
-  }) async {
+  Future<void> _persistSelectedHistoryMonth({SharedPreferences? prefs}) async {
     final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
     await resolvedPrefs.setString(
       _historySelectedMonthKey,
@@ -1186,27 +1117,6 @@ class WaterProvider extends ChangeNotifier {
     }
   }
 
-  Map<String, int> _decodeIntMap(String? raw) {
-    if (raw == null || raw.trim().isEmpty) {
-      return <String, int>{};
-    }
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        return <String, int>{};
-      }
-      return decoded.map<String, int>(
-        (key, value) => MapEntry(
-          key.toString(),
-          value is num ? value.toInt() : (int.tryParse(value.toString()) ?? 0),
-        ),
-      );
-    } catch (_) {
-      return <String, int>{};
-    }
-  }
-
   List<WaterUsageHistoryEntry> _extractLocalDurationRecordsFromLegacy(
     List<WaterUsageHistoryEntry> legacyHistory,
   ) {
@@ -1324,97 +1234,6 @@ class WaterProvider extends ChangeNotifier {
     return usageHistory;
   }
 
-  Future<List<Map<String, dynamic>>> _waitForDeviceList(
-    List<Map<String, dynamic>> deviceList,
-  ) async {
-    var retry = 0;
-    while (deviceList.isEmpty && retry < 30) {
-      await Future.delayed(const Duration(milliseconds: 200));
-      retry++;
-    }
-    return deviceList;
-  }
-
-  Map<String, dynamic>? _resolveTargetDevice({
-    required List<Map<String, dynamic>> deviceList,
-    required Map<String, String> customRemarks,
-    required String targetName,
-    required String selectedDeviceId,
-  }) {
-    if (deviceList.isEmpty) {
-      return null;
-    }
-
-    final normalizedTarget = _normalizeDeviceName(targetName);
-    if (normalizedTarget.isNotEmpty) {
-      for (final device in deviceList) {
-        final deviceId = device['deviceInfId']?.toString() ?? '';
-        final remarkName = customRemarks[deviceId] ?? '';
-        final backendName = device['deviceInfName']?.toString() ?? '';
-        final candidates = <String>{
-          _normalizeDeviceName(remarkName),
-          _normalizeDeviceName(backendName),
-        }..removeWhere((name) => name.isEmpty);
-
-        final matched = candidates.any(
-          (candidate) =>
-              candidate == normalizedTarget ||
-              candidate.contains(normalizedTarget) ||
-              normalizedTarget.contains(candidate),
-        );
-        if (matched) {
-          return device;
-        }
-      }
-    }
-
-    if (selectedDeviceId.isNotEmpty) {
-      for (final device in deviceList) {
-        if (device['deviceInfId']?.toString() == selectedDeviceId) {
-          return device;
-        }
-      }
-    }
-
-    return deviceList.first;
-  }
-
-  String _buildCurrentDeviceName({
-    required List<Map<String, dynamic>> deviceList,
-    required Map<String, String> customRemarks,
-    required String selectedDeviceId,
-  }) {
-    if (deviceList.isEmpty) {
-      return '';
-    }
-
-    Map<String, dynamic>? device;
-    if (selectedDeviceId.isNotEmpty) {
-      for (final item in deviceList) {
-        if (item['deviceInfId']?.toString() == selectedDeviceId) {
-          device = item;
-          break;
-        }
-      }
-    }
-    final resolvedDevice = device ?? deviceList.first;
-
-    final deviceId = resolvedDevice['deviceInfId']?.toString() ?? '';
-    final customName = customRemarks[deviceId];
-    final backendName = resolvedDevice['deviceInfName']?.toString() ?? '';
-    final baseName = (customName == null || customName.trim().isEmpty)
-        ? _stripDevicePrefix(backendName)
-        : customName.trim();
-    final suffix = resolvedDevice['billType'] == 2
-        ? '\u70ed\u6c34'
-        : '\u76f4\u996e\u6c34';
-    return '$baseName$suffix';
-  }
-
-  String _normalizeDeviceName(String value) {
-    return _stripDevicePrefix(value).trim().toLowerCase();
-  }
-
   String _stripDevicePrefix(String value) {
     return value.replaceFirst(RegExp(r'^[12]-'), '');
   }
@@ -1481,7 +1300,8 @@ class WaterProvider extends ChangeNotifier {
 
       merged.add(
         serverEntry.copyWith(
-          durationSeconds: localEntry.durationSeconds ?? serverEntry.durationSeconds,
+          durationSeconds:
+              localEntry.durationSeconds ?? serverEntry.durationSeconds,
           durationLabel:
               _durationLabelForMerge(localEntry) ??
               _durationLabelForMerge(serverEntry),
@@ -1612,7 +1432,8 @@ class WaterProvider extends ChangeNotifier {
     if (current.isLocalOnly && !candidate.isLocalOnly) {
       return candidate.copyWith(
         durationSeconds: candidate.durationSeconds ?? current.durationSeconds,
-        durationLabel: _durationLabelForMerge(current) ?? candidate.durationLabel,
+        durationLabel:
+            _durationLabelForMerge(current) ?? candidate.durationLabel,
         deviceId: candidate.deviceId ?? current.deviceId,
         isLocalOnly: false,
       );
@@ -1620,7 +1441,8 @@ class WaterProvider extends ChangeNotifier {
     if (!current.isLocalOnly && candidate.isLocalOnly) {
       return current.copyWith(
         durationSeconds: current.durationSeconds ?? candidate.durationSeconds,
-        durationLabel: current.durationLabel ?? _durationLabelForMerge(candidate),
+        durationLabel:
+            current.durationLabel ?? _durationLabelForMerge(candidate),
         deviceId: current.deviceId ?? candidate.deviceId,
         isLocalOnly: false,
       );
@@ -1685,7 +1507,7 @@ class WaterProvider extends ChangeNotifier {
 
       final amountDiff = (candidate.amount - targetAmount).abs();
       final score = diffSeconds + (amountDiff * 600);
-      if (bestScore != null && score >= bestScore!) {
+      if (bestScore != null && score >= bestScore) {
         continue;
       }
 
@@ -1727,7 +1549,7 @@ class WaterProvider extends ChangeNotifier {
         continue;
       }
 
-      if (bestDiffSeconds != null && diffSeconds >= bestDiffSeconds!) {
+      if (bestDiffSeconds != null && diffSeconds >= bestDiffSeconds) {
         continue;
       }
 
@@ -1763,17 +1585,6 @@ class WaterProvider extends ChangeNotifier {
     );
     normalized = normalized.replaceAll('\u6d17\u6d74', '\u70ed\u6c34');
     return normalized;
-  }
-
-  String _localHistoryDeviceName(Map<String, dynamic> device) {
-    final rawName = (device['deviceInfName'] ?? device['deviceName'] ?? '')
-        .toString()
-        .replaceFirst(RegExp(r'^[12]-'), '');
-    final suffix = device['billType'] == 2 ? '\u70ed\u6c34' : '\u76f4\u996e';
-    if (rawName.isEmpty) {
-      return suffix;
-    }
-    return '$rawName$suffix';
   }
 
   bool _historyNamesLikelySame(String left, String right) {

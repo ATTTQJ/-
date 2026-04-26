@@ -140,6 +140,7 @@ import UIKit
             case "clearShortcutContext":
                 WaterIntentStore.clearSession()
                 WaterIntentStore.clearAuthContext()
+                WaterIntentStore.clearDeviceCatalog()
                 result(["ok": true])
             default:
                 result(FlutterMethodNotImplemented)
@@ -240,8 +241,8 @@ struct WaterShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: StartWaterIntent(),
             phrases: [
-                "开始用水 \(.applicationName)",
-                "开水 \(.applicationName)"
+                "开始用水\(.applicationName)",
+                "开水\(.applicationName)"
             ],
             shortTitle: "开始用水",
             systemImageName: "drop.fill"
@@ -250,8 +251,8 @@ struct WaterShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: StopWaterIntent(),
             phrases: [
-                "结束用水 \(.applicationName)",
-                "关水 \(.applicationName)"
+                "结束用水\(.applicationName)",
+                "关水\(.applicationName)"
             ],
             shortTitle: "结束用水",
             systemImageName: "xmark.circle.fill"

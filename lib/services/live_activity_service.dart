@@ -13,17 +13,22 @@ class LiveActivityService {
     required String deviceName,
     required String orderNum,
     required DateTime startTime,
+    int billType = 0,
+    String tableName = '',
+    String mac = '',
+    String initialBalance = '',
   }) async {
-    await _invoke(
-      'startWater',
-      {
-        'deviceId': deviceId,
-        'deviceName': deviceName,
-        'orderNum': orderNum,
-        'startTimeMillis': startTime.millisecondsSinceEpoch,
-        'elapsedSeconds': 0,
-      },
-    );
+    await _invoke('startWater', {
+      'deviceId': deviceId,
+      'deviceName': deviceName,
+      'orderNum': orderNum,
+      'billType': billType,
+      'tableName': tableName,
+      'mac': mac,
+      'initialBalance': initialBalance,
+      'startTimeMillis': startTime.millisecondsSinceEpoch,
+      'elapsedSeconds': 0,
+    });
   }
 
   static Future<void> updateWater({
@@ -32,16 +37,13 @@ class LiveActivityService {
     required int elapsedSeconds,
     String statusText = '正在用水',
   }) async {
-    await _invoke(
-      'updateWater',
-      {
-        'orderNum': orderNum,
-        'startTimeMillis': startTime.millisecondsSinceEpoch,
-        'elapsedSeconds': elapsedSeconds,
-        'statusText': statusText,
-        'isRunning': true,
-      },
-    );
+    await _invoke('updateWater', {
+      'orderNum': orderNum,
+      'startTimeMillis': startTime.millisecondsSinceEpoch,
+      'elapsedSeconds': elapsedSeconds,
+      'statusText': statusText,
+      'isRunning': true,
+    });
   }
 
   static Future<void> endWater({
@@ -49,14 +51,11 @@ class LiveActivityService {
     required int elapsedSeconds,
     String amountText = '',
   }) async {
-    await _invoke(
-      'endWater',
-      {
-        'orderNum': orderNum,
-        'elapsedSeconds': elapsedSeconds,
-        'amountText': amountText,
-      },
-    );
+    await _invoke('endWater', {
+      'orderNum': orderNum,
+      'elapsedSeconds': elapsedSeconds,
+      'amountText': amountText,
+    });
   }
 
   static Future<void> _invoke(String method, Map<String, Object> args) async {
