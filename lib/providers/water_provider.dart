@@ -9,6 +9,7 @@ import '../core/toast_service.dart';
 import '../models/water_usage_history_entry.dart';
 import '../services/api_service.dart';
 import '../services/live_activity_service.dart';
+import '../services/shortcut_context_service.dart';
 
 typedef BalanceUpdateCallback = Future<void> Function(String balance);
 
@@ -121,9 +122,6 @@ class WaterProvider extends ChangeNotifier {
     tableName = prefs.getString('water_tableName') ?? '';
     mac = prefs.getString('water_mac') ?? '';
     activeDeviceId = prefs.getString('water_activeDeviceId') ?? '';
-    final activeDeviceName = prefs.getString(_activeDeviceNameKey) ?? '';
-    final activeBillType = prefs.getInt(_activeBillTypeKey) ?? 0;
-    final initialBalance = prefs.getString('water_initial_balance') ?? '';
 
     _monthlyServerHistoryCache
       ..clear()
@@ -202,31 +200,44 @@ class WaterProvider extends ChangeNotifier {
       startTime = DateTime.fromMillisecondsSinceEpoch(savedStartTime);
       _startRunningTimer();
       _incrementUsageCount(activeDeviceId, orderNum, createdAt: startTime);
-      unawaited(
-        LiveActivityService.startWater(
-          deviceId: activeDeviceId,
-          deviceName: activeDeviceName.trim().isEmpty
-              ? '\u5f53\u524d\u8bbe\u5907'
-              : activeDeviceName.trim(),
-          orderNum: orderNum,
-          startTime: startTime!,
-          billType: activeBillType,
-          tableName: tableName,
-          mac: mac,
-          initialBalance: initialBalance,
-        ),
-      );
     } else {
       startTime = null;
       runningTime = '00:00';
       timer?.cancel();
       timer = null;
       activeDeviceId = '';
-      unawaited(LiveActivityService.endWater(orderNum: '', elapsedSeconds: 0));
     }
 
     _hasLoadedLocalState = true;
     notifyListeners();
+  }
+
+  Future<bool> syncExternalWaterSession({
+    String currentBalance = '',
+    BalanceUpdateCallback? onBalanceUpdated,
+  }) async {
+    final snapshot = await ShortcutContextService.getWaterSessionSnapshot();
+    if (snapshot == null) {
+      return false;
+    }
+
+    if (snapshot.isRunning) {
+      final changed =
+          orderNum.trim() != snapshot.orderNum.trim() || startTime == null;
+      await _applyExternalRunningSession(snapshot);
+      return changed;
+    }
+
+    if (snapshot.isFinished) {
+      await _applyExternalFinishedSession(
+        snapshot,
+        currentBalance: currentBalance,
+        onBalanceUpdated: onBalanceUpdated,
+      );
+      return true;
+    }
+
+    return false;
   }
 
   Future<bool> startWater(
@@ -432,6 +443,106 @@ class WaterProvider extends ChangeNotifier {
       isRequesting = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _applyExternalRunningSession(
+    ShortcutWaterSessionSnapshot snapshot,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final nextStartTime = snapshot.startedAt;
+    final nextDeviceName = snapshot.deviceName.trim().isEmpty
+        ? '\u5f53\u524d\u8bbe\u5907'
+        : snapshot.deviceName.trim();
+
+    orderNum = snapshot.orderNum;
+    tableName = snapshot.tableName;
+    mac = snapshot.mac;
+    activeDeviceId = snapshot.deviceId;
+    startTime = nextStartTime;
+    runningTime = _formatClockDuration(
+      DateTime.now().difference(nextStartTime).inSeconds,
+    );
+
+    await prefs.setString('water_orderNum', orderNum);
+    await prefs.setString('water_tableName', tableName);
+    await prefs.setString('water_mac', mac);
+    await prefs.setString('water_activeDeviceId', activeDeviceId);
+    await prefs.setString(_activeDeviceNameKey, nextDeviceName);
+    await prefs.setInt(_activeBillTypeKey, snapshot.billType);
+    await prefs.setInt(
+      'water_start_time',
+      nextStartTime.millisecondsSinceEpoch,
+    );
+    if (snapshot.initialBalance.trim().isNotEmpty) {
+      await prefs.setString(
+        'water_initial_balance',
+        snapshot.initialBalance.trim(),
+      );
+    }
+
+    _incrementUsageCount(activeDeviceId, orderNum, createdAt: nextStartTime);
+    _startRunningTimer();
+    notifyListeners();
+  }
+
+  Future<void> _applyExternalFinishedSession(
+    ShortcutWaterSessionSnapshot snapshot, {
+    required String currentBalance,
+    BalanceUpdateCallback? onBalanceUpdated,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final shouldClearActiveState =
+        orderNum.isEmpty || orderNum.trim() == snapshot.orderNum.trim();
+
+    if (shouldClearActiveState) {
+      timer?.cancel();
+      timer = null;
+      orderNum = '';
+      tableName = '';
+      mac = '';
+      activeDeviceId = '';
+      startTime = null;
+      runningTime = '00:00';
+      await _clearPersistedActiveSession(prefs);
+    }
+
+    final syncedBalance = snapshot.balance.trim();
+    if (syncedBalance.isNotEmpty && onBalanceUpdated != null) {
+      await onBalanceUpdated(syncedBalance);
+    }
+
+    final amount = snapshot.amount > 0
+        ? snapshot.amount
+        : _balanceDiffAmount(
+            initialBalance: snapshot.initialBalance,
+            currentBalance: syncedBalance.isNotEmpty
+                ? syncedBalance
+                : currentBalance,
+          );
+    final durationSeconds = snapshot.elapsedSeconds > 0
+        ? snapshot.elapsedSeconds
+        : DateTime.now().difference(snapshot.startedAt).inSeconds;
+    final safeDurationSeconds = durationSeconds < 0 ? 0 : durationSeconds;
+    final safeDeviceName = snapshot.deviceName.trim().isEmpty
+        ? '\u672a\u547d\u540d\u8bbe\u5907'
+        : snapshot.deviceName.trim();
+
+    _upsertLocalDurationRecord(
+      WaterUsageHistoryEntry(
+        createdAt: snapshot.startedAt,
+        deviceName: safeDeviceName,
+        amount: amount,
+        deviceId: snapshot.deviceId.trim().isEmpty
+            ? null
+            : snapshot.deviceId.trim(),
+        isLocalOnly: true,
+        durationSeconds: safeDurationSeconds,
+        orderNum: snapshot.orderNum,
+      ),
+    );
+    await _persistLocalDurationPatchesOnly(prefs: prefs);
+    await ShortcutContextService.consumeFinishedWaterSession(snapshot.orderNum);
+    notifyListeners();
   }
 
   void selectHistoryMonth(int year, int month) {
@@ -1654,6 +1765,16 @@ class WaterProvider extends ChangeNotifier {
     return diff > 0 ? diff : 0;
   }
 
+  double _balanceDiffAmount({
+    required String initialBalance,
+    required String currentBalance,
+  }) {
+    final before = double.tryParse(initialBalance) ?? 0;
+    final after = double.tryParse(currentBalance) ?? 0;
+    final diff = before - after;
+    return diff > 0 ? diff : 0;
+  }
+
   int _resolveDurationSeconds({
     required Map<String, dynamic> response,
     required DateTime? startedAt,
@@ -1842,6 +1963,24 @@ class WaterProvider extends ChangeNotifier {
     final minutes = durationSeconds ~/ 60;
     final seconds = durationSeconds % 60;
     return '${minutes}\u5206${seconds}\u79d2';
+  }
+
+  String _formatClockDuration(int durationSeconds) {
+    final safeSeconds = durationSeconds < 0 ? 0 : durationSeconds;
+    final minutes = safeSeconds ~/ 60;
+    final seconds = safeSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _clearPersistedActiveSession(SharedPreferences prefs) async {
+    await prefs.remove('water_orderNum');
+    await prefs.remove('water_tableName');
+    await prefs.remove('water_mac');
+    await prefs.remove('water_start_time');
+    await prefs.remove('water_initial_balance');
+    await prefs.remove('water_activeDeviceId');
+    await prefs.remove(_activeDeviceNameKey);
+    await prefs.remove(_activeBillTypeKey);
   }
 
   void _startRunningTimer() {

@@ -137,6 +137,12 @@ import UIKit
                 let deviceId = stringValue(arguments["deviceId"])
                 WaterIntentStore.setDefaultDevice(id: deviceId)
                 result(["ok": true])
+            case "getWaterSessionSnapshot":
+                result(WaterIntentStore.sessionSnapshot())
+            case "consumeFinishedWaterSession":
+                let orderNum = stringValue(arguments["orderNum"])
+                WaterIntentStore.consumeFinishedSession(orderNum: orderNum)
+                result(["ok": true])
             case "clearShortcutContext":
                 WaterIntentStore.clearSession()
                 WaterIntentStore.clearAuthContext()

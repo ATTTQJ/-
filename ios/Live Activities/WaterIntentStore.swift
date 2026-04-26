@@ -18,6 +18,10 @@ enum WaterIntentStore {
         static let startedAtMs = "water.session.startedAtMs"
         static let initialBalance = "water.session.initialBalance"
         static let isRunning = "water.session.isRunning"
+        static let settlementAmount = "water.session.settlementAmount"
+        static let settlementElapsedSeconds = "water.session.settlementElapsedSeconds"
+        static let settlementBalance = "water.session.settlementBalance"
+        static let finishedAtMs = "water.session.finishedAtMs"
     }
 
     private static var defaults: UserDefaults {
@@ -107,6 +111,31 @@ enum WaterIntentStore {
         defaults.set(NSNumber(value: session.startedAtMs), forKey: Key.startedAtMs)
         defaults.set(session.initialBalance, forKey: Key.initialBalance)
         defaults.set(session.isRunning, forKey: Key.isRunning)
+        defaults.removeObject(forKey: Key.settlementAmount)
+        defaults.removeObject(forKey: Key.settlementElapsedSeconds)
+        defaults.removeObject(forKey: Key.settlementBalance)
+        defaults.removeObject(forKey: Key.finishedAtMs)
+        defaults.synchronize()
+    }
+
+    static func saveFinishedSession(_ session: WaterIntentSession, settlement: WaterSettlement) {
+        let defaults = defaults
+        defaults.set(session.orderNum, forKey: Key.orderNum)
+        defaults.set(session.tableName, forKey: Key.tableName)
+        defaults.set(session.mac, forKey: Key.mac)
+        defaults.set(session.deviceId, forKey: Key.deviceId)
+        defaults.set(session.deviceName, forKey: Key.deviceName)
+        defaults.set(session.isHotWater, forKey: Key.isHotWater)
+        defaults.set(NSNumber(value: session.startedAtMs), forKey: Key.startedAtMs)
+        defaults.set(session.initialBalance, forKey: Key.initialBalance)
+        defaults.set(false, forKey: Key.isRunning)
+        defaults.set(settlement.amount, forKey: Key.settlementAmount)
+        defaults.set(settlement.elapsedSeconds, forKey: Key.settlementElapsedSeconds)
+        defaults.set(settlement.balance, forKey: Key.settlementBalance)
+        defaults.set(NSNumber(value: nowMillis()), forKey: Key.finishedAtMs)
+        if !settlement.balance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            defaults.set(settlement.balance, forKey: Key.balance)
+        }
         defaults.synchronize()
     }
 
@@ -140,7 +169,57 @@ enum WaterIntentStore {
         defaults.removeObject(forKey: Key.startedAtMs)
         defaults.removeObject(forKey: Key.initialBalance)
         defaults.removeObject(forKey: Key.isRunning)
+        defaults.removeObject(forKey: Key.settlementAmount)
+        defaults.removeObject(forKey: Key.settlementElapsedSeconds)
+        defaults.removeObject(forKey: Key.settlementBalance)
+        defaults.removeObject(forKey: Key.finishedAtMs)
         defaults.synchronize()
+    }
+
+    static func sessionSnapshot() -> [String: Any] {
+        let defaults = defaults
+        let orderNum = defaults.string(forKey: Key.orderNum) ?? ""
+        guard !orderNum.isEmpty else {
+            return ["state": "none"]
+        }
+
+        let isRunning = defaults.bool(forKey: Key.isRunning)
+        let startedAtMs = int64(forKey: Key.startedAtMs)
+        let isHotWater = defaults.bool(forKey: Key.isHotWater)
+        let elapsedSeconds: Int
+        if isRunning {
+            elapsedSeconds = max(0, Int((nowMillis() - startedAtMs) / 1000))
+        } else {
+            elapsedSeconds = defaults.integer(forKey: Key.settlementElapsedSeconds)
+        }
+
+        return [
+            "state": isRunning ? "running" : "finished",
+            "orderNum": orderNum,
+            "tableName": defaults.string(forKey: Key.tableName) ?? "",
+            "mac": defaults.string(forKey: Key.mac) ?? "",
+            "deviceId": defaults.string(forKey: Key.deviceId) ?? "",
+            "deviceName": defaults.string(forKey: Key.deviceName) ?? "当前设备",
+            "isHotWater": isHotWater,
+            "billType": isHotWater ? 2 : 1,
+            "startedAtMs": startedAtMs,
+            "initialBalance": defaults.string(forKey: Key.initialBalance) ?? "",
+            "elapsedSeconds": elapsedSeconds,
+            "amount": defaults.double(forKey: Key.settlementAmount),
+            "amountText": amountText(defaults.double(forKey: Key.settlementAmount)),
+            "balance": defaults.string(forKey: Key.settlementBalance) ?? "",
+            "finishedAtMs": int64(forKey: Key.finishedAtMs)
+        ]
+    }
+
+    static func consumeFinishedSession(orderNum: String) {
+        let storedOrderNum = defaults.string(forKey: Key.orderNum) ?? ""
+        guard !storedOrderNum.isEmpty,
+              storedOrderNum == orderNum,
+              defaults.bool(forKey: Key.isRunning) == false else {
+            return
+        }
+        clearSession()
     }
 
     private static func int64(forKey key: String) -> Int64 {
@@ -148,5 +227,13 @@ enum WaterIntentStore {
             return number.int64Value
         }
         return Int64(defaults.double(forKey: key))
+    }
+
+    private static func nowMillis() -> Int64 {
+        Int64(Date().timeIntervalSince1970 * 1000)
+    }
+
+    private static func amountText(_ amount: Double) -> String {
+        "¥\(String(format: "%.2f", max(0, amount)))"
     }
 }

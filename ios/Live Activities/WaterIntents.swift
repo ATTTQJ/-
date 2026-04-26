@@ -40,7 +40,7 @@ struct StopWaterIntent: LiveActivityIntent {
         }
 
         let settlement = try await WaterApiClient(auth: auth).stopWater(session: session)
-        WaterIntentStore.clearSession()
+        WaterIntentStore.saveFinishedSession(session, settlement: settlement)
         await WaterLiveActivityController.finish(session: session, settlement: settlement)
         return .result(value: "stop", dialog: "已关水")
     }

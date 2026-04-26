@@ -44,6 +44,13 @@ struct WaterIntentSession: Codable, Hashable {
 struct WaterSettlement: Hashable {
     let amount: Double
     let elapsedSeconds: Int
+    let balance: String
+
+    init(amount: Double, elapsedSeconds: Int, balance: String = "") {
+        self.amount = amount
+        self.elapsedSeconds = elapsedSeconds
+        self.balance = balance
+    }
 
     var amountText: String {
         "¥\(String(format: "%.2f", amount))"

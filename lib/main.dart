@@ -46,13 +46,29 @@ class WaterApp extends StatefulWidget {
   State<WaterApp> createState() => _WaterAppState();
 }
 
-class _WaterAppState extends State<WaterApp> {
+class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
+  bool _isSyncingExternalWaterSession = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initApp();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_syncExternalWaterSession(syncHistoryAfterChange: true));
+    }
   }
 
   Future<void> _initApp() async {
@@ -75,6 +91,11 @@ class _WaterAppState extends State<WaterApp> {
       return;
     }
 
+    await _syncExternalWaterSession();
+    if (!mounted) {
+      return;
+    }
+
     if (userProvider.token.isNotEmpty && userProvider.userId.isNotEmpty) {
       await waterProvider.syncHistoryFromServer(
         token: userProvider.token,
@@ -91,6 +112,37 @@ class _WaterAppState extends State<WaterApp> {
           userId: userProvider.userId,
         ),
       );
+    }
+  }
+
+  Future<void> _syncExternalWaterSession({
+    bool syncHistoryAfterChange = false,
+  }) async {
+    if (_isSyncingExternalWaterSession || !mounted) {
+      return;
+    }
+
+    _isSyncingExternalWaterSession = true;
+    try {
+      final userProvider = context.read<UserProvider>();
+      final waterProvider = context.read<WaterProvider>();
+      final changed = await waterProvider.syncExternalWaterSession(
+        currentBalance: userProvider.balance,
+        onBalanceUpdated: userProvider.setBalance,
+      );
+      if (!mounted || !changed || !syncHistoryAfterChange) {
+        return;
+      }
+      if (userProvider.token.isEmpty || userProvider.userId.isEmpty) {
+        return;
+      }
+      await waterProvider.syncHistoryFromServer(
+        token: userProvider.token,
+        userId: userProvider.userId,
+        muteToast: true,
+      );
+    } finally {
+      _isSyncingExternalWaterSession = false;
     }
   }
 

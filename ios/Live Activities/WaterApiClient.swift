@@ -81,7 +81,11 @@ struct WaterApiClient {
         let elapsedSeconds = extractDurationSeconds(from: response)
             ?? session.elapsedSeconds
 
-        return WaterSettlement(amount: max(0, amount), elapsedSeconds: max(0, elapsedSeconds))
+        return WaterSettlement(
+            amount: max(0, amount),
+            elapsedSeconds: max(0, elapsedSeconds),
+            balance: syncedBalance ?? ""
+        )
     }
 
     func fetchBalance() async throws -> String {
