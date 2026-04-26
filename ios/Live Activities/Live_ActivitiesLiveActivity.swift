@@ -81,7 +81,7 @@ private struct WaterIslandExpandedContent: View {
     let context: ActivityViewContext<WaterLiveActivityAttributes>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
                 WaterStatusIcon(context: context, size: 38)
 
@@ -163,7 +163,7 @@ private struct WaterFinishedBlock: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 18)
         .padding(.top, 1)
-        .padding(.bottom, 5)
+        .padding(.bottom, 9)
     }
 }
 
@@ -227,26 +227,26 @@ private struct WaterAmountText: View {
 
 private struct WaterAmountPill: View {
     let state: WaterLiveActivityAttributes.ContentState
-    private let pillWidth: CGFloat = 118
+    private let pillWidth: CGFloat = 108
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: 4) {
             Text("扣费")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.56))
                 .frame(width: pillWidth, alignment: .trailing)
 
             Text(state.amountText.isEmpty ? "¥0.00" : state.amountText)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(size: 23, weight: .bold, design: .rounded))
                 .foregroundStyle(Color(red: 0.78, green: 1.0, blue: 0.96))
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
-                .frame(width: pillWidth - 28, alignment: .trailing)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .frame(width: pillWidth - 24, alignment: .trailing)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(Color(red: 0.13, green: 0.84, blue: 0.78).opacity(0.18))
+                        .fill(Color(red: 0.13, green: 0.84, blue: 0.78).opacity(0.15))
                 )
         }
         .frame(width: pillWidth, alignment: .trailing)

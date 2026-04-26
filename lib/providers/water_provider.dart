@@ -1392,12 +1392,18 @@ class WaterProvider extends ChangeNotifier {
 
     final merged = <WaterUsageHistoryEntry>[];
     final usedPatchKeys = <String>{};
+    final fallbackCounts = _serverFallbackBucketCounts(serverEntries);
 
     for (final serverEntry in serverEntries) {
+      final hasServerOrder = serverEntry.orderNum.trim().isNotEmpty;
+      final fallbackAllowed =
+          !hasServerOrder &&
+          (fallbackCounts[_serverFallbackBucketKey(serverEntry)] ?? 0) <= 1;
       final localEntry = _resolveDurationPatchForServerEntry(
         serverEntry: serverEntry,
         usedPatchKeys: usedPatchKeys,
         rememberLink: rememberLinks,
+        allowFallbackMatching: fallbackAllowed,
       );
       if (localEntry == null) {
         merged.add(serverEntry);
@@ -1436,24 +1442,38 @@ class WaterProvider extends ChangeNotifier {
     required WaterUsageHistoryEntry serverEntry,
     required Set<String> usedPatchKeys,
     bool rememberLink = false,
+    bool allowFallbackMatching = true,
   }) {
     final directPatchKey = _directPatchKeyForOrder(serverEntry.orderNum);
-    if (directPatchKey != null &&
-        !usedPatchKeys.contains(directPatchKey) &&
-        _durationPatches.containsKey(directPatchKey)) {
+    if (directPatchKey != null) {
+      final directPatch = _durationPatches[directPatchKey];
+      if (directPatch == null ||
+          usedPatchKeys.contains(directPatchKey) ||
+          !_canUseDurationPatchForMerge(directPatch)) {
+        return null;
+      }
+
       usedPatchKeys.add(directPatchKey);
       if (rememberLink) {
         _historyPatchLinks[_serverPatchLinkKey(serverEntry)] = directPatchKey;
       }
-      return _durationPatches[directPatchKey];
+      return directPatch;
+    }
+
+    if (!allowFallbackMatching) {
+      return null;
     }
 
     final linkedPatchKey = _historyPatchLinks[_serverPatchLinkKey(serverEntry)];
+    final linkedPatch = linkedPatchKey == null
+        ? null
+        : _durationPatches[linkedPatchKey];
     if (linkedPatchKey != null &&
         !usedPatchKeys.contains(linkedPatchKey) &&
-        _durationPatches.containsKey(linkedPatchKey)) {
+        linkedPatch != null &&
+        _canUseDurationPatchForMerge(linkedPatch)) {
       usedPatchKeys.add(linkedPatchKey);
-      return _durationPatches[linkedPatchKey];
+      return linkedPatch;
     }
 
     final devicePatchKey = _findBestPatchByDeviceId(
@@ -1461,11 +1481,15 @@ class WaterProvider extends ChangeNotifier {
       usedPatchKeys: usedPatchKeys,
     );
     if (devicePatchKey != null) {
+      final devicePatch = _durationPatches[devicePatchKey];
+      if (devicePatch == null || !_canUseDurationPatchForMerge(devicePatch)) {
+        return null;
+      }
       usedPatchKeys.add(devicePatchKey);
       if (rememberLink) {
         _historyPatchLinks[_serverPatchLinkKey(serverEntry)] = devicePatchKey;
       }
-      return _durationPatches[devicePatchKey];
+      return devicePatch;
     }
 
     final bestPatchKey = _findBestLocalHistoryMatch(
@@ -1476,11 +1500,16 @@ class WaterProvider extends ChangeNotifier {
       return null;
     }
 
+    final bestPatch = _durationPatches[bestPatchKey];
+    if (bestPatch == null || !_canUseDurationPatchForMerge(bestPatch)) {
+      return null;
+    }
+
     usedPatchKeys.add(bestPatchKey);
     if (rememberLink) {
       _historyPatchLinks[_serverPatchLinkKey(serverEntry)] = bestPatchKey;
     }
-    return _durationPatches[bestPatchKey];
+    return bestPatch;
   }
 
   String _historyMergeKey(WaterUsageHistoryEntry entry) {
@@ -1580,6 +1609,30 @@ class WaterProvider extends ChangeNotifier {
     return entry.durationSeconds != null || (label.isNotEmpty && label != '--');
   }
 
+  bool _canUseDurationPatchForMerge(WaterUsageHistoryEntry entry) {
+    return entry.isLocalOnly && _hasDuration(entry);
+  }
+
+  Map<String, int> _serverFallbackBucketCounts(
+    Iterable<WaterUsageHistoryEntry> entries,
+  ) {
+    final counts = <String, int>{};
+    for (final entry in entries) {
+      final key = _serverFallbackBucketKey(entry);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  String _serverFallbackBucketKey(WaterUsageHistoryEntry entry) {
+    final deviceId = entry.deviceId?.trim() ?? '';
+    final nameSignature = _historySignature(entry.displayDeviceName);
+    final identity = nameSignature.isNotEmpty
+        ? 'name:$nameSignature'
+        : 'device:$deviceId';
+    return '$identity|${entry.minutePrecisionTime.toIso8601String()}';
+  }
+
   String? _findBestLocalHistoryMatch({
     required WaterUsageHistoryEntry target,
     required Set<String> usedPatchKeys,
@@ -1595,6 +1648,10 @@ class WaterProvider extends ChangeNotifier {
       }
 
       final candidate = entry.value;
+      if (!_canUseDurationPatchForMerge(candidate)) {
+        continue;
+      }
+
       final diffSeconds = _historyTimeDistanceSeconds(candidate, target);
       if (diffSeconds > 90 * 60) {
         continue;
@@ -1644,6 +1701,10 @@ class WaterProvider extends ChangeNotifier {
       }
 
       final candidate = entry.value;
+      if (!_canUseDurationPatchForMerge(candidate)) {
+        continue;
+      }
+
       final candidateDeviceId = candidate.deviceId?.trim() ?? '';
       if (candidateDeviceId.isEmpty || candidateDeviceId != targetDeviceId) {
         continue;
