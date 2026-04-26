@@ -5,21 +5,17 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-    private static let siriChannelName = "com.fakeuy.water/siri"
     private static let liveActivityChannelName = "com.fakeuy.water/live_activity"
-    private static let actionKey = "water_action"
-    private static let deviceKey = "water_device"
-    private static var siriChannel: FlutterMethodChannel?
+    private static let shortcutContextChannelName = "com.fakeuy.water/shortcut_context"
     private static var liveActivityChannel: FlutterMethodChannel?
-    @available(iOS 16.1, *)
-    private static var waterActivity: Activity<WaterLiveActivityAttributes>?
+    private static var shortcutContextChannel: FlutterMethodChannel?
 
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
-        Self.registerSiriChannelIfNeeded(rootViewController: window?.rootViewController)
+        Self.registerChannelsIfNeeded(rootViewController: window?.rootViewController)
         return result
     }
 
@@ -32,31 +28,21 @@ import UIKit
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
-        if Self.handleIncomingURL(url) {
+        if url.scheme == "waterapp" {
             return true
         }
         return super.application(app, open: url, options: options)
     }
 
-    static func registerSiriChannelIfNeeded(rootViewController: UIViewController?) {
+    static func registerChannelsIfNeeded(rootViewController: UIViewController?) {
         guard let flutterViewController = rootViewController as? FlutterViewController else {
             return
         }
 
-        let channel = FlutterMethodChannel(
-            name: siriChannelName,
+        registerLiveActivityChannelIfNeeded(
             binaryMessenger: flutterViewController.binaryMessenger
         )
-        channel.setMethodCallHandler { call, result in
-            switch call.method {
-            case "getPendingAction":
-                result(fetchAndClearAction())
-            default:
-                result(FlutterMethodNotImplemented)
-            }
-        }
-        siriChannel = channel
-        registerLiveActivityChannelIfNeeded(
+        registerShortcutContextChannelIfNeeded(
             binaryMessenger: flutterViewController.binaryMessenger
         )
     }
@@ -69,16 +55,19 @@ import UIKit
             binaryMessenger: binaryMessenger
         )
         channel.setMethodCallHandler { call, result in
+            guard #available(iOS 16.1, *) else {
+                result(["ok": false, "reason": "unsupported"])
+                return
+            }
+
+            let arguments = call.arguments as? [String: Any] ?? [:]
             switch call.method {
             case "startWater":
-                guard #available(iOS 16.1, *) else {
-                    result(["ok": false, "reason": "unsupported"])
-                    return
-                }
-                let arguments = call.arguments as? [String: Any] ?? [:]
                 Task {
                     do {
-                        try await startWaterLiveActivity(arguments: arguments)
+                        let session = sessionFromFlutterArguments(arguments)
+                        try await WaterLiveActivityController.start(session: session)
+                        WaterIntentStore.saveSession(session)
                         result(["ok": true])
                     } catch {
                         result(
@@ -91,23 +80,28 @@ import UIKit
                     }
                 }
             case "updateWater":
-                guard #available(iOS 16.1, *) else {
-                    result(["ok": false, "reason": "unsupported"])
-                    return
-                }
-                let arguments = call.arguments as? [String: Any] ?? [:]
                 Task {
-                    await updateWaterLiveActivity(arguments: arguments)
+                    await WaterLiveActivityController.updateRunning(
+                        orderNum: stringValue(arguments["orderNum"]),
+                        startedAt: dateValue(arguments["startTimeMillis"]) ?? Date(),
+                        elapsedSeconds: intValue(arguments["elapsedSeconds"])
+                    )
                     result(["ok": true])
                 }
             case "endWater":
-                guard #available(iOS 16.1, *) else {
-                    result(["ok": false, "reason": "unsupported"])
-                    return
-                }
-                let arguments = call.arguments as? [String: Any] ?? [:]
                 Task {
-                    await endWaterLiveActivity(arguments: arguments)
+                    let orderNum = stringValue(arguments["orderNum"])
+                    if let session = WaterIntentStore.activeSession(),
+                       orderNum.isEmpty || session.orderNum == orderNum {
+                        let settlement = WaterSettlement(
+                            amount: parseAmountText(stringValue(arguments["amountText"])),
+                            elapsedSeconds: intValue(arguments["elapsedSeconds"])
+                        )
+                        await WaterLiveActivityController.finish(session: session, settlement: settlement)
+                        WaterIntentStore.clearSession()
+                    } else {
+                        await WaterLiveActivityController.endMatching(orderNum: orderNum)
+                    }
                     result(["ok": true])
                 }
             default:
@@ -117,127 +111,78 @@ import UIKit
         liveActivityChannel = channel
     }
 
-    @available(iOS 16.1, *)
-    private static func startWaterLiveActivity(arguments: [String: Any]) async throws {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            return
-        }
-
-        await endWaterLiveActivity(arguments: arguments)
-
-        let deviceId = stringValue(arguments["deviceId"])
-        let deviceName = stringValue(arguments["deviceName"], fallback: "当前设备")
-        let orderNum = stringValue(arguments["orderNum"])
-        let startTimeMillis = doubleValue(arguments["startTimeMillis"])
-        let startedAt = startTimeMillis > 0
-            ? Date(timeIntervalSince1970: startTimeMillis / 1000)
-            : Date()
-        let elapsedSeconds = intValue(arguments["elapsedSeconds"])
-
-        let attributes = WaterLiveActivityAttributes(
-            deviceId: deviceId,
-            deviceName: deviceName,
-            orderNum: orderNum
+    private static func registerShortcutContextChannelIfNeeded(
+        binaryMessenger: FlutterBinaryMessenger
+    ) {
+        let channel = FlutterMethodChannel(
+            name: shortcutContextChannelName,
+            binaryMessenger: binaryMessenger
         )
-        let state = WaterLiveActivityAttributes.ContentState(
-            statusText: "正在用水",
-            startedAt: startedAt,
-            elapsedSeconds: elapsedSeconds,
-            amountText: "",
+        channel.setMethodCallHandler { call, result in
+            let arguments = call.arguments as? [String: Any] ?? [:]
+
+            switch call.method {
+            case "syncAuthContext":
+                WaterIntentStore.saveAuthContext(
+                    token: stringValue(arguments["token"]),
+                    userId: stringValue(arguments["userId"]),
+                    balance: stringValue(arguments["balance"])
+                )
+                result(["ok": true])
+            case "syncDeviceCatalog":
+                let devices = decodeDevicesJson(stringValue(arguments["devicesJson"]))
+                WaterIntentStore.saveDeviceCatalog(devices)
+                result(["ok": true])
+            case "setDefaultDevice":
+                let deviceId = stringValue(arguments["deviceId"])
+                WaterIntentStore.setDefaultDevice(id: deviceId)
+                result(["ok": true])
+            case "clearShortcutContext":
+                WaterIntentStore.clearSession()
+                WaterIntentStore.clearAuthContext()
+                result(["ok": true])
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
+        shortcutContextChannel = channel
+    }
+
+    @available(iOS 16.1, *)
+    private static func sessionFromFlutterArguments(_ arguments: [String: Any]) -> WaterIntentSession {
+        let startTimeMillis = int64Value(arguments["startTimeMillis"])
+        let deviceName = stringValue(arguments["deviceName"], fallback: "当前设备")
+        let billType = intValue(arguments["billType"])
+
+        return WaterIntentSession(
+            orderNum: stringValue(arguments["orderNum"]),
+            tableName: stringValue(arguments["tableName"]),
+            mac: stringValue(arguments["mac"]),
+            deviceId: stringValue(arguments["deviceId"]),
+            deviceName: deviceName,
+            isHotWater: billType == 2,
+            startedAtMs: startTimeMillis > 0 ? startTimeMillis : Int64(Date().timeIntervalSince1970 * 1000),
+            initialBalance: stringValue(arguments["initialBalance"]),
             isRunning: true
         )
-
-        if #available(iOS 16.2, *) {
-            waterActivity = try Activity.request(
-                attributes: attributes,
-                content: ActivityContent(state: state, staleDate: nil),
-                pushType: nil
-            )
-        } else {
-            waterActivity = try Activity.request(
-                attributes: attributes,
-                contentState: state,
-                pushType: nil
-            )
-        }
     }
 
-    @available(iOS 16.1, *)
-    private static func updateWaterLiveActivity(arguments: [String: Any]) async {
-        guard let activity = resolveWaterActivity(arguments: arguments) else {
-            return
+    private static func decodeDevicesJson(_ value: String) -> [WaterIntentDevice] {
+        guard let data = value.data(using: .utf8),
+              let rawItems = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
         }
 
-        let startedAt = dateValue(arguments["startTimeMillis"])
-            ?? activity.contentState.startedAt
-        let state = WaterLiveActivityAttributes.ContentState(
-            statusText: stringValue(arguments["statusText"], fallback: "正在用水"),
-            startedAt: startedAt,
-            elapsedSeconds: intValue(arguments["elapsedSeconds"]),
-            amountText: stringValue(
-                arguments["amountText"],
-                fallback: activity.contentState.amountText
-            ),
-            isRunning: boolValue(arguments["isRunning"], fallback: true)
-        )
-
-        if #available(iOS 16.2, *) {
-            await activity.update(ActivityContent(state: state, staleDate: nil))
-        } else {
-            await activity.update(using: state)
-        }
-        waterActivity = activity
-    }
-
-    @available(iOS 16.1, *)
-    private static func endWaterLiveActivity(arguments: [String: Any]) async {
-        let orderNum = stringValue(arguments["orderNum"])
-        let targetActivities = Activity<WaterLiveActivityAttributes>.activities
-            .filter { activity in
-                orderNum.isEmpty || activity.attributes.orderNum == orderNum
+        return rawItems.compactMap { item in
+            let id = stringValue(item["id"])
+            guard !id.isEmpty else {
+                return nil
             }
-
-        let activities = targetActivities.isEmpty
-            ? Activity<WaterLiveActivityAttributes>.activities
-            : targetActivities
-        let elapsedSeconds = intValue(arguments["elapsedSeconds"])
-        let amountText = stringValue(arguments["amountText"])
-
-        for activity in activities {
-            let state = WaterLiveActivityAttributes.ContentState(
-                statusText: "已关水",
-                startedAt: activity.contentState.startedAt,
-                elapsedSeconds: elapsedSeconds,
-                amountText: amountText,
-                isRunning: false
+            return WaterIntentDevice(
+                id: id,
+                name: stringValue(item["name"], fallback: "当前设备"),
+                billType: intValue(item["billType"])
             )
-            if #available(iOS 16.2, *) {
-                await activity.end(
-                    ActivityContent(state: state, staleDate: nil),
-                    dismissalPolicy: .after(Date().addingTimeInterval(12))
-                )
-            } else {
-                await activity.end(
-                    using: state,
-                    dismissalPolicy: .after(Date().addingTimeInterval(12))
-                )
-            }
-        }
-
-        waterActivity = nil
-    }
-
-    @available(iOS 16.1, *)
-    private static func resolveWaterActivity(
-        arguments: [String: Any]
-    ) -> Activity<WaterLiveActivityAttributes>? {
-        let orderNum = stringValue(arguments["orderNum"])
-        if let waterActivity,
-           orderNum.isEmpty || waterActivity.attributes.orderNum == orderNum {
-            return waterActivity
-        }
-        return Activity<WaterLiveActivityAttributes>.activities.first { activity in
-            orderNum.isEmpty || activity.attributes.orderNum == orderNum
         }
     }
 
@@ -245,19 +190,6 @@ import UIKit
         let text = value.map { "\($0)" } ?? ""
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? fallback : trimmed
-    }
-
-    private static func doubleValue(_ value: Any?) -> Double {
-        if let value = value as? Double {
-            return value
-        }
-        if let value = value as? Int {
-            return Double(value)
-        }
-        if let value = value as? Int64 {
-            return Double(value)
-        }
-        return Double(stringValue(value)) ?? 0
     }
 
     private static func intValue(_ value: Any?) -> Int {
@@ -273,118 +205,55 @@ import UIKit
         return Int(stringValue(value)) ?? 0
     }
 
-    private static func boolValue(_ value: Any?, fallback: Bool) -> Bool {
-        if let value = value as? Bool {
+    private static func int64Value(_ value: Any?) -> Int64 {
+        if let value = value as? Int64 {
             return value
         }
-        let text = stringValue(value).lowercased()
-        if text == "true" || text == "1" {
-            return true
+        if let value = value as? Int {
+            return Int64(value)
         }
-        if text == "false" || text == "0" {
-            return false
+        if let value = value as? Double {
+            return Int64(value)
         }
-        return fallback
+        return Int64(stringValue(value)) ?? 0
     }
 
     private static func dateValue(_ value: Any?) -> Date? {
-        let millis = doubleValue(value)
+        let millis = int64Value(value)
         if millis <= 0 {
             return nil
         }
-        return Date(timeIntervalSince1970: millis / 1000)
+        return Date(timeIntervalSince1970: TimeInterval(millis) / 1000)
     }
 
-    @discardableResult
-    static func handleIncomingURL(_ url: URL) -> Bool {
-        guard url.scheme == "waterapp" else {
-            return false
+    private static func parseAmountText(_ value: String) -> Double {
+        let filtered = value.filter { char in
+            char.isNumber || char == "." || char == "-"
         }
-
-        let action = url.host ?? ""
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        let deviceName = components?.queryItems?.first(where: { $0.name == "device" })?.value ?? ""
-        saveAction(action: action, device: deviceName)
-        return true
-    }
-
-    static func saveAction(action: String, device: String) {
-        UserDefaults.standard.set(action, forKey: actionKey)
-        UserDefaults.standard.set(device, forKey: deviceKey)
-        UserDefaults.standard.synchronize()
-    }
-
-    static func fetchAndClearAction() -> [String: String]? {
-        let action = UserDefaults.standard.string(forKey: actionKey)
-        let device = UserDefaults.standard.string(forKey: deviceKey)
-
-        guard let action, !action.isEmpty else {
-            return nil
-        }
-
-        UserDefaults.standard.removeObject(forKey: actionKey)
-        UserDefaults.standard.removeObject(forKey: deviceKey)
-        UserDefaults.standard.synchronize()
-        return [
-            "action": action,
-            "device": device ?? ""
-        ]
+        return Double(String(filtered)) ?? 0
     }
 }
 
-@available(iOS 16.0, *)
-struct StartWaterIntent: AppIntent {
-    static var title: LocalizedStringResource = "Start Water"
-    static var openAppWhenRun: Bool = true
-
-    @Parameter(title: "Device Name")
-    var deviceName: String?
-
-    @MainActor
-    func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        AppDelegate.saveAction(action: "start", device: deviceName ?? "")
-        return .result(
-            value: "start",
-            dialog: "Opening the water controller."
-        )
-    }
-}
-
-@available(iOS 16.0, *)
-struct StopWaterIntent: AppIntent {
-    static var title: LocalizedStringResource = "Stop Water"
-    static var openAppWhenRun: Bool = true
-
-    @MainActor
-    func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        AppDelegate.saveAction(action: "stop", device: "")
-        return .result(
-            value: "stop",
-            dialog: "Opening the water controller."
-        )
-    }
-}
-
-@available(iOS 16.0, *)
+@available(iOS 17.0, *)
 struct WaterShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: StartWaterIntent(),
             phrases: [
-                "Start water with \(.applicationName)",
-                "Turn on water with \(.applicationName)"
+                "开始用水 \(.applicationName)",
+                "开水 \(.applicationName)"
             ],
-            shortTitle: "Start Water",
+            shortTitle: "开始用水",
             systemImageName: "drop.fill"
         )
 
         AppShortcut(
             intent: StopWaterIntent(),
             phrases: [
-                "Stop water with \(.applicationName)",
-                "Turn off water with \(.applicationName)"
+                "结束用水 \(.applicationName)",
+                "关水 \(.applicationName)"
             ],
-            shortTitle: "Stop Water",
+            shortTitle: "结束用水",
             systemImageName: "xmark.circle.fill"
         )
     }

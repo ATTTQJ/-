@@ -8,15 +8,11 @@ class SceneDelegate: FlutterSceneDelegate {
         options connectionOptions: UIScene.ConnectionOptions
     ) {
         super.scene(scene, willConnectTo: session, options: connectionOptions)
-        AppDelegate.registerSiriChannelIfNeeded(rootViewController: window?.rootViewController)
-
-        if let url = connectionOptions.urlContexts.first?.url {
-            _ = AppDelegate.handleIncomingURL(url)
-        }
+        AppDelegate.registerChannelsIfNeeded(rootViewController: window?.rootViewController)
     }
 
     override func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        if let url = URLContexts.first?.url, AppDelegate.handleIncomingURL(url) {
+        if let url = URLContexts.first?.url, url.scheme == "waterapp" {
             return
         }
         super.scene(scene, openURLContexts: URLContexts)

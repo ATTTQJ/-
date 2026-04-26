@@ -14,4 +14,5 @@ struct WaterLiveActivityAttributes: ActivityAttributes {
     var deviceId: String
     var deviceName: String
     var orderNum: String
+    var isHotWater: Bool
 }
