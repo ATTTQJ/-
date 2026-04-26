@@ -102,19 +102,18 @@ private struct WaterIslandExpandedContent: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            HStack(alignment: .bottom, spacing: 12) {
-                if context.state.isRunning {
+            if context.state.isRunning {
+                HStack(alignment: .bottom, spacing: 12) {
                     WaterElapsedBlock(state: context.state)
-                } else {
-                    WaterFinishedBlock(state: context.state)
-                }
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 8)
 
-                if context.state.isRunning {
                     WaterStopButton()
                         .padding(.bottom, 2)
                 }
+            } else {
+                WaterFinishedBlock(state: context.state)
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(.top, 2)
@@ -143,7 +142,7 @@ private struct WaterFinishedBlock: View {
     let state: WaterLiveActivityAttributes.ContentState
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .bottom, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("用水时长")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
@@ -155,12 +154,16 @@ private struct WaterFinishedBlock: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(width: 122, alignment: .leading)
+
+            Spacer(minLength: 16)
 
             WaterAmountPill(state: state)
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 2)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 18)
+        .padding(.top, 1)
+        .padding(.bottom, 5)
     }
 }
 
@@ -224,25 +227,29 @@ private struct WaterAmountText: View {
 
 private struct WaterAmountPill: View {
     let state: WaterLiveActivityAttributes.ContentState
+    private let pillWidth: CGFloat = 118
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 5) {
+        VStack(alignment: .trailing, spacing: 6) {
             Text("扣费")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.56))
+                .frame(width: pillWidth, alignment: .trailing)
 
             Text(state.amountText.isEmpty ? "¥0.00" : state.amountText)
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(Color(red: 0.78, green: 1.0, blue: 0.96))
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 7)
+                .frame(width: pillWidth - 28, alignment: .trailing)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
                 .background(
                     Capsule()
                         .fill(Color(red: 0.13, green: 0.84, blue: 0.78).opacity(0.18))
                 )
         }
+        .frame(width: pillWidth, alignment: .trailing)
     }
 }
 

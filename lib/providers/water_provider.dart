@@ -255,6 +255,7 @@ class WaterProvider extends ChangeNotifier {
 
     final targetDeviceId = device['deviceInfId'].toString();
     final targetBillType = device['billType'].toString();
+    final requestedStartTime = DateTime.now();
 
     try {
       await ApiService.post(
@@ -289,7 +290,7 @@ class WaterProvider extends ChangeNotifier {
       );
 
       if (res != null && (res['code'] == 0 || res['code'] == '0')) {
-        startTime = DateTime.now();
+        startTime = requestedStartTime;
         orderNum = res['data']['orderNum']?.toString() ?? '';
         tableName = res['data']['tableName']?.toString() ?? '';
         mac = res['data']['mac']?.toString() ?? '';
@@ -1594,15 +1595,21 @@ class WaterProvider extends ChangeNotifier {
       }
 
       final candidate = entry.value;
-      if (!_historyNamesLikelySame(
-        target.displayDeviceName,
-        candidate.displayDeviceName,
-      )) {
+      final diffSeconds = _historyTimeDistanceSeconds(candidate, target);
+      if (diffSeconds > 90 * 60) {
         continue;
       }
 
-      final diffSeconds = _historyTimeDistanceSeconds(candidate, target);
-      if (diffSeconds > 90 * 60) {
+      final namesLikelySame = _historyNamesLikelySame(
+        target.displayDeviceName,
+        candidate.displayDeviceName,
+      );
+      if (!namesLikelySame &&
+          (diffSeconds > 5 * 60 ||
+              !_historyNamesCanFallbackMatch(
+                target.displayDeviceName,
+                candidate.displayDeviceName,
+              ))) {
         continue;
       }
 
@@ -1745,6 +1752,27 @@ class WaterProvider extends ChangeNotifier {
         leftType == rightType &&
         leftRoom.isNotEmpty &&
         leftRoom == rightRoom;
+  }
+
+  bool _historyNamesCanFallbackMatch(String left, String right) {
+    final leftNormalized = _normalizeHistoryDeviceName(left);
+    final rightNormalized = _normalizeHistoryDeviceName(right);
+    final leftType = _historyType(leftNormalized);
+    final rightType = _historyType(rightNormalized);
+    if (leftType.isNotEmpty && rightType.isNotEmpty && leftType != rightType) {
+      return false;
+    }
+
+    final leftRoom = _historyRoomToken(leftNormalized);
+    final rightRoom = _historyRoomToken(rightNormalized);
+    if (leftRoom.isNotEmpty && rightRoom.isNotEmpty && leftRoom != rightRoom) {
+      return false;
+    }
+
+    return leftType.isNotEmpty ||
+        rightType.isNotEmpty ||
+        leftRoom.isNotEmpty ||
+        rightRoom.isNotEmpty;
   }
 
   String _historySignature(String name) {

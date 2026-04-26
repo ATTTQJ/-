@@ -14,6 +14,7 @@ struct WaterApiClient {
             throw WaterIntentError.missingAuth
         }
 
+        let startedAtMs = nowMillis()
         let baseParams: [(String, String)] = [
             ("orderWay", "1"),
             ("theConnectionMethod", "2"),
@@ -53,7 +54,7 @@ struct WaterApiClient {
             deviceId: device.id,
             deviceName: device.name.isEmpty ? "当前设备" : device.name,
             isHotWater: device.isHotWater,
-            startedAtMs: nowMillis(),
+            startedAtMs: startedAtMs,
             initialBalance: auth.balance,
             isRunning: true
         )
