@@ -126,14 +126,7 @@ class DeviceProvider extends ChangeNotifier {
         }
       }
 
-      processedList.sort((a, b) {
-        int typeA = a["billType"] as int;
-        int typeB = b["billType"] as int;
-        if (typeA != typeB) return typeB.compareTo(typeA);
-        return a["deviceInfName"].toString().compareTo(
-          b["deviceInfName"].toString(),
-        );
-      });
+      _sortDeviceListWithCurrentOrder(processedList);
 
       deviceList = processedList;
       if (deviceList.isNotEmpty &&
@@ -178,6 +171,49 @@ class DeviceProvider extends ChangeNotifier {
   Future<void> _persistDeviceList() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('saved_device_list', jsonEncode(deviceList));
+  }
+
+  void _sortDeviceListWithCurrentOrder(List<Map<String, dynamic>> devices) {
+    final currentOrder = <String, int>{};
+    for (var i = 0; i < deviceList.length; i++) {
+      final id = deviceList[i]["deviceInfId"]?.toString() ?? "";
+      if (id.isNotEmpty) {
+        currentOrder[id] = i;
+      }
+    }
+
+    devices.sort((a, b) {
+      final aId = a["deviceInfId"]?.toString() ?? "";
+      final bId = b["deviceInfId"]?.toString() ?? "";
+      final aOrder = currentOrder[aId];
+      final bOrder = currentOrder[bId];
+
+      if (aOrder != null && bOrder != null) {
+        return aOrder.compareTo(bOrder);
+      }
+      if (aOrder != null) {
+        return -1;
+      }
+      if (bOrder != null) {
+        return 1;
+      }
+
+      return _compareDevicesByDefaultOrder(a, b);
+    });
+  }
+
+  int _compareDevicesByDefaultOrder(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+  ) {
+    final typeA = int.tryParse(a["billType"]?.toString() ?? "") ?? 0;
+    final typeB = int.tryParse(b["billType"]?.toString() ?? "") ?? 0;
+    if (typeA != typeB) {
+      return typeB.compareTo(typeA);
+    }
+    return a["deviceInfName"].toString().compareTo(
+      b["deviceInfName"].toString(),
+    );
   }
 
   Future<void> syncShortcutDeviceCatalog() async {
