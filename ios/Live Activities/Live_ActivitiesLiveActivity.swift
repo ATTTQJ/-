@@ -227,29 +227,22 @@ private struct WaterAmountText: View {
 
 private struct WaterAmountPill: View {
     let state: WaterLiveActivityAttributes.ContentState
-    private let pillWidth: CGFloat = 108
+    private let pillWidth: CGFloat = 104
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            Text("扣费")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.56))
-                .frame(width: pillWidth, alignment: .trailing)
-
-            Text(state.amountText.isEmpty ? "¥0.00" : state.amountText)
-                .font(.system(size: 23, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(red: 0.78, green: 1.0, blue: 0.96))
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-                .frame(width: pillWidth - 24, alignment: .trailing)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(Color(red: 0.13, green: 0.84, blue: 0.78).opacity(0.15))
-                )
-        }
-        .frame(width: pillWidth, alignment: .trailing)
+        Text(state.amountText.isEmpty ? "¥0.00" : state.amountText)
+            .font(.system(size: 25, weight: .bold, design: .rounded))
+            .foregroundStyle(Color(red: 0.78, green: 1.0, blue: 0.96))
+            .lineLimit(1)
+            .minimumScaleFactor(0.78)
+            .frame(width: pillWidth - 20, alignment: .trailing)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color(red: 0.13, green: 0.84, blue: 0.78).opacity(0.15))
+            )
+            .frame(width: pillWidth, alignment: .trailing)
     }
 }
 
