@@ -18,12 +18,21 @@ struct Live_ActivitiesLiveActivity: Widget {
             } compactLeading: {
                 WaterCompactIcon(context: context)
             } compactTrailing: {
-                WaterLiveTimerText(state: context.state)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(width: 52, height: 28, alignment: .trailing)
+                if context.state.isRunning {
+                    WaterLiveTimerText(state: context.state)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(width: 52, height: 28, alignment: .trailing)
+                } else {
+                    Text(context.state.amountText.isEmpty ? "¥0.00" : context.state.amountText)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.78, green: 1.0, blue: 0.96))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .frame(width: 58, height: 28, alignment: .trailing)
+                }
             } minimal: {
                 Image(systemName: context.state.isRunning ? waterIconName(context) : "checkmark.circle.fill")
                     .font(.system(size: 14, weight: .semibold))
@@ -161,9 +170,10 @@ private struct WaterFinishedBlock: View {
             WaterAmountPill(state: state)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 18)
+        .padding(.leading, 18)
+        .padding(.trailing, 12)
         .padding(.top, 1)
-        .padding(.bottom, 9)
+        .padding(.bottom, 7)
     }
 }
 
@@ -227,17 +237,18 @@ private struct WaterAmountText: View {
 
 private struct WaterAmountPill: View {
     let state: WaterLiveActivityAttributes.ContentState
-    private let pillWidth: CGFloat = 104
+    private let pillWidth: CGFloat = 96
 
     var body: some View {
         Text(state.amountText.isEmpty ? "¥0.00" : state.amountText)
-            .font(.system(size: 25, weight: .bold, design: .rounded))
+            .font(.system(size: 22, weight: .bold, design: .rounded))
             .foregroundStyle(Color(red: 0.78, green: 1.0, blue: 0.96))
             .lineLimit(1)
             .minimumScaleFactor(0.78)
-            .frame(width: pillWidth - 20, alignment: .trailing)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .multilineTextAlignment(.center)
+            .frame(width: pillWidth - 16, alignment: .center)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
             .background(
                 Capsule()
                     .fill(Color(red: 0.13, green: 0.84, blue: 0.78).opacity(0.15))
