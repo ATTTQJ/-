@@ -3,24 +3,74 @@ import AppIntents
 import Foundation
 
 @available(iOS 17.0, *)
+struct WaterDeviceEntity: AppEntity, Identifiable {
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "设备"
+    static let defaultQuery = WaterDeviceEntityQuery()
+
+    let id: String
+    let name: String
+    let billType: Int
+
+    init(device: WaterIntentDevice) {
+        self.id = device.id
+        self.name = device.name
+        self.billType = device.billType
+    }
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(
+            title: "\(name)",
+            subtitle: "\(billType == 2 ? "热水" : "直饮水")",
+            image: .init(systemName: billType == 2 ? "flame.fill" : "drop.fill")
+        )
+    }
+
+    var intentDevice: WaterIntentDevice {
+        WaterIntentDevice(id: id, name: name, billType: billType)
+    }
+}
+
+@available(iOS 17.0, *)
+struct WaterDeviceEntityQuery: EntityQuery {
+    func entities(for identifiers: [WaterDeviceEntity.ID]) async throws -> [WaterDeviceEntity] {
+        let idSet = Set(identifiers)
+        return WaterIntentStore.deviceCatalog()
+            .filter { idSet.contains($0.id) }
+            .map(WaterDeviceEntity.init)
+    }
+
+    func suggestedEntities() async throws -> [WaterDeviceEntity] {
+        WaterIntentStore.deviceCatalog().map(WaterDeviceEntity.init)
+    }
+
+    func defaultResult() async -> WaterDeviceEntity? {
+        WaterIntentStore.defaultDevice().map(WaterDeviceEntity.init)
+    }
+}
+
+@available(iOS 17.0, *)
 struct StartWaterIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "开始用水"
-    static var description = IntentDescription("使用默认设备开始用水")
+    static var description = IntentDescription("选择设备并开始用水")
     static var openAppWhenRun: Bool = false
+
+    @Parameter(title: "设备", requestValueDialog: "选择要开水的设备")
+    var device: WaterDeviceEntity?
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let auth = WaterIntentStore.authContext()
         guard auth.isValid else {
             throw WaterIntentError.missingAuth
         }
-        guard let device = WaterIntentStore.defaultDevice() else {
+
+        guard let targetDevice = device?.intentDevice ?? WaterIntentStore.defaultDevice() else {
             throw WaterIntentError.missingDefaultDevice
         }
 
-        let session = try await WaterApiClient(auth: auth).startWater(device: device)
+        let session = try await WaterApiClient(auth: auth).startWater(device: targetDevice)
         WaterIntentStore.saveSession(session)
         try await WaterLiveActivityController.start(session: session)
-        return .result(value: "start", dialog: "已开始用水")
+        return .result(value: "start", dialog: "已开始 \(targetDevice.name)")
     }
 }
 

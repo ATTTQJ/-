@@ -248,7 +248,8 @@ struct WaterShortcuts: AppShortcutsProvider {
             intent: StartWaterIntent(),
             phrases: [
                 "开始用水\(.applicationName)",
-                "开水\(.applicationName)"
+                "开水\(.applicationName)",
+                "用\(.applicationName)开\(\.$device)"
             ],
             shortTitle: "开始用水",
             systemImageName: "drop.fill"
