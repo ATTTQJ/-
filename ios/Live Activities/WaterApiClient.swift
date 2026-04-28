@@ -14,7 +14,6 @@ struct WaterApiClient {
             throw WaterIntentError.missingAuth
         }
 
-        let startedAtMs = nowMillis()
         let baseParams: [(String, String)] = [
             ("orderWay", "1"),
             ("theConnectionMethod", "2"),
@@ -46,6 +45,7 @@ struct WaterApiClient {
         guard !orderNum.isEmpty else {
             throw WaterIntentError.invalidServerResponse
         }
+        let startedAtMs = nowMillis()
 
         return WaterIntentSession(
             orderNum: orderNum,

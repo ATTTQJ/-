@@ -89,9 +89,19 @@ struct StopWaterIntent: LiveActivityIntent {
             throw WaterIntentError.missingActiveSession
         }
 
-        let settlement = try await WaterApiClient(auth: auth).stopWater(session: session)
-        WaterIntentStore.saveFinishedSession(session, settlement: settlement)
-        await WaterLiveActivityController.finish(session: session, settlement: settlement)
-        return .result(value: "stop", dialog: "已关水")
+        await WaterLiveActivityController.markStopping(session: session)
+        do {
+            let settlement = try await WaterApiClient(auth: auth).stopWater(session: session)
+            WaterIntentStore.saveFinishedSession(session, settlement: settlement)
+            await WaterLiveActivityController.finish(session: session, settlement: settlement)
+            return .result(value: "stop", dialog: "已关水")
+        } catch {
+            await WaterLiveActivityController.updateRunning(
+                orderNum: session.orderNum,
+                startedAt: session.startedAt,
+                elapsedSeconds: session.elapsedSeconds
+            )
+            throw error
+        }
     }
 }

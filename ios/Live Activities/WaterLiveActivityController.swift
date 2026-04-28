@@ -53,6 +53,24 @@ enum WaterLiveActivityController {
         await update(activity: activity, state: state)
     }
 
+    static func markStopping(session: WaterIntentSession) async {
+        guard let activity = activity(orderNum: session.orderNum) else {
+            return
+        }
+        let elapsedSeconds = max(
+            activity.contentState.elapsedSeconds,
+            Int(Date().timeIntervalSince(activity.contentState.startedAt))
+        )
+        let state = WaterLiveActivityAttributes.ContentState(
+            statusText: "关水中",
+            startedAt: activity.contentState.startedAt,
+            elapsedSeconds: elapsedSeconds,
+            amountText: activity.contentState.amountText,
+            isRunning: true
+        )
+        await update(activity: activity, state: state)
+    }
+
     static func finish(session: WaterIntentSession, settlement: WaterSettlement) async {
         let targets = matchingActivities(orderNum: session.orderNum)
         let activities = targets.isEmpty ? Activity<WaterLiveActivityAttributes>.activities : targets

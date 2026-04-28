@@ -76,7 +76,7 @@ private struct WaterLockScreenView: View {
             Spacer(minLength: 8)
 
             if context.state.isRunning {
-                WaterStopButton()
+                WaterStopButton(state: context.state)
             } else {
                 WaterAmountText(state: context.state)
             }
@@ -117,7 +117,7 @@ private struct WaterIslandExpandedContent: View {
 
                     Spacer(minLength: 8)
 
-                    WaterStopButton()
+                    WaterStopButton(state: context.state)
                         .padding(.bottom, 2)
                 }
             } else {
@@ -189,20 +189,49 @@ private struct WaterCompactIcon: View {
 }
 
 private struct WaterStopButton: View {
+    let state: WaterLiveActivityAttributes.ContentState
+    private var isStopping: Bool {
+        state.statusText == "关水中"
+    }
+
     var body: some View {
         if #available(iOS 17.0, *) {
             Button(intent: StopWaterIntent()) {
-                Text("结束")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 9)
-                    .background(
-                        Capsule()
-                            .fill(Color(red: 0.58, green: 0.18, blue: 0.16))
-                    )
+                Group {
+                    if isStopping {
+                        WaterLoadingDots()
+                    } else {
+                        Text("结束")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                    }
+                }
+                .foregroundStyle(.white)
+                .frame(width: 64, height: 38)
+                .background(
+                    Capsule()
+                        .fill(Color(red: 0.58, green: 0.18, blue: 0.16))
+                )
             }
             .buttonStyle(.plain)
+            .disabled(isStopping)
+        }
+    }
+}
+
+private struct WaterLoadingDots: View {
+    private let interval: TimeInterval = 0.32
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: interval)) { timeline in
+            let activeIndex = Int(timeline.date.timeIntervalSinceReferenceDate / interval) % 3
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(.white.opacity(index == activeIndex ? 1 : 0.36))
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .frame(width: 34, height: 18)
         }
     }
 }
