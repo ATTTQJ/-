@@ -23,7 +23,7 @@ import UIKit
         GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
         if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "WaterNativeUI") {
             registrar.register(
-                WaterNativeViewFactory(messenger: registrar.messenger(), parent: registrar.viewController()),
+                WaterNativeViewFactory(messenger: registrar.messenger(), parent: registrar.viewController),
                 withId: "com.fakeuy.water/native_ui"
             )
         }
