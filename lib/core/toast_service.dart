@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+
 import 'global_keys.dart';
 
 class ToastService {
+  static void Function(String message, int durationMs)? nativePresenter;
   static OverlayEntry? _toastEntry;
   static Timer? _toastOverlayTimer;
 
@@ -15,6 +18,10 @@ class ToastService {
   }
 
   static void show(String message, {int durationMs = 3000}) {
+    if (nativePresenter != null) {
+      nativePresenter!(message, durationMs);
+      return;
+    }
     _clearOverlayToast();
 
     final overlayState = navigatorKey.currentState?.overlay;

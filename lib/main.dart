@@ -11,6 +11,7 @@ import 'providers/user_provider.dart';
 import 'providers/water_provider.dart';
 import 'ui/pages/home_page.dart';
 import 'ui/pages/login_page.dart';
+import 'ui/pages/native_water_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,8 +35,11 @@ class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback =
-          (X509Certificate cert, String host, int port) => true;
+      ..badCertificateCallback = (
+        X509Certificate cert,
+        String host,
+        int port,
+      ) => true;
   }
 }
 
@@ -48,6 +52,7 @@ class WaterApp extends StatefulWidget {
 
 class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
   bool _isSyncingExternalWaterSession = false;
+  bool _hasLoadedLocalState = false;
 
   @override
   void initState() {
@@ -90,6 +95,8 @@ class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
     if (!mounted) {
       return;
     }
+
+    setState(() => _hasLoadedLocalState = true);
 
     await _syncExternalWaterSession();
     if (!mounted) {
@@ -155,6 +162,9 @@ class _WaterAppState extends State<WaterApp> with WidgetsBindingObserver {
       theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
       home: Consumer<UserProvider>(
         builder: (context, userProvider, child) {
+          if (Platform.isIOS) {
+            return NativeWaterPage(ready: _hasLoadedLocalState);
+          }
           if (userProvider.token.isEmpty) {
             return const LoginPage();
           }

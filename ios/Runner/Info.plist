@@ -51,7 +51,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>The app uses the camera to scan device QR codes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>The app uses your photo library so you can choose a profile picture.</string>
+	<string>用于选择头像或自定义应用背景。</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>The app may save processed profile pictures to your photo library.</string>
 	<key>NSLocalNetworkUsageDescription</key>
